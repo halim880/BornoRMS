@@ -13,7 +13,7 @@ public class OrderReceiptDocument : IDocument
 
     public DocumentMetadata GetMetadata() => new()
     {
-        Title = $"Order receipt {_data.OrderNumber}",
+        Title = $"Invoice {_data.OrderNumber}",
         Author = _data.RestaurantName
     };
 
@@ -40,7 +40,7 @@ public class OrderReceiptDocument : IDocument
                 row.RelativeItem().Column(c =>
                 {
                     c.Item().Text(_data.RestaurantName).FontSize(16).Bold();
-                    c.Item().Text("Order Receipt").FontSize(11).FontColor(Colors.Grey.Darken2);
+                    c.Item().Text("Invoice").FontSize(11).FontColor(Colors.Grey.Darken2);
                 });
                 row.ConstantItem(160).AlignRight().Column(c =>
                 {

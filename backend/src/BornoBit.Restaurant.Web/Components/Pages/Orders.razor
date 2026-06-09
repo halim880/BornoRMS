@@ -53,7 +53,7 @@ else
             </DataGridColumn>
             <DataGridColumn TItem="OrderListItemDto" Title="Placed" Property="@(o => (object?)o.OrderedAtUtc)" Format="g" Width="150px" />
             <DataGridColumn TItem="OrderListItemDto" Title="" Align="DataGridAlign.Right" Width="110px">
-                <a class="hc-link" href="/reports/order/@context.Id/receipt.pdf" target="_blank">Receipt</a>
+                <a class="hc-link" href="/reports/order/@context.Id/receipt.pdf" target="_blank">Invoice</a>
             </DataGridColumn>
         </Columns>
     </DataGrid>

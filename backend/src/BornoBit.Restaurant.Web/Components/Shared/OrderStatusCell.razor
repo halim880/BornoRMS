@@ -27,6 +27,7 @@
     @if (Order.IsPaid)
     {
         <HcBadge Tone="success">Paid</HcBadge>
+        <a class="hc-link" href="/reports/order/@Order.Id/receipt.pdf" target="_blank">Invoice</a>
     }
     else if (Order.Status != OrderStatus.Cancelled)
     {
