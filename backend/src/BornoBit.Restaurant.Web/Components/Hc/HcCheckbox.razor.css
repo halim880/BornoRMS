@@ -1,0 +1,59 @@
+.hc-cmp-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    color: var(--hc-text);
+}
+
+.hc-cmp-check.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.hc-cmp-check input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.hc-cmp-check-box {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid var(--hc-border-strong);
+    background: var(--hc-bg-card);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 100ms, border-color 100ms;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.hc-cmp-check input:checked + .hc-cmp-check-box {
+    background: var(--hc-primary);
+    border-color: var(--hc-primary);
+}
+
+.hc-cmp-check input:checked + .hc-cmp-check-box::after {
+    content: "";
+    width: 4px;
+    height: 8px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.hc-cmp-check input:focus-visible + .hc-cmp-check-box {
+    outline: 2px solid var(--hc-primary);
+    outline-offset: 2px;
+}
+
+.hc-cmp-check-label {
+    line-height: 1.3;
+}

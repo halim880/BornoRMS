@@ -1,0 +1,150 @@
+@page "/admin/tenants"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "SuperAdmin")]
+@using BornoBit.Restaurant.Application.Tenants
+@using MediatR
+@inject ISender Mediator
+@inject IHcDialogService DialogService
+@inject IHcToastService ToastService
+
+<PageTitle>Tenants · BornoBit.Restaurant</PageTitle>
+
+<div style="display:flex; flex-direction:column; gap:16px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+        <h1>Tenants</h1>
+        <HcButton Variant="primary" OnClick="ShowCreateAsync">New tenant</HcButton>
+    </div>
+
+    <p style="color:var(--neutral-foreground-hint);">
+        All clinics on this deployment. Each tenant gets its own subdomain (e.g. <code>acme.localhost</code>).
+    </p>
+
+    @if (_loading)
+    {
+        <HcSpinner />
+    }
+    else if (_error is not null)
+    {
+        <HcMessageBar Intent="error">@_error</HcMessageBar>
+    }
+    else if (_tenants.Count == 0)
+    {
+        <div class="hc-cmp-cardish">
+            <p style="margin:0;">No tenants yet. Click <strong>New tenant</strong> to create the first one.</p>
+        </div>
+    }
+    else
+    {
+        <DataGrid TItem="TenantDto" Items="@_tenants" Title="" Description="" PageSize="25" SearchPredicate="@((t, q) => t.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || t.Subdomain.Contains(q, StringComparison.OrdinalIgnoreCase))" SearchPlaceholder="Search by name or subdomain…">
+            <Columns>
+                <DataGridColumn TItem="TenantDto" Title="Name" Property="@(t => t.Name)" Sortable="true">
+                    <strong>@context.Name</strong>
+                </DataGridColumn>
+                <DataGridColumn TItem="TenantDto" Title="Subdomain" Property="@(t => t.Subdomain)" Sortable="true">
+                    <span class="hc-code">@context.Subdomain</span>
+                </DataGridColumn>
+                <DataGridColumn TItem="TenantDto" Title="Contact email" Property="@(t => t.ContactEmail)">
+                    @(context.ContactEmail ?? "—")
+                </DataGridColumn>
+                <DataGridColumn TItem="TenantDto" Title="Active" Align="DataGridAlign.Center" Width="100px">
+                    @if (context.IsActive) { <HcBadge Tone="success">Active</HcBadge> }
+                    else { <HcBadge>Inactive</HcBadge> }
+                </DataGridColumn>
+                <DataGridColumn TItem="TenantDto" Title="License expires" Property="@(t => (object?)t.LicenseExpiresOnUtc)" Format="yyyy-MM-dd" Width="140px" />
+                <DataGridColumn TItem="TenantDto" Title="Created" Property="@(t => (object?)t.CreatedAtUtc)" Format="yyyy-MM-dd HH:mm" Width="160px" />
+                <DataGridColumn TItem="TenantDto" Title="" Align="DataGridAlign.Right" Width="220px">
+                    <HcButton Variant="ghost" OnClick="@(() => ShowEditAsync(context))">Edit</HcButton>
+                    @if (context.IsActive)
+                    {
+                        <HcButton Variant="ghost" OnClick="@(() => ConfirmSetActiveAsync(context, false))">Deactivate</HcButton>
+                    }
+                    else
+                    {
+                        <HcButton Variant="ghost" OnClick="@(() => ConfirmSetActiveAsync(context, true))">Activate</HcButton>
+                    }
+                </DataGridColumn>
+            </Columns>
+        </DataGrid>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<TenantDto> _tenants = new();
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var list = await Mediator.Send(new GetTenantsQuery(IncludeInactive: true));
+            _tenants = list.ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load tenants: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ShowCreateAsync()
+    {
+        var model = new TenantFormModel();
+        var result = await DialogService.ShowAsync<TenantFormDialog, TenantFormModel>(model, new HcDialogOptions
+        {
+            Title = "New tenant",
+            Width = "480px",
+            DismissOnOverlayClick = false,});
+        if (!result.Cancelled && result.Data is TenantFormModel saved)
+        {
+            ToastService.ShowSuccess($"Tenant '{saved.Name}' created.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ShowEditAsync(TenantDto tenant)
+    {
+        var model = new TenantFormModel
+        {
+            Id = tenant.Id,
+            Name = tenant.Name,
+            Subdomain = tenant.Subdomain,
+            ContactEmail = tenant.ContactEmail,
+            LicenseExpiresOnUtc = tenant.LicenseExpiresOnUtc
+        };
+        var result = await DialogService.ShowAsync<TenantFormDialog, TenantFormModel>(model, new HcDialogOptions
+        {
+            Title = "Edit tenant",
+            Width = "480px",
+            DismissOnOverlayClick = false,});
+        if (!result.Cancelled)
+        {
+            ToastService.ShowSuccess($"Tenant '{tenant.Name}' updated.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ConfirmSetActiveAsync(TenantDto tenant, bool activate)
+    {
+        var verb = activate ? "Activate" : "Deactivate";
+        var confirmed = await DialogService.ConfirmAsync($"{verb} tenant", $"{verb} tenant '{tenant.Name}'?", confirmLabel: verb, cancelLabel: "Cancel");
+        if (!confirmed) return;
+
+        try
+        {
+            await Mediator.Send(new SetTenantActiveCommand(tenant.Id, activate));
+            ToastService.ShowSuccess($"Tenant '{tenant.Name}' {(activate ? "activated" : "deactivated")}.");
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+    }
+}

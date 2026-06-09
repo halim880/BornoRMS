@@ -1,0 +1,19 @@
+@namespace BornoBit.Restaurant.Web.Components.Hc.Dialog
+@using BornoBit.Restaurant.Web.Components.Hc
+
+<HcDialogBody>
+    <p style="margin:0; color:var(--hc-text); line-height:1.5;">@Content.Message</p>
+</HcDialogBody>
+
+<HcDialogFooter>
+    <HcButton Variant="ghost" OnClick="Cancel">@Content.CancelLabel</HcButton>
+    <HcButton Variant="@Content.Variant" OnClick="Confirm">@Content.ConfirmLabel</HcButton>
+</HcDialogFooter>
+
+@code {
+    [Parameter, EditorRequired] public HcConfirmContent Content { get; set; } = default!;
+    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+
+    private void Confirm() => Dialog.Close(true);
+    private void Cancel() => Dialog.Cancel();
+}

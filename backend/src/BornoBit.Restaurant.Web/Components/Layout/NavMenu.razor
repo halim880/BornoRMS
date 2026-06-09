@@ -1,0 +1,353 @@
+@using BornoBit.Restaurant.Application.Menus
+@using BornoBit.Restaurant.Domain.Identity
+@using BornoBit.Restaurant.Infrastructure.Identity
+@using MediatR
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using System.Security.Claims
+@inject ISender Mediator
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+@inject RoleManager<ApplicationRole> RoleManager
+@implements IDisposable
+
+<aside class="nav-shell @(IsCollapsed ? "is-collapsed" : "")">
+    <div class="nav-brand">
+        <div class="nav-brand-mark"><span class="nav-brand-dot">i</span></div>
+        <div class="nav-brand-text">
+            <span class="nav-brand-line1">innovatix</span>
+            <span class="nav-brand-line2">info.sys</span>
+        </div>
+    </div>
+
+    <div class="nav-search">
+        <HcSearch Placeholder="Search menus…"
+                  Value="@_search"
+                  ValueChanged="OnSearchValueChanged"
+                  DebounceMs="120" />
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_activeModuleTitle))
+    {
+        <div class="nav-module-label">@_activeModuleTitle</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="nav-status"><HcSpinner Size="sm" /> <span>Loading…</span></div>
+    }
+    else if (_loadError is not null)
+    {
+        <div class="nav-status nav-error">@_loadError</div>
+    }
+    else if (_visible.Count == 0)
+    {
+        <div class="nav-status">@(string.IsNullOrWhiteSpace(_search)
+            ? (ActiveModuleId is null ? "Select a module from the top bar." : "No menus in this module yet.")
+            : "No matches.")</div>
+    }
+    else
+    {
+        <nav class="nav-tree">
+            @foreach (var item in _visible)
+            {
+                @RenderRoot(item)
+            }
+        </nav>
+    }
+
+    <div class="nav-footer">
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-user">
+                    <div class="nav-user-avatar"><span>@GetInitial(context.User.Identity?.Name)</span></div>
+                    <div class="nav-user-text">
+                        <div class="nav-user-name">@(context.User.Identity?.Name ?? "User")</div>
+                        <div class="nav-user-status">Signed in</div>
+                    </div>
+                    <button type="button" class="nav-user-logout" title="Sign out"
+                            @onclick="@(() => Nav.NavigateTo("/logout", true))">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9.5 11.5 L13 8 L9.5 4.5" />
+                            <path d="M13 8 H6" />
+                            <path d="M6 2 H3 a1 1 0 0 0 -1 1 v10 a1 1 0 0 0 1 1 h3" />
+                        </svg>
+                    </button>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <button type="button" class="nav-user-signin"
+                        @onclick="@(() => Nav.NavigateTo("/login"))">
+                    Sign in
+                </button>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</aside>
+
+@code {
+    [CascadingParameter(Name = "ActiveModuleId")] public Guid? ActiveModuleId { get; set; }
+    [Parameter] public bool IsCollapsed { get; set; }
+
+    private string _search = string.Empty;
+    private bool _loading = true;
+    private string? _loadError;
+    private IReadOnlyList<MenuItemDto> _allRoots = Array.Empty<MenuItemDto>();
+    private IReadOnlyList<MenuItemDto> _visible = Array.Empty<MenuItemDto>();
+    private bool _isFiltering => !string.IsNullOrWhiteSpace(_search);
+    private HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
+    private string _currentPath = string.Empty;
+    private Guid? _lastResolvedModuleId;
+    private string? _activeModuleTitle;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        _currentPath = NormalizePath(Nav.Uri);
+
+        try
+        {
+            var state = await AuthState.GetAuthenticationStateAsync();
+            var isAuthenticated = state.User.Identity?.IsAuthenticated == true;
+            var isSuperAdmin = isAuthenticated && state.User.IsInRole(Roles.SuperAdmin);
+
+            var roleIds = new List<Guid>();
+            if (isAuthenticated && !isSuperAdmin)
+            {
+                var roleNames = state.User.FindAll(ClaimTypes.Role).Select(c => c.Value);
+                foreach (var name in roleNames)
+                {
+                    var r = await RoleManager.FindByNameAsync(name);
+                    if (r is not null) roleIds.Add(r.Id);
+                }
+            }
+
+            _allRoots = await Mediator.Send(new GetMenuTreeQuery(roleIds, IsSuperAdmin: isSuperAdmin));
+            UpdateVisibleForActiveModule();
+        }
+        catch (Exception ex) { _loadError = $"Failed to load menus: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_lastResolvedModuleId != ActiveModuleId)
+        {
+            UpdateVisibleForActiveModule();
+        }
+    }
+
+    private void UpdateVisibleForActiveModule()
+    {
+        _lastResolvedModuleId = ActiveModuleId;
+        var activeRoot = ActiveModuleId is { } id
+            ? _allRoots.FirstOrDefault(r => r.Id == id)
+            : (ResolveRootByUrl(_currentPath) ?? _allRoots.FirstOrDefault());
+
+        if (activeRoot is null)
+        {
+            _visible = Array.Empty<MenuItemDto>();
+            _activeModuleTitle = null;
+            return;
+        }
+
+        _activeModuleTitle = activeRoot.Title;
+
+        // Render only the active root's children. If the root itself has a URL
+        // (a "leaf module"), render the root as a single navigable entry too.
+        var children = activeRoot.Children;
+        if (children.Count == 0 && !string.IsNullOrWhiteSpace(activeRoot.Url))
+        {
+            _visible = new[] { activeRoot };
+        }
+        else
+        {
+            _visible = string.IsNullOrWhiteSpace(_search)
+                ? children
+                : Filter(children, _search);
+        }
+
+        ExpandActiveBranches(_visible);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        _currentPath = NormalizePath(e.Location);
+        UpdateVisibleForActiveModule();
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Walk the tree to find the root menu whose subtree contains a leaf matching the path.</summary>
+    private MenuItemDto? ResolveRootByUrl(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path == "/") return null;
+        foreach (var root in _allRoots)
+        {
+            if (BranchHasUrlMatch(root, path)) return root;
+        }
+        return null;
+    }
+
+    private static bool BranchHasUrlMatch(MenuItemDto item, string path)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Url))
+        {
+            var u = "/" + item.Url.TrimStart('/').TrimEnd('/');
+            if (string.Equals(u, path, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        foreach (var c in item.Children)
+            if (BranchHasUrlMatch(c, path)) return true;
+        return false;
+    }
+
+    private string NormalizePath(string uri)
+    {
+        var rel = Nav.ToBaseRelativePath(uri);
+        var path = rel.Split('?')[0].Split('#')[0];
+        return "/" + path.TrimEnd('/');
+    }
+
+    private bool IsActive(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        var u = "/" + url.TrimStart('/').TrimEnd('/');
+        return string.Equals(_currentPath, u, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool BranchHasActive(MenuItemDto item)
+    {
+        if (IsActive(item.Url)) return true;
+        foreach (var c in item.Children)
+            if (BranchHasActive(c)) return true;
+        return false;
+    }
+
+    private void ExpandActiveBranches(IReadOnlyList<MenuItemDto> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.Children.Count > 0 && BranchHasActive(item))
+                _expanded.Add(item.Title);
+            ExpandActiveBranches(item.Children);
+        }
+    }
+
+    private void ToggleGroup(string title)
+    {
+        if (!_expanded.Add(title)) _expanded.Remove(title);
+    }
+
+    private bool IsExpanded(string title) => _isFiltering || _expanded.Contains(title);
+
+    private void OnSearchValueChanged(string? value)
+    {
+        _search = value ?? string.Empty;
+        UpdateVisibleForActiveModule();
+    }
+
+    private static IReadOnlyList<MenuItemDto> Filter(IReadOnlyList<MenuItemDto> tree, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return tree;
+        var q = query.Trim();
+        var result = new List<MenuItemDto>();
+        foreach (var item in tree)
+        {
+            var matchedChildren = Filter(item.Children, q);
+            var selfMatches = item.Title.Contains(q, StringComparison.OrdinalIgnoreCase);
+            if (selfMatches || matchedChildren.Count > 0)
+                result.Add(item with { Children = matchedChildren });
+        }
+        return result;
+    }
+
+    private static string GetInitial(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "·";
+        var trimmed = name.TrimStart();
+        return trimmed.Length == 0 ? "·" : char.ToUpperInvariant(trimmed[0]).ToString();
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+
+    private RenderFragment RenderRoot(MenuItemDto item) => __builder =>
+    {
+        if (item.Children.Count > 0)
+        {
+            var expanded = IsExpanded(item.Title);
+            var hasActive = BranchHasActive(item);
+            <button type="button"
+                    class="nav-group @(hasActive ? "active-branch" : "")"
+                    @onclick="@(() => ToggleGroup(item.Title))">
+                @if (!string.IsNullOrWhiteSpace(item.Icon))
+                {
+                    <HcIcon Name="@item.Icon" Size="15" Class="nav-group-icon" />
+                }
+                <span class="nav-group-label">@item.Title</span>
+                <span class="nav-chevron @(expanded ? "open" : "")">›</span>
+            </button>
+            @if (expanded)
+            {
+                <div class="nav-group-children">
+                    @foreach (var c in item.Children)
+                    {
+                        @RenderChild(c)
+                    }
+                </div>
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(item.Url))
+        {
+            <a class="nav-leaf nav-leaf-root @(IsActive(item.Url) ? "active" : "")" href="@item.Url">
+                @RenderLeafGlyph(item)
+                <span class="nav-leaf-text">@item.Title</span>
+            </a>
+        }
+    };
+
+    private RenderFragment RenderChild(MenuItemDto item) => __builder =>
+    {
+        if (item.Children.Count > 0)
+        {
+            var expanded = IsExpanded(item.Title);
+            <button type="button"
+                    class="nav-subgroup"
+                    @onclick="@(() => ToggleGroup(item.Title))">
+                @if (!string.IsNullOrWhiteSpace(item.Icon))
+                {
+                    <HcIcon Name="@item.Icon" Size="15" Class="nav-subgroup-icon" />
+                }
+                <span class="nav-subgroup-label">@item.Title</span>
+                <span class="nav-chevron @(expanded ? "open" : "")">›</span>
+            </button>
+            @if (expanded)
+            {
+                <div class="nav-group-children">
+                    @foreach (var c in item.Children) { @RenderChild(c) }
+                </div>
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(item.Url))
+        {
+            <a class="nav-leaf @(IsActive(item.Url) ? "active" : "")" href="@item.Url">
+                @RenderLeafGlyph(item)
+                <span class="nav-leaf-text">@item.Title</span>
+            </a>
+        }
+    };
+
+    /// <summary>
+    /// Render an icon next to a leaf if one is defined; otherwise fall back to
+    /// the small dot bullet so menus without an icon still align cleanly.
+    /// </summary>
+    private RenderFragment RenderLeafGlyph(MenuItemDto item) => __builder =>
+    {
+        if (!string.IsNullOrWhiteSpace(item.Icon))
+        {
+            <HcIcon Name="@item.Icon" Size="16" Class="nav-leaf-icon" />
+        }
+        else
+        {
+            <span class="nav-leaf-bullet"></span>
+        }
+    };
+}

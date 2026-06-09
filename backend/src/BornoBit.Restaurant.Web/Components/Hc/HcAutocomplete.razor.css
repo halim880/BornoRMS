@@ -1,0 +1,204 @@
+.hc-cmp-ac {
+    position: relative;
+    display: block;
+}
+
+.hc-cmp-ac-shell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: var(--hc-bg-card);
+    border: 1px solid var(--hc-border);
+    border-radius: var(--hc-radius-sm, 6px);
+    transition: border-color 100ms, box-shadow 100ms;
+    box-sizing: border-box;
+}
+
+.hc-cmp-ac-shell:hover:not(.is-disabled) {
+    border-color: var(--hc-border-strong);
+}
+
+.hc-cmp-ac-shell:focus-within {
+    border-color: var(--hc-primary);
+    box-shadow: 0 0 0 3px var(--hc-primary-tint);
+}
+
+.hc-cmp-field.is-invalid .hc-cmp-ac-shell {
+    border-color: var(--hc-danger);
+}
+
+.hc-cmp-field.is-invalid .hc-cmp-ac-shell:focus-within {
+    box-shadow: 0 0 0 3px var(--hc-danger-soft);
+}
+
+.hc-cmp-ac-shell.is-disabled {
+    background: var(--hc-bg-soft);
+}
+
+.hc-cmp-ac-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    padding: 8px 4px 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--hc-text);
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: text;
+}
+
+.hc-cmp-ac-input::placeholder {
+    color: var(--hc-text-faint);
+}
+
+.hc-cmp-ac-input.is-hidden-text {
+    color: transparent;
+    caret-color: transparent;
+}
+
+.hc-cmp-ac-selected {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: 4px 28px 4px 10px;
+    pointer-events: none;
+    overflow: hidden;
+    font-size: 13px;
+    color: var(--hc-text);
+}
+
+.hc-cmp-ac-selected > * {
+    pointer-events: auto;
+}
+
+.hc-cmp-ac-input:disabled {
+    color: var(--hc-text-faint);
+    cursor: not-allowed;
+}
+
+.hc-cmp-ac-clear {
+    background: transparent;
+    border: 0;
+    color: var(--hc-text-subtle);
+    font-size: 18px;
+    line-height: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin: 0 2px;
+    padding: 0;
+}
+
+.hc-cmp-ac-clear:hover {
+    background: var(--hc-border);
+    color: var(--hc-text);
+}
+
+.hc-cmp-ac-chevron {
+    color: var(--hc-text-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-right: 10px;
+    padding-left: 4px;
+    pointer-events: none;
+    flex-shrink: 0;
+    transition: color 120ms ease, transform 180ms ease;
+}
+
+.hc-cmp-ac-shell:hover:not(.is-disabled) .hc-cmp-ac-chevron {
+    color: var(--hc-text-muted);
+}
+
+.hc-cmp-ac-shell:focus-within .hc-cmp-ac-chevron {
+    color: var(--hc-primary);
+}
+
+.hc-cmp-ac-shell.is-open .hc-cmp-ac-chevron {
+    transform: rotate(180deg);
+}
+
+.hc-cmp-ac-shell.is-disabled .hc-cmp-ac-chevron {
+    color: var(--hc-text-faint);
+}
+
+.hc-cmp-field.is-invalid .hc-cmp-ac-chevron {
+    color: var(--hc-danger);
+}
+
+.hc-cmp-ac-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--hc-bg-card);
+    border: 1px solid var(--hc-border);
+    border-radius: var(--hc-radius-md, 8px);
+    box-shadow: var(--hc-shadow-lg, 0 12px 20px -6px rgba(15, 23, 42, 0.12), 0 4px 8px -3px rgba(15, 23, 42, 0.05));
+    z-index: 50;
+    padding: 4px;
+}
+
+.hc-cmp-ac-list.is-drop-up {
+    top: auto;
+    bottom: calc(100% + 4px);
+}
+
+.hc-cmp-ac-option {
+    padding: 7px 10px;
+    font-size: 13px;
+    color: var(--hc-text);
+    border-radius: var(--hc-radius-xs, 4px);
+    cursor: pointer;
+    user-select: none;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hc-cmp-ac-option.is-custom {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.hc-cmp-ac-option.is-highlighted {
+    background: var(--hc-bg-soft);
+}
+
+.hc-cmp-ac-option.is-selected {
+    background: var(--hc-primary-tint);
+    color: var(--hc-primary-emphasis);
+    font-weight: 600;
+}
+
+.hc-cmp-ac-option.is-selected.is-highlighted {
+    background: var(--hc-primary-soft);
+}
+
+.hc-cmp-ac-empty,
+.hc-cmp-ac-more {
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--hc-text-subtle);
+    text-align: center;
+    user-select: none;
+}
+
+.hc-cmp-ac-more {
+    border-top: 1px solid var(--hc-border-soft);
+    margin-top: 4px;
+    padding-top: 8px;
+}

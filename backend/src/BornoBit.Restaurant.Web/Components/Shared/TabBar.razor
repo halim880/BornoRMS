@@ -1,0 +1,121 @@
+@typeparam TItem
+@typeparam TKey
+
+<div class="tabbar @Class" style="@Style">
+    @foreach (var item in Items)
+    {
+        var it = item;
+        var key = ItemKey(it);
+        var isActive = EqualityComparer<TKey>.Default.Equals(key, ActiveKey);
+        var title = ItemTitle(it);
+        <button type="button"
+                class="tabbar-tab @(isActive ? "active" : "")"
+                title="@title"
+                @onclick="@(() => SelectAsync(key))">
+            <span class="tabbar-tab-title">@title</span>
+            @if (ShowClose && OnClose.HasDelegate)
+            {
+                <span class="tabbar-close" title="Close"
+                      @onclick:stopPropagation="true"
+                      @onclick="@(() => CloseAsync(key))">×</span>
+            }
+        </button>
+    }
+    @if (ShowAdd && OnAdd.HasDelegate)
+    {
+        <button type="button" class="tabbar-tab tabbar-add" title="@AddTitle" @onclick="AddAsync">@AddLabel</button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<TItem> Items { get; set; } = Array.Empty<TItem>();
+    [Parameter] public TKey? ActiveKey { get; set; }
+    [Parameter, EditorRequired] public Func<TItem, TKey> ItemKey { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<TItem, string> ItemTitle { get; set; } = default!;
+    [Parameter] public EventCallback<TKey> OnSelect { get; set; }
+    [Parameter] public EventCallback<TKey> OnClose { get; set; }
+    [Parameter] public EventCallback OnAdd { get; set; }
+    [Parameter] public bool ShowClose { get; set; } = true;
+    [Parameter] public bool ShowAdd { get; set; } = true;
+    [Parameter] public string AddLabel { get; set; } = "+";
+    [Parameter] public string AddTitle { get; set; } = "Add tab";
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+
+    private async Task SelectAsync(TKey key)
+    {
+        if (OnSelect.HasDelegate) await OnSelect.InvokeAsync(key);
+    }
+
+    private async Task CloseAsync(TKey key)
+    {
+        if (OnClose.HasDelegate) await OnClose.InvokeAsync(key);
+    }
+
+    private async Task AddAsync()
+    {
+        if (OnAdd.HasDelegate) await OnAdd.InvokeAsync();
+    }
+}
+
+<style>
+    .tabbar {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .tabbar-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 6px 6px 14px;
+        background: #fff;
+        border: 1px solid #E2E8F0;
+        border-radius: 999px;
+        color: #475569;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        max-width: 240px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: background 100ms, border-color 100ms, color 100ms, box-shadow 100ms;
+    }
+
+    .tabbar-tab:hover { background: #F8FAFC; border-color: #CBD5E1; color: #0F172A; }
+
+    .tabbar-tab.active {
+        background: var(--hc-primary-tint);
+        border-color: #FFC480;
+        color: #A85A00;
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(255,140,0,0.08);
+    }
+
+    .tabbar-tab-title { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+
+    .tabbar-close {
+        width: 20px; height: 20px;
+        border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 14px; line-height: 1;
+        color: #94A3B8;
+        margin-left: 2px;
+        transition: background 100ms, color 100ms;
+    }
+    .tabbar-close:hover { background: var(--hc-primary-soft); color: #7A4400; }
+    .tabbar-tab.active .tabbar-close { color: #A85A00; }
+    .tabbar-tab.active .tabbar-close:hover { background: #FFC480; color: #fff; }
+
+    .tabbar-add {
+        padding: 6px 12px;
+        background: transparent;
+        border: 1px dashed #CBD5E1;
+        color: #64748B;
+        font-size: 14px; font-weight: 700;
+    }
+    .tabbar-add:hover { background: var(--hc-primary-tint); border-color: #FFC480; color: var(--hc-primary); }
+</style>

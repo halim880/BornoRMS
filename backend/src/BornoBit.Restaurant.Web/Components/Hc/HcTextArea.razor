@@ -1,0 +1,79 @@
+@namespace BornoBit.Restaurant.Web.Components.Hc
+
+<div class="hc-cmp-field @(string.IsNullOrEmpty(Error) ? "" : "is-invalid") @CssClass">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="hc-cmp-field-label" for="@_id">
+            @Label
+            @if (Required)
+            {
+                <span class="hc-cmp-field-required" aria-hidden="true">*</span>
+            }
+        </label>
+    }
+    <div class="hc-cmp-textarea-wrap @(Disabled ? "is-disabled" : "") @(ReadOnly ? "is-readonly" : "")">
+        <textarea id="@_id"
+                  class="hc-cmp-textarea"
+                  rows="@Rows"
+                  placeholder="@Placeholder"
+                  maxlength="@(Maxlength > 0 ? Maxlength : 524288)"
+                  disabled="@Disabled"
+                  readonly="@ReadOnly"
+                  @onchange="OnChange"
+                  @oninput="OnInput"
+                  @attributes="AdditionalAttributes">@Value</textarea>
+        <span class="hc-cmp-textarea-grip" aria-hidden="true">
+            <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                <path d="M2 10 L10 2" />
+                <path d="M5 10 L10 5" />
+                <path d="M8 10 L10 8" />
+            </svg>
+        </span>
+        @if (Maxlength > 0)
+        {
+            var len = Value?.Length ?? 0;
+            var pct = (double)len / Maxlength;
+            var counterClass = pct >= 1.0 ? "is-full" : (pct > 0.85 ? "is-near" : "");
+            <div class="hc-cmp-textarea-count @counterClass" aria-hidden="true">
+                @len / @Maxlength
+            </div>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="hc-cmp-field-error">@Error</div>
+    }
+    else if (!string.IsNullOrEmpty(Hint))
+    {
+        <div class="hc-cmp-field-hint">@Hint</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public int Rows { get; set; } = 3;
+    [Parameter] public int Maxlength { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool Immediate { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => AdditionalAttributes is { } a && a.TryGetValue("class", out var c) ? c?.ToString() ?? "" : "";
+    private readonly string _id = $"hc-ta-{Guid.NewGuid():N}";
+
+    private async Task OnChange(ChangeEventArgs e)
+    {
+        if (!Immediate) await ValueChanged.InvokeAsync(e.Value?.ToString());
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        if (Immediate) await ValueChanged.InvokeAsync(e.Value?.ToString());
+    }
+}

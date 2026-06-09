@@ -1,0 +1,147 @@
+@page "/admin/users"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Users
+@using MediatR
+@inject ISender Mediator
+@inject IHcDialogService DialogService
+@inject IHcToastService ToastService
+
+<PageTitle>Users · BornoBit.Restaurant</PageTitle>
+
+<div style="display:flex; flex-direction:column; gap:16px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+        <h1>Users &amp; roles</h1>
+        <HcButton Variant="primary" OnClick="ShowCreateAsync">New user</HcButton>
+    </div>
+
+    <p style="color:var(--neutral-foreground-hint);">Local user accounts for this tenant. Roles control which menus they can see.</p>
+
+    @if (_loading) { <HcSpinner /> }
+    else if (_error is not null) { <HcMessageBar Intent="error">@_error</HcMessageBar> }
+    else if (_users.Count == 0)
+    {
+        <div class="hc-cmp-cardish"><p style="margin:0;">No users yet. Click <strong>New user</strong>.</p></div>
+    }
+    else
+    {
+        <DataGrid TItem="UserDto" Items="@_users" PageSize="25" SearchPlaceholder="Search by username, email, name…"
+                  SearchPredicate="@((u, q) => u.UserName.Contains(q, StringComparison.OrdinalIgnoreCase) || (u.Email?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) || (u.FullName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))">
+            <Columns>
+                <DataGridColumn TItem="UserDto" Title="Username" Property="@(u => u.UserName)" Sortable="true">
+                    <strong>@context.UserName</strong>
+                </DataGridColumn>
+                <DataGridColumn TItem="UserDto" Title="Email" Property="@(u => u.Email)" Sortable="true">
+                    @(context.Email ?? "—")
+                </DataGridColumn>
+                <DataGridColumn TItem="UserDto" Title="Full name" Property="@(u => u.FullName)" Sortable="true">
+                    @(context.FullName ?? "—")
+                </DataGridColumn>
+                <DataGridColumn TItem="UserDto" Title="Roles">
+                    @if (context.IsSuperAdmin) { <HcBadge Tone="primary">SuperAdmin</HcBadge> }
+                    @foreach (var r in context.Roles.Where(r => r != "SuperAdmin"))
+                    {
+                        <HcBadge>@r</HcBadge>
+                    }
+                </DataGridColumn>
+                <DataGridColumn TItem="UserDto" Title="Active" Align="DataGridAlign.Center" Width="100px">
+                    @if (context.IsActive) { <HcBadge Tone="success">Active</HcBadge> } else { <HcBadge>Inactive</HcBadge> }
+                </DataGridColumn>
+                <DataGridColumn TItem="UserDto" Title="Created" Property="@(u => (object?)u.CreatedAtUtc)" Format="yyyy-MM-dd" Width="120px" />
+                <DataGridColumn TItem="UserDto" Title="" Align="DataGridAlign.Right" Width="320px">
+                    @if (!context.IsSuperAdmin)
+                    {
+                        <HcButton Variant="ghost" OnClick="@(() => ShowEditAsync(context))">Edit</HcButton>
+                        <HcButton Variant="ghost" OnClick="@(() => ResetPasswordAsync(context))">Reset password</HcButton>
+                        @if (context.IsActive)
+                        {
+                            <HcButton Variant="ghost" OnClick="@(() => ConfirmSetActiveAsync(context, false))">Deactivate</HcButton>
+                        }
+                        else
+                        {
+                            <HcButton Variant="ghost" OnClick="@(() => ConfirmSetActiveAsync(context, true))">Activate</HcButton>
+                        }
+                    }
+                </DataGridColumn>
+            </Columns>
+        </DataGrid>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<UserDto> _users = new();
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var list = await Mediator.Send(new GetUsersQuery(IncludeInactive: true));
+            _users = list.ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load users: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task ShowCreateAsync()
+    {
+        var model = new UserFormModel();
+        var result = await DialogService.ShowAsync<UserFormDialog, UserFormModel>(model, new HcDialogOptions
+        {
+            Title = "New user", Width = "520px", DismissOnOverlayClick = false,});
+        if (!result.Cancelled && result.Data is UserFormModel saved)
+        {
+            ToastService.ShowSuccess($"User '{saved.UserName}' created.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ShowEditAsync(UserDto u)
+    {
+        var model = new UserFormModel
+        {
+            Id = u.Id, UserName = u.UserName, Email = u.Email, FullName = u.FullName,
+            Roles = u.Roles.Where(r => r != "SuperAdmin").ToList()
+        };
+        var result = await DialogService.ShowAsync<UserFormDialog, UserFormModel>(model, new HcDialogOptions
+        {
+            Title = "Edit user", Width = "520px", DismissOnOverlayClick = false,});
+        if (!result.Cancelled)
+        {
+            ToastService.ShowSuccess($"User '{u.Email}' updated.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ResetPasswordAsync(UserDto u)
+    {
+        var confirmed = await DialogService.ConfirmAsync("Reset password", $"Reset password for '{u.Email}'? A new temporary password will be generated.", confirmLabel: "Reset", cancelLabel: "Cancel");
+        if (!confirmed) return;
+        try
+        {
+            var newPassword = await Mediator.Send(new ResetPasswordCommand(u.Id));
+            await DialogService.ShowAsync<TempPasswordDisplay, object>(newPassword, new HcDialogOptions
+            {
+                Title = "New temporary password", Width = "420px"
+            });
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+    }
+
+    private async Task ConfirmSetActiveAsync(UserDto u, bool activate)
+    {
+        var verb = activate ? "Activate" : "Deactivate";
+        var confirmed = await DialogService.ConfirmAsync($"{verb} user", $"{verb} user '{u.Email}'?", confirmLabel: verb, cancelLabel: "Cancel");
+        if (!confirmed) return;
+        try
+        {
+            await Mediator.Send(new SetUserActiveCommand(u.Id, activate));
+            ToastService.ShowSuccess($"User '{u.Email}' {(activate ? "activated" : "deactivated")}.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+    }
+}

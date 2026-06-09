@@ -1,0 +1,122 @@
+@namespace BornoBit.Restaurant.Web.Components.Hc.Dialog
+@implements IAsyncDisposable
+@inject IHcDialogService DialogService
+@inject IJSRuntime JS
+
+@if (_dialogs.Count > 0)
+{
+    @foreach (var dlg in _dialogs)
+    {
+        <CascadingValue Value="dlg" IsFixed="true">
+            <div class="hc-dialog-overlay" @key="dlg.Id" @onclick="@(() => OnOverlayClick(dlg))">
+                <div class="hc-dialog" tabindex="-1"
+                     style="width:@dlg.Options.Width"
+                     @onclick:stopPropagation="true"
+                     @ref="_dialogRefs[dlg.Id]">
+                    <div class="hc-dialog-header">
+                        <h2 class="hc-dialog-title">@(dlg.Options.Title ?? string.Empty)</h2>
+                        @if (dlg.Options.ShowCloseButton)
+                        {
+                            <button type="button" class="hc-dialog-close" title="Close" @onclick="@(() => dlg.Cancel())">×</button>
+                        }
+                    </div>
+                    <div class="hc-dialog-content">
+                        <DynamicComponent Type="dlg.ContentComponent" Parameters="dlg.ContentParameters" />
+                    </div>
+                </div>
+            </div>
+        </CascadingValue>
+    }
+}
+
+@code {
+    private List<HcDialogInstance> _dialogs = new();
+    private readonly Dictionary<Guid, ElementReference> _dialogRefs = new();
+    private readonly HashSet<Guid> _pushed = new();
+    private DotNetObjectReference<HcDialogProvider>? _selfRef;
+    private bool _jsRegistered;
+
+    protected override void OnInitialized()
+    {
+        if (DialogService is HcDialogService svc)
+        {
+            svc.Changed += OnChanged;
+            _dialogs = svc.Open.ToList();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+        }
+
+        if (!_jsRegistered)
+        {
+            try { await JS.InvokeVoidAsync("hcDialog.register", _selfRef); _jsRegistered = true; }
+            catch { return; }
+        }
+
+        // Push newly opened dialogs into the JS stack and focus their first focusable child.
+        foreach (var dlg in _dialogs)
+        {
+            if (_pushed.Add(dlg.Id))
+            {
+                await JS.InvokeVoidAsync("hcDialog.push", dlg.Id.ToString(), dlg.Options.DismissOnEsc);
+                if (_dialogRefs.TryGetValue(dlg.Id, out var elRef))
+                {
+                    await JS.InvokeVoidAsync("hcDialog.focusDialog", elRef);
+                }
+            }
+        }
+
+        // Pop any dialogs that have closed.
+        var openIds = _dialogs.Select(d => d.Id).ToHashSet();
+        foreach (var pushedId in _pushed.ToList())
+        {
+            if (!openIds.Contains(pushedId))
+            {
+                await JS.InvokeVoidAsync("hcDialog.pop", pushedId.ToString());
+                _pushed.Remove(pushedId);
+                _dialogRefs.Remove(pushedId);
+            }
+        }
+    }
+
+    [JSInvokable]
+    public void OnEscape(string id)
+    {
+        if (!Guid.TryParse(id, out var guid)) return;
+        var dlg = _dialogs.FirstOrDefault(d => d.Id == guid);
+        dlg?.Cancel();
+    }
+
+    private void OnChanged()
+    {
+        if (DialogService is HcDialogService svc)
+        {
+            _dialogs = svc.Open.ToList();
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnOverlayClick(HcDialogInstance dlg)
+    {
+        if (dlg.Options.DismissOnOverlayClick) dlg.Cancel();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (DialogService is HcDialogService svc) svc.Changed -= OnChanged;
+        try
+        {
+            foreach (var id in _pushed)
+            {
+                await JS.InvokeVoidAsync("hcDialog.pop", id.ToString());
+            }
+        }
+        catch { /* JS may already be torn down */ }
+        _selfRef?.Dispose();
+    }
+}

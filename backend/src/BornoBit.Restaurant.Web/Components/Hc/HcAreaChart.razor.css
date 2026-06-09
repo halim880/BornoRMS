@@ -1,0 +1,48 @@
+.hc-area-chart {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.hc-area-svg {
+    flex: 1 1 auto;
+    display: block;
+    overflow: visible;
+}
+
+.hc-area-empty {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--hc-text-faint, #94A3B8);
+    font-size: 13px;
+    border: 1px dashed var(--hc-border-soft, #EEF2F7);
+    border-radius: var(--hc-radius-md, 10px);
+}
+
+.hc-area-axis {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--hc-text-subtle, #64748B);
+    font-variant-numeric: tabular-nums;
+}
+
+.hc-area-axis-label {
+    font-weight: 500;
+}
+
+.hc-area-axis-peak {
+    font-size: 11px;
+    color: var(--hc-text-subtle, #64748B);
+}
+
+.hc-area-axis-peak strong {
+    color: var(--hc-text, #0F172A);
+    font-weight: 700;
+    margin-left: 2px;
+}

@@ -1,0 +1,10 @@
+.hc-dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--hc-border-soft);
+    background: var(--hc-bg-soft);
+    flex-shrink: 0;
+}

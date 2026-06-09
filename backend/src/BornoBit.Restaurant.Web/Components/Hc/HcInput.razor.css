@@ -1,0 +1,74 @@
+.hc-cmp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hc-cmp-field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--hc-text-muted);
+    line-height: 1.3;
+}
+
+.hc-cmp-field-required {
+    color: var(--hc-danger);
+    margin-left: 2px;
+}
+
+.hc-cmp-field-input {
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--hc-text);
+    background: var(--hc-bg-card);
+    border: 1px solid var(--hc-border);
+    border-radius: var(--hc-radius-sm, 6px);
+    padding: 8px 10px;
+    line-height: 1.4;
+    transition: border-color 100ms, box-shadow 100ms;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.hc-cmp-field-input::placeholder {
+    color: var(--hc-text-faint);
+}
+
+.hc-cmp-field-input:hover:not(:disabled) {
+    border-color: var(--hc-border-strong);
+}
+
+.hc-cmp-field-input:focus {
+    outline: none;
+    border-color: var(--hc-primary);
+    box-shadow: 0 0 0 3px var(--hc-primary-tint);
+}
+
+.hc-cmp-field-input:disabled {
+    background: var(--hc-bg-soft);
+    color: var(--hc-text-faint);
+    cursor: not-allowed;
+}
+
+.hc-cmp-field-input:read-only {
+    background: var(--hc-bg-soft);
+}
+
+.hc-cmp-field.is-invalid .hc-cmp-field-input {
+    border-color: var(--hc-danger);
+}
+.hc-cmp-field.is-invalid .hc-cmp-field-input:focus {
+    box-shadow: 0 0 0 3px var(--hc-danger-soft);
+}
+
+.hc-cmp-field-error {
+    font-size: 11px;
+    color: var(--hc-danger);
+    line-height: 1.3;
+}
+
+.hc-cmp-field-hint {
+    font-size: 11px;
+    color: var(--hc-text-subtle);
+    line-height: 1.3;
+}

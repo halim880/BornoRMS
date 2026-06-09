@@ -1,0 +1,64 @@
+@inject IJSRuntime JS
+
+<div class="hc-row" style="gap:10px; align-items:center;">
+    <span class="hc-section-title" style="margin:0;">Theme</span>
+    <div class="hc-theme-swatches">
+        @foreach (var c in _palette)
+        {
+            var active = string.Equals(c.Hex, _current, StringComparison.OrdinalIgnoreCase);
+            <button type="button"
+                    class="hc-theme-swatch @(active ? "active" : "")"
+                    title="@c.Name"
+                    style="background:@c.Hex"
+                    @onclick="() => SetAsync(c.Hex)"></button>
+        }
+    </div>
+    <button type="button" class="hc-btn hc-btn-ghost" @onclick="ResetAsync">Reset</button>
+</div>
+
+@code {
+    private string? _current;
+
+    private record Swatch(string Name, string Hex);
+    /// <summary>
+    /// Curated palette: each swatch is a deeper, slightly desaturated mid-tone
+    /// (most lie around the *-700 step) so they read as "professional brand"
+    /// rather than vibrant Tailwind defaults. Cool → green → warm → neutral.
+    /// </summary>
+    private static readonly Swatch[] _palette =
+    {
+        new("Ocean",    "#0E7490"), // cyan-700  (default — healthcare/trust)
+        new("Sapphire", "#1D4ED8"), // blue-700
+        new("Indigo",   "#4338CA"), // indigo-700
+        new("Violet",   "#6D28D9"), // violet-700
+        new("Pine",     "#0F766E"), // teal-700
+        new("Forest",   "#15803D"), // green-700
+        new("Saffron",  "#B45309"), // amber-700
+        new("Crimson",  "#BE123C"), // rose-700
+        new("Graphite", "#334155")  // slate-700
+    };
+
+    private const string DefaultColor = "#0E7490";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _current = await JS.InvokeAsync<string?>("hcTheme.get");
+            if (string.IsNullOrEmpty(_current)) _current = DefaultColor;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SetAsync(string hex)
+    {
+        _current = hex;
+        await JS.InvokeVoidAsync("hcTheme.set", hex);
+    }
+
+    private async Task ResetAsync()
+    {
+        _current = DefaultColor;
+        await JS.InvokeVoidAsync("hcTheme.reset");
+    }
+}

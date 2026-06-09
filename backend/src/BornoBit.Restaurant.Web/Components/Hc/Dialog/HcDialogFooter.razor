@@ -1,0 +1,11 @@
+@namespace BornoBit.Restaurant.Web.Components.Hc.Dialog
+
+<div class="hc-dialog-footer @CssClass">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+    private string CssClass => AdditionalAttributes is { } a && a.TryGetValue("class", out var c) ? c?.ToString() ?? "" : "";
+}

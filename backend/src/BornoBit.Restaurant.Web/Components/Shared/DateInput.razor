@@ -1,0 +1,213 @@
+@using System.Globalization
+
+<div class="di-wrap @Class" style="@Style">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="di-label">@Label@if (Required) {<span class="di-req">*</span>}</label>
+    }
+    <div class="di-input-wrap @(_invalid ? "is-invalid" : "")">
+        <input type="text"
+               class="di-text"
+               @ref="_textRef"
+               placeholder="@Placeholder"
+               value="@_text"
+               disabled="@Disabled"
+               maxlength="10"
+               autocomplete="off"
+               spellcheck="false"
+               inputmode="numeric"
+               @oninput="OnTextInput"
+               @onblur="OnTextBlurAsync"
+               @onkeydown="OnTextKeyDownAsync" />
+        <span class="di-suffix" title="Open calendar">
+            <svg class="di-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="12" height="11" rx="1.5" />
+                <path d="M2 6.5h12M5 2v3M11 2v3" />
+            </svg>
+            <input type="date"
+                   class="di-picker"
+                   value="@PickerValue"
+                   disabled="@Disabled"
+                   tabindex="-1"
+                   aria-hidden="true"
+                   min="@MinValue"
+                   max="@MaxValue"
+                   @onchange="OnPickerChangeAsync" />
+        </span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public DateTime? Value { get; set; }
+    [Parameter] public EventCallback<DateTime?> ValueChanged { get; set; }
+    [Parameter] public EventCallback OnEnter { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "dd/MM/yyyy";
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public DateTime? Min { get; set; }
+    [Parameter] public DateTime? Max { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private ElementReference _textRef;
+    private string _text = string.Empty;
+    private bool _invalid;
+    private DateTime? _lastSyncedValue;
+    private bool _syncedOnce;
+
+    public ValueTask FocusAsync() => _textRef.FocusAsync();
+
+    private string PickerValue => Value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+    private string MinValue => Min?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+    private string MaxValue => Max?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private static readonly string[] _acceptedFormats =
+    {
+        "dd/MM/yyyy", "d/M/yyyy", "dd/M/yyyy", "d/MM/yyyy",
+        "dd-MM-yyyy", "d-M-yyyy",
+        "ddMMyyyy"
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (!_syncedOnce || !EqualityComparer<DateTime?>.Default.Equals(Value, _lastSyncedValue))
+        {
+            _lastSyncedValue = Value;
+            _text = Value?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? string.Empty;
+            _invalid = false;
+            _syncedOnce = true;
+        }
+    }
+
+    private void OnTextInput(ChangeEventArgs e)
+    {
+        _text = e.Value?.ToString() ?? string.Empty;
+        if (_invalid) _invalid = false;
+    }
+
+    private Task OnTextBlurAsync(FocusEventArgs e) => TryCommitTextAsync();
+
+    private async Task OnTextKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await TryCommitTextAsync();
+            if (!_invalid && OnEnter.HasDelegate) await OnEnter.InvokeAsync();
+        }
+    }
+
+    private async Task TryCommitTextAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_text))
+        {
+            _invalid = false;
+            if (Value is not null) await SetValueAsync(null);
+            return;
+        }
+
+        if (TryParseDate(_text, out var dt))
+        {
+            _invalid = false;
+            _text = dt.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            await SetValueAsync(dt);
+        }
+        else
+        {
+            _invalid = true;
+        }
+    }
+
+    private async Task OnPickerChangeAsync(ChangeEventArgs e)
+    {
+        var s = e.Value?.ToString();
+        if (string.IsNullOrEmpty(s))
+        {
+            await SetValueAsync(null);
+            return;
+        }
+        if (DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+        {
+            _invalid = false;
+            _text = dt.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            await SetValueAsync(dt);
+        }
+    }
+
+    private async Task SetValueAsync(DateTime? value)
+    {
+        if (EqualityComparer<DateTime?>.Default.Equals(Value, value)) return;
+        Value = value;
+        _lastSyncedValue = value;
+        if (ValueChanged.HasDelegate) await ValueChanged.InvokeAsync(value);
+    }
+
+    private static bool TryParseDate(string input, out DateTime dt)
+    {
+        var trimmed = input.Trim();
+        return DateTime.TryParseExact(trimmed, _acceptedFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt);
+    }
+}
+
+<style>
+    .di-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .di-label {
+        font-size: 12px; font-weight: 500;
+        color: #374151; line-height: 1.2;
+    }
+    .di-req { color: #DC2626; margin-left: 1px; }
+
+    .di-input-wrap { position: relative; display: flex; align-items: center; }
+
+    .di-text {
+        width: 100%;
+        padding: 9px 44px 9px 12px;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        font-size: 13px; line-height: 1.4;
+        background: #fff; color: #111827;
+        outline: none;
+        transition: border-color 100ms, box-shadow 100ms;
+        font-family: inherit;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.02em;
+    }
+    .di-text::placeholder { color: #9CA3AF; }
+    .di-text:hover:not(:focus):not(:disabled) { border-color: #D1D5DB; }
+    .di-text:focus { border-color: #94A3B8; box-shadow: 0 0 0 3px rgba(148,163,184,0.18); }
+    .di-text:disabled { background: #F9FAFB; color: #9CA3AF; cursor: not-allowed; }
+
+    .di-input-wrap.is-invalid .di-text { border-color: #FCA5A5; }
+    .di-input-wrap.is-invalid .di-text:focus { border-color: #DC2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.15); }
+
+    .di-suffix {
+        position: absolute; right: 4px; top: 4px; bottom: 4px;
+        width: 32px;
+        display: flex; align-items: center; justify-content: center;
+        color: #9CA3AF;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: color 100ms, background 100ms;
+    }
+    .di-suffix:hover { color: #475569; background: #F3F4F6; }
+    .di-suffix .di-icon { width: 16px; height: 16px; pointer-events: none; }
+
+    .di-picker {
+        position: absolute;
+        inset: 0;
+        width: 100%; height: 100%;
+        opacity: 0;
+        cursor: pointer;
+        border: 0; padding: 0; margin: 0;
+        background: transparent;
+        color: transparent;
+    }
+    .di-picker::-webkit-calendar-picker-indicator {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        margin: 0; padding: 0;
+        background: transparent;
+        cursor: pointer;
+    }
+    .di-picker:disabled { cursor: not-allowed; }
+</style>

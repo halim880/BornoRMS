@@ -1,0 +1,36 @@
+@typeparam TItem
+@using System.Linq.Expressions
+@using System.Globalization
+
+@code {
+    [CascadingParameter] internal DataGrid<TItem>? Parent { get; set; }
+
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public Expression<Func<TItem, object?>>? Property { get; set; }
+    [Parameter] public string? Format { get; set; }
+    [Parameter] public bool Sortable { get; set; }
+    [Parameter] public DataGridAlign Align { get; set; } = DataGridAlign.Left;
+    [Parameter] public string? Width { get; set; }
+    [Parameter] public RenderFragment<TItem>? ChildContent { get; set; }
+    [Parameter] public RenderFragment<TItem>? CellTemplate { get; set; }
+    [Parameter] public RenderFragment? HeaderTemplate { get; set; }
+
+    internal Func<TItem, object?>? PropertyFunc { get; private set; }
+    internal RenderFragment<TItem>? Cell => CellTemplate ?? ChildContent;
+
+    protected override void OnInitialized()
+    {
+        if (Property is not null) PropertyFunc = Property.Compile();
+        Parent?.RegisterColumn(this);
+    }
+
+    internal string GetCellText(TItem item)
+    {
+        if (PropertyFunc is null) return string.Empty;
+        var v = PropertyFunc(item);
+        if (v is null) return string.Empty;
+        if (!string.IsNullOrEmpty(Format) && v is IFormattable f)
+            return f.ToString(Format, CultureInfo.CurrentCulture);
+        return v.ToString() ?? string.Empty;
+    }
+}

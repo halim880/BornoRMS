@@ -1,0 +1,137 @@
+@using BornoBit.Restaurant.Application.Modules
+@using BornoBit.Restaurant.Domain.Identity
+@using BornoBit.Restaurant.Infrastructure.Identity
+@using MediatR
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using System.Security.Claims
+@inject ISender Mediator
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+@inject RoleManager<ApplicationRole> RoleManager
+@implements IDisposable
+
+@if (_loading)
+{
+    <div class="module-switcher loading">Loading…</div>
+}
+else if (_modules.Count == 0)
+{
+    <div class="module-switcher empty">No modules</div>
+}
+else
+{
+    <nav class="module-switcher" role="tablist">
+        @{
+            var effectiveActiveId = ActiveModuleId ?? ResolveActiveByUrl();
+        }
+        @foreach (var m in _modules)
+        {
+            var active = effectiveActiveId == m.Id;
+            var titleAttr = BuildTitle(m);
+            <button type="button"
+                    class="module-pill @(active ? "active" : "")"
+                    role="tab"
+                    aria-selected="@(active ? "true" : "false")"
+                    title="@titleAttr"
+                    @onclick="@(() => OnModuleClick(m))">
+                <span class="module-pill-glyph">
+                    @if (!string.IsNullOrWhiteSpace(m.Icon))
+                    {
+                        <HcIcon Name="@m.Icon" Size="16" />
+                    }
+                    else
+                    {
+                        @GetGlyph(m.Title)
+                    }
+                </span>
+                <span class="module-pill-text">@m.Title</span>
+            </button>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter] public Guid? ActiveModuleId { get; set; }
+    [Parameter] public EventCallback<Guid?> ActiveModuleIdChanged { get; set; }
+
+    private bool _loading = true;
+    private List<ModuleDto> _modules = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var state = await AuthState.GetAuthenticationStateAsync();
+            var isAuthed = state.User.Identity?.IsAuthenticated == true;
+            if (!isAuthed) { _modules = new(); return; }
+
+            var isSuperAdmin = state.User.IsInRole(Roles.SuperAdmin);
+            var roleIds = new List<Guid>();
+            if (!isSuperAdmin)
+            {
+                foreach (var name in state.User.FindAll(ClaimTypes.Role).Select(c => c.Value))
+                {
+                    var r = await RoleManager.FindByNameAsync(name);
+                    if (r is not null) roleIds.Add(r.Id);
+                }
+            }
+            _modules = (await Mediator.Send(new GetUserModulesQuery(roleIds, isSuperAdmin))).ToList();
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task OnModuleClick(ModuleDto m)
+    {
+        await ActiveModuleIdChanged.InvokeAsync(m.Id);
+        if (!string.IsNullOrWhiteSpace(m.FirstAccessibleUrl))
+        {
+            Nav.NavigateTo(m.FirstAccessibleUrl);
+        }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs _)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Guid? ResolveActiveByUrl()
+    {
+        var rel = Nav.ToBaseRelativePath(Nav.Uri);
+        var path = "/" + rel.Split('?')[0].Split('#')[0].TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(path) || path == "/") return null;
+
+        foreach (var m in _modules)
+        {
+            if (m.AccessibleUrls is null) continue;
+            foreach (var u in m.AccessibleUrls)
+            {
+                var nu = "/" + u.TrimStart('/').TrimEnd('/');
+                if (string.Equals(nu, path, StringComparison.OrdinalIgnoreCase)) return m.Id;
+            }
+        }
+        return null;
+    }
+
+    private static string GetGlyph(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return "·";
+        return char.ToUpperInvariant(title.Trim()[0]).ToString();
+    }
+
+    private static string BuildTitle(ModuleDto m)
+    {
+        return m.AccessibleMenuCount > 0
+            ? $"{m.Title} · {m.AccessibleMenuCount} item(s)"
+            : m.Title;
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

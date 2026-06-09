@@ -1,0 +1,232 @@
+@namespace BornoBit.Restaurant.Web.Components.Hc
+@typeparam TOption
+
+<div class="hc-cmp-field hc-cmp-ac-wrap @(string.IsNullOrEmpty(Error) ? "" : "is-invalid") @CssClass">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="hc-cmp-field-label" for="@_id">
+            @Label
+            @if (Required)
+            {
+                <span class="hc-cmp-field-required" aria-hidden="true">*</span>
+            }
+        </label>
+    }
+    <div class="hc-cmp-ac" @onfocusout="OnFocusOut">
+        <div class="hc-cmp-ac-shell @(_open ? "is-open" : "") @(Disabled ? "is-disabled" : "")">
+            <input id="@_id"
+                   type="text"
+                   class="hc-cmp-ac-input @(ShowSelectedOverlay ? "is-hidden-text" : "")"
+                   value="@_displayText"
+                   placeholder="@(string.IsNullOrEmpty(Placeholder) ? "Search…" : Placeholder)"
+                   disabled="@Disabled"
+                   autocomplete="off"
+                   spellcheck="false"
+                   role="combobox"
+                   aria-expanded="@(_open ? "true" : "false")"
+                   aria-autocomplete="list"
+                   @oninput="OnInput"
+                   @onfocus="OnFocus"
+                   @onclick="OnFocus"
+                   @onkeydown="OnKeyDown" />
+            @if (ShowSelectedOverlay)
+            {
+                <div class="hc-cmp-ac-selected" @onmousedown:preventDefault="true" @onclick="OnFocus">
+                    @SelectedTemplate!(SelectedOption!)
+                </div>
+            }
+            @if (SelectedOption is not null && !Disabled)
+            {
+                <button type="button" tabindex="-1" class="hc-cmp-ac-clear"
+                        @onmousedown:preventDefault="true"
+                        @onmousedown:stopPropagation="true"
+                        @onclick="ClearAsync"
+                        title="Clear">×</button>
+            }
+            <span class="hc-cmp-ac-chevron" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m4 6 4 4 4-4" />
+                </svg>
+            </span>
+        </div>
+        @if (_open && !Disabled)
+        {
+            var filtered = FilteredItems().ToList();
+            <div class="hc-cmp-ac-list @(DropUp ? "is-drop-up" : "")" role="listbox" @onmousedown:preventDefault="true">
+                @if (filtered.Count == 0)
+                {
+                    <div class="hc-cmp-ac-empty">No matches</div>
+                }
+                else
+                {
+                    var idx = 0;
+                    @foreach (var item in filtered)
+                    {
+                        var i = idx;
+                        var isSelected = SelectedOption is not null && OptionValue(SelectedOption) == OptionValue(item);
+                        var isHighlighted = i == _highlightedIndex;
+                        <div class="hc-cmp-ac-option @(OptionTemplate is not null ? "is-custom" : "") @(isSelected ? "is-selected" : "") @(isHighlighted ? "is-highlighted" : "")"
+                             role="option"
+                             aria-selected="@(isSelected ? "true" : "false")"
+                             @onmouseenter="@(() => _highlightedIndex = i)"
+                             @onclick="@(() => SelectAsync(item))">
+                            @if (OptionTemplate is not null)
+                            {
+                                @OptionTemplate(item)
+                            }
+                            else
+                            {
+                                @OptionText(item)
+                            }
+                        </div>
+                        idx++;
+                    }
+                    @if (Items is not null && Items.Count() > MaxResults && string.IsNullOrEmpty(_query))
+                    {
+                        <div class="hc-cmp-ac-more">Showing first @MaxResults of @Items.Count(). Type to filter.</div>
+                    }
+                }
+            </div>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="hc-cmp-field-error">@Error</div>
+    }
+    else if (!string.IsNullOrEmpty(Hint))
+    {
+        <div class="hc-cmp-field-hint">@Hint</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<TOption>? Items { get; set; }
+    [Parameter, EditorRequired] public Func<TOption, string> OptionValue { get; set; } = _ => "";
+    [Parameter, EditorRequired] public Func<TOption, string> OptionText { get; set; } = _ => "";
+    /// <summary>Optional searchable text. Defaults to OptionText.</summary>
+    [Parameter] public Func<TOption, string>? OptionSearch { get; set; }
+    /// <summary>Custom render for each dropdown item. Falls back to OptionText if null.</summary>
+    [Parameter] public RenderFragment<TOption>? OptionTemplate { get; set; }
+    /// <summary>Custom render for the selected value displayed in the input area. Falls back to OptionText if null.</summary>
+    [Parameter] public RenderFragment<TOption>? SelectedTemplate { get; set; }
+    [Parameter] public TOption? SelectedOption { get; set; }
+    [Parameter] public EventCallback<TOption?> SelectedOptionChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    /// <summary>Open dropdown upward (above input). Use when input sits near the bottom of a modal/scroll container that clips downward overflow.</summary>
+    [Parameter] public bool DropUp { get; set; }
+    [Parameter] public int MaxResults { get; set; } = 100;
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => AdditionalAttributes is { } a && a.TryGetValue("class", out var c) ? c?.ToString() ?? "" : "";
+    private readonly string _id = $"hc-ac-{Guid.NewGuid():N}";
+
+    private bool _open;
+    private string _query = "";
+    private bool _isTyping;
+    private int _highlightedIndex;
+
+    private string _displayText => _isTyping ? _query : (SelectedOption is null ? "" : OptionText(SelectedOption));
+
+    private bool ShowSelectedOverlay =>
+        SelectedTemplate is not null && SelectedOption is not null && !_isTyping && !_open;
+
+    private IEnumerable<TOption> FilteredItems()
+    {
+        if (Items is null) yield break;
+        var q = _isTyping ? (_query ?? "").Trim() : "";
+        var searcher = OptionSearch ?? OptionText;
+        var count = 0;
+        foreach (var item in Items)
+        {
+            if (q.Length > 0)
+            {
+                var hay = searcher(item) ?? "";
+                if (hay.IndexOf(q, StringComparison.OrdinalIgnoreCase) < 0) continue;
+            }
+            yield return item;
+            if (++count >= MaxResults) yield break;
+        }
+    }
+
+    private void OnFocus()
+    {
+        if (Disabled) return;
+        _open = true;
+    }
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+        _isTyping = true;
+        _open = true;
+        _highlightedIndex = 0;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (Disabled) return;
+
+        if (!_open && (e.Key == "ArrowDown" || e.Key == "Enter"))
+        {
+            _open = true;
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                {
+                    var count = FilteredItems().Count();
+                    _highlightedIndex = Math.Min(count - 1, _highlightedIndex + 1);
+                    break;
+                }
+            case "ArrowUp":
+                _highlightedIndex = Math.Max(0, _highlightedIndex - 1);
+                break;
+            case "Enter":
+                {
+                    var list = FilteredItems().ToList();
+                    if (list.Count > 0 && _highlightedIndex >= 0 && _highlightedIndex < list.Count)
+                        await SelectAsync(list[_highlightedIndex]);
+                    break;
+                }
+            case "Escape":
+            case "Tab":
+                Close();
+                break;
+        }
+    }
+
+    private async Task SelectAsync(TOption item)
+    {
+        await SelectedOptionChanged.InvokeAsync(item);
+        Close();
+    }
+
+    private async Task ClearAsync()
+    {
+        await SelectedOptionChanged.InvokeAsync(default);
+        Close();
+    }
+
+    private void OnFocusOut(FocusEventArgs e)
+    {
+        // Options use @onmousedown:preventDefault so clicking an option
+        // does not blur the input. A real focusout means the user tabbed
+        // or clicked away.
+        Close();
+    }
+
+    private void Close()
+    {
+        _open = false;
+        _isTyping = false;
+        _query = "";
+        _highlightedIndex = 0;
+    }
+}

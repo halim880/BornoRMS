@@ -1,0 +1,76 @@
+@page "/orders"
+@attribute [Authorize(Policy = "Staff")]
+@using Microsoft.AspNetCore.Authorization
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Shared.Common
+@using MediatR
+@inject ISender Sender
+@rendermode InteractiveServer
+
+<PageTitle>Orders · BornoBit</PageTitle>
+
+<PageHeader Title="Incoming Orders" Description="Live customer orders. Download a receipt for any order.">
+    <Actions>
+        <HcButton Variant="ghost" OnClick="Load">Refresh</HcButton>
+    </Actions>
+</PageHeader>
+
+@if (_loading)
+{
+    <LoadingState Message="Loading orders…" />
+}
+else if (_result is null || _result.Items.Count == 0)
+{
+    <EmptyState Icon="DocumentBulletList" Title="No orders yet"
+                Description="Orders placed by customers will appear here." />
+}
+else
+{
+    <DataGrid TItem="OrderListItemDto" Items="@_result.Items" PageSize="25"
+              SearchPlaceholder="Search order #, customer, phone…"
+              SearchPredicate="@((o, q) => o.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase)
+                  || (o.CustomerName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                  || o.CustomerPhone.Contains(q, StringComparison.OrdinalIgnoreCase))">
+        <Columns>
+            <DataGridColumn TItem="OrderListItemDto" Title="Order #" Property="@(o => o.OrderNumber)" Sortable="true">
+                <strong>@context.OrderNumber</strong>
+            </DataGridColumn>
+            <DataGridColumn TItem="OrderListItemDto" Title="Customer">
+                @(context.CustomerName ?? context.CustomerPhone)
+            </DataGridColumn>
+            <DataGridColumn TItem="OrderListItemDto" Title="Type" Property="@(o => o.OrderType)" Sortable="true" />
+            <DataGridColumn TItem="OrderListItemDto" Title="Table">
+                @(context.TableNumber ?? "—")
+            </DataGridColumn>
+            <DataGridColumn TItem="OrderListItemDto" Title="Items" Align="DataGridAlign.Center" Width="80px">
+                @context.ItemCount
+            </DataGridColumn>
+            <DataGridColumn TItem="OrderListItemDto" Title="Total" Align="DataGridAlign.Right" Width="120px">
+                <strong>@context.Currency @context.Total.ToString("0.##")</strong>
+            </DataGridColumn>
+            <DataGridColumn TItem="OrderListItemDto" Title="Status" Align="DataGridAlign.Center" Width="280px">
+                <OrderStatusCell Order="context" OnChanged="Load" />
+            </DataGridColumn>
+            <DataGridColumn TItem="OrderListItemDto" Title="Placed" Property="@(o => (object?)o.OrderedAtUtc)" Format="g" Width="150px" />
+            <DataGridColumn TItem="OrderListItemDto" Title="" Align="DataGridAlign.Right" Width="110px">
+                <a class="hc-link" href="/reports/order/@context.Id/receipt.pdf" target="_blank">Receipt</a>
+            </DataGridColumn>
+        </Columns>
+    </DataGrid>
+    <p style="color:var(--hc-text-muted); font-size:var(--hc-font-sm); margin-top:8px;">@_result.TotalCount total</p>
+}
+
+@code {
+    private PagedResult<OrderListItemDto>? _result;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        StateHasChanged();
+        _result = await Sender.Send(new GetOrdersQuery(Page: 1, PageSize: 100));
+        _loading = false;
+    }
+}

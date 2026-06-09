@@ -1,0 +1,324 @@
+@page "/waiter/orders"
+@attribute [Authorize(Policy = "Staff")]
+@using Microsoft.AspNetCore.Authorization
+@using BornoBit.Restaurant.Application.Catalog.Queries
+@using BornoBit.Restaurant.Application.Dining.Queries
+@using BornoBit.Restaurant.Application.Ordering.Commands
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Domain.Ordering
+@using BornoBit.Restaurant.Shared.Common
+@using MediatR
+@inject ISender Sender
+@inject IHcToastService ToastService
+@rendermode InteractiveServer
+
+<PageTitle>Take Order · BornoBit</PageTitle>
+
+<PageHeader Title="Take Order" Description="Build and place an order on behalf of a guest.">
+    <Actions>
+        <HcButton Variant="ghost" OnClick="LoadRecent">Refresh list</HcButton>
+    </Actions>
+</PageHeader>
+
+@if (_loading)
+{
+    <LoadingState Message="Loading menu…" />
+}
+else
+{
+    <div class="waiter-grid">
+        <!-- ORDER BUILDER -->
+        <HcCard Title="New order">
+            <div class="builder">
+                <div class="field-row">
+                    <span class="field-label">Order type</span>
+                    <div class="type-toggle">
+                        <HcButton Variant="@(_type == OrderType.DineIn ? "primary" : "outline")"
+                                  Size="sm" OnClick="@(() => SetType(OrderType.DineIn))">Dine-in</HcButton>
+                        <HcButton Variant="@(_type == OrderType.Takeaway ? "primary" : "outline")"
+                                  Size="sm" OnClick="@(() => SetType(OrderType.Takeaway))">Takeaway</HcButton>
+                    </div>
+                </div>
+
+                @if (_type == OrderType.DineIn)
+                {
+                    <HcSelect TOption="TableDto" Items="_tables"
+                              OptionValue="@(t => t.Id.ToString())"
+                              OptionText="@(t => $"{t.TableNumber} · seats {t.Capacity}")"
+                              SelectedOption="_selectedTable"
+                              SelectedOptionChanged="@(t => _selectedTable = t)"
+                              Label="Table" Placeholder="Select a table…" Required="true" />
+                }
+
+                <div class="two-col">
+                    <HcInput @bind-Value="_phone" Label="Customer phone (optional)" Placeholder="01XXXXXXXXX" />
+                    <HcInput @bind-Value="_name" Label="Customer name (optional)" />
+                </div>
+
+                <div class="field-row">
+                    <span class="field-label">Menu</span>
+                    @if (_menu is null || _menu.Count == 0)
+                    {
+                        <EmptyState Icon="DocumentBulletList" Title="No menu items"
+                                    Description="Add menu items first." />
+                    }
+                    else
+                    {
+                        <div class="menu">
+                            @foreach (var cat in _menu)
+                            {
+                                <div class="menu-cat">
+                                    <div class="menu-cat-name">@cat.Name</div>
+                                    @foreach (var item in cat.Items)
+                                    {
+                                        <div class="menu-item">
+                                            <div class="menu-item-info">
+                                                <span class="menu-item-name">@item.Name</span>
+                                                <span class="menu-item-price">@item.Currency @item.Price.ToString("0.##")</span>
+                                            </div>
+                                            <HcButton Variant="outline" Size="sm" OnClick="@(() => AddItem(item))">Add</HcButton>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </HcCard>
+
+        <!-- CART -->
+        <HcCard Title="Order summary">
+            <div class="cart">
+                @if (_cart.Count == 0)
+                {
+                    <EmptyState Icon="Cart" Title="Cart empty" Description="Add menu items to start." />
+                }
+                else
+                {
+                    <div class="cart-lines">
+                        @foreach (var line in _cart)
+                        {
+                            <div class="cart-line" @key="line.Item.Id">
+                                <div class="cart-line-info">
+                                    <span class="cart-line-name">@line.Item.Name</span>
+                                    <span class="cart-line-sub">@line.Item.Currency @line.Item.Price.ToString("0.##")</span>
+                                </div>
+                                <div class="qty">
+                                    <HcButton Variant="ghost" Size="sm" OnClick="@(() => Decrement(line))">−</HcButton>
+                                    <span class="qty-val">@line.Qty</span>
+                                    <HcButton Variant="ghost" Size="sm" OnClick="@(() => Increment(line))">+</HcButton>
+                                </div>
+                                <span class="cart-line-total">@line.Item.Currency @((line.Item.Price * line.Qty).ToString("0.##"))</span>
+                                <HcButton Variant="ghost" Size="sm" OnClick="@(() => Remove(line))">✕</HcButton>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="cart-total">
+                        <span>Total</span>
+                        <strong>@Currency @Total.ToString("0.##")</strong>
+                    </div>
+                }
+
+                <HcInput @bind-Value="_notes" Label="Notes (optional)" Placeholder="e.g. no onions" />
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <HcMessageBar Intent="error">@_error</HcMessageBar>
+                }
+
+                <HcButton Variant="primary" OnClick="PlaceAsync" Loading="_placing" Disabled="@(!CanPlace)">
+                    Place order
+                </HcButton>
+            </div>
+        </HcCard>
+    </div>
+
+    <!-- RECENT ORDERS -->
+    <div style="margin-top:24px;">
+        <HcCard Title="Recent orders">
+            @if (_recent is null || _recent.Items.Count == 0)
+            {
+                <EmptyState Icon="DocumentBulletList" Title="No orders yet"
+                            Description="Placed orders will appear here." />
+            }
+            else
+            {
+                <DataGrid TItem="OrderListItemDto" Items="@_recent.Items" PageSize="10"
+                          SearchPlaceholder="Search order #, customer…"
+                          SearchPredicate="@((o, q) => o.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase)
+                              || (o.CustomerName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                              || o.CustomerPhone.Contains(q, StringComparison.OrdinalIgnoreCase))">
+                    <Columns>
+                        <DataGridColumn TItem="OrderListItemDto" Title="Order #" Property="@(o => o.OrderNumber)" Sortable="true">
+                            <strong>@context.OrderNumber</strong>
+                        </DataGridColumn>
+                        <DataGridColumn TItem="OrderListItemDto" Title="Customer">
+                            @(context.CustomerName ?? context.CustomerPhone)
+                        </DataGridColumn>
+                        <DataGridColumn TItem="OrderListItemDto" Title="Type" Property="@(o => o.OrderType)" Sortable="true" />
+                        <DataGridColumn TItem="OrderListItemDto" Title="Table">
+                            @(context.TableNumber ?? "—")
+                        </DataGridColumn>
+                        <DataGridColumn TItem="OrderListItemDto" Title="Items" Align="DataGridAlign.Center" Width="80px">
+                            @context.ItemCount
+                        </DataGridColumn>
+                        <DataGridColumn TItem="OrderListItemDto" Title="Total" Align="DataGridAlign.Right" Width="120px">
+                            <strong>@context.Currency @context.Total.ToString("0.##")</strong>
+                        </DataGridColumn>
+                        <DataGridColumn TItem="OrderListItemDto" Title="Status" Align="DataGridAlign.Center" Width="280px">
+                            <OrderStatusCell Order="context" OnChanged="LoadRecent" />
+                        </DataGridColumn>
+                        <DataGridColumn TItem="OrderListItemDto" Title="Placed" Property="@(o => (object?)o.OrderedAtUtc)" Format="g" Width="150px" />
+                    </Columns>
+                </DataGrid>
+            }
+        </HcCard>
+    </div>
+}
+
+@code {
+    private sealed class CartLine
+    {
+        public required MenuItemDto Item { get; init; }
+        public int Qty { get; set; } = 1;
+    }
+
+    private IReadOnlyList<MenuCategoryDto>? _menu;
+    private IReadOnlyList<TableDto> _tables = Array.Empty<TableDto>();
+    private PagedResult<OrderListItemDto>? _recent;
+
+    private readonly List<CartLine> _cart = new();
+    private OrderType _type = OrderType.DineIn;
+    private TableDto? _selectedTable;
+    private string? _phone;
+    private string? _name;
+    private string? _notes;
+
+    private bool _loading = true;
+    private bool _placing;
+    private string? _error;
+
+    private string Currency => _cart.Count > 0 ? _cart[0].Item.Currency : "Tk";
+    private decimal Total => _cart.Sum(l => l.Item.Price * l.Qty);
+    private bool CanPlace => !_placing && _cart.Count > 0
+        && (_type != OrderType.DineIn || _selectedTable is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _menu = await Sender.Send(new GetMenuQuery());
+        _tables = await Sender.Send(new GetTablesQuery());
+        await LoadRecent();
+        _loading = false;
+    }
+
+    private async Task LoadRecent()
+    {
+        _recent = await Sender.Send(new GetOrdersQuery(Page: 1, PageSize: 20));
+        StateHasChanged();
+    }
+
+    private void SetType(OrderType type)
+    {
+        _type = type;
+        if (type == OrderType.Takeaway) _selectedTable = null;
+    }
+
+    private void AddItem(MenuItemDto item)
+    {
+        var existing = _cart.FirstOrDefault(l => l.Item.Id == item.Id);
+        if (existing is null) _cart.Add(new CartLine { Item = item });
+        else existing.Qty++;
+    }
+
+    private void Increment(CartLine line) => line.Qty++;
+
+    private void Decrement(CartLine line)
+    {
+        if (line.Qty <= 1) _cart.Remove(line);
+        else line.Qty--;
+    }
+
+    private void Remove(CartLine line) => _cart.Remove(line);
+
+
+
+    private async Task PlaceAsync()
+    {
+        _error = null;
+        _placing = true;
+        try
+        {
+            var lines = _cart.Select(l => new PlaceOrderLineInput(l.Item.Id, l.Qty)).ToList();
+            var result = await Sender.Send(new PlaceWaiterOrderCommand(
+                _phone, _name, _selectedTable?.Id, _type, _notes, lines));
+
+            ToastService.ShowSuccess($"Order {result.OrderNumber} placed · {result.Currency} {result.Total:0.##}");
+
+            _cart.Clear();
+            _phone = _name = _notes = null;
+            _selectedTable = null;
+            await LoadRecent();
+        }
+        catch (FluentValidation.ValidationException vex)
+        {
+            _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _placing = false;
+        }
+    }
+}
+
+<style>
+    .waiter-grid {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+    @@media (max-width: 980px) {
+        .waiter-grid { grid-template-columns: 1fr; }
+    }
+    .builder { display: flex; flex-direction: column; gap: 16px; }
+    .field-row { display: flex; flex-direction: column; gap: 6px; }
+    .field-label {
+        font-size: 13px; font-weight: 600; color: var(--hc-text-muted, var(--neutral-foreground-rest));
+    }
+    .type-toggle { display: flex; gap: 8px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .menu { display: flex; flex-direction: column; gap: 14px; max-height: 460px; overflow-y: auto; padding-right: 4px; }
+    .menu-cat-name {
+        font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+        color: var(--hc-text-muted); margin-bottom: 6px;
+    }
+    .menu-item {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 8px 10px; border: 1px solid var(--hc-border, #e3e3e3); border-radius: 8px; margin-bottom: 6px;
+    }
+    .menu-item-info { display: flex; flex-direction: column; }
+    .menu-item-name { font-weight: 600; }
+    .menu-item-price { font-size: 12px; color: var(--hc-text-muted); }
+    .cart { display: flex; flex-direction: column; gap: 14px; }
+    .cart-lines { display: flex; flex-direction: column; gap: 8px; }
+    .cart-line {
+        display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 10px;
+        padding: 6px 0; border-bottom: 1px solid var(--hc-border, #eee);
+    }
+    .cart-line-info { display: flex; flex-direction: column; }
+    .cart-line-name { font-weight: 600; }
+    .cart-line-sub { font-size: 12px; color: var(--hc-text-muted); }
+    .qty { display: flex; align-items: center; gap: 4px; }
+    .qty-val { min-width: 24px; text-align: center; font-weight: 600; }
+    .cart-line-total { font-weight: 600; min-width: 80px; text-align: right; }
+    .cart-total {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 18px; padding-top: 8px; border-top: 2px solid var(--hc-border, #ddd);
+    }
+</style>

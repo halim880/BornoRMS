@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "bornobit-sql": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": [
+        "tools/BornoBit.Restaurant.Mcp/bin/Debug/net10.0/BornoBit.Restaurant.Mcp.dll"
+      ],
+      "env": {
+        "CONNECTION_STRING": "Server=(localdb)\\MSSQLLocalDB;Database=BornoBitRestaurant;Trusted_Connection=True;TrustServerCertificate=True"
+      }
+    }
+  }
+}

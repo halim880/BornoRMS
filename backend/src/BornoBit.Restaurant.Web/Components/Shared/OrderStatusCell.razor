@@ -1,0 +1,118 @@
+@using BornoBit.Restaurant.Application.Ordering.Commands
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Domain.Ordering
+@using BornoBit.Restaurant.Shared.Common
+@using MediatR
+@inject ISender Sender
+@inject IHcToastService ToastService
+@inject IHcDialogService DialogService
+
+<div class="order-status-cell">
+    <HcBadge Tone="@StatusTone(Order.Status)">@Order.Status</HcBadge>
+
+    @{
+        var next = NextStep(Order.Status);
+    }
+    @if (next is not null)
+    {
+        <HcButton Variant="primary" Size="sm" Loading="_busy" OnClick="@(() => AdvanceAsync(next.Value.Target))">
+            @next.Value.Label
+        </HcButton>
+    }
+    @if (CanCancel(Order.Status))
+    {
+        <HcButton Variant="ghost" Size="sm" Disabled="_busy" OnClick="CancelAsync">Cancel</HcButton>
+    }
+
+    @if (Order.IsPaid)
+    {
+        <HcBadge Tone="success">Paid</HcBadge>
+    }
+    else if (Order.Status != OrderStatus.Cancelled)
+    {
+        <HcButton Variant="accent" Size="sm" Disabled="_busy" OnClick="BillAsync">Bill</HcButton>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public OrderListItemDto Order { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool _busy;
+
+    private async Task AdvanceAsync(OrderStatus target)
+    {
+        _busy = true;
+        try
+        {
+            await Sender.Send(new ChangeOrderStatusCommand(Order.Id, target));
+            ToastService.ShowSuccess($"Order {Order.OrderNumber} → {target}.");
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task BillAsync()
+    {
+        var result = await DialogService.ShowAsync<BillDialog, Guid>(
+            Order.Id,
+            new HcDialogOptions { Title = $"Bill · {Order.OrderNumber}", Width = "520px" });
+        if (!result.Cancelled && result.Data is true)
+            await OnChanged.InvokeAsync();
+    }
+
+    private async Task CancelAsync()
+    {
+        var result = await DialogService.ShowAsync<CancelOrderDialog, string>(
+            Order.OrderNumber,
+            new HcDialogOptions { Title = "Cancel order", Width = "440px" });
+        if (result.Cancelled) return;
+
+        _busy = true;
+        try
+        {
+            var reason = result.Data as string;
+            await Sender.Send(new ChangeOrderStatusCommand(Order.Id, OrderStatus.Cancelled, reason));
+            ToastService.ShowSuccess($"Order {Order.OrderNumber} cancelled.");
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError(ex.Message);
+        }
+        finally { _busy = false; }
+    }
+
+    private static (OrderStatus Target, string Label)? NextStep(OrderStatus status) => status switch
+    {
+        OrderStatus.Placed => (OrderStatus.Confirmed, "Confirm"),
+        OrderStatus.Confirmed => (OrderStatus.Preparing, "Start preparing"),
+        OrderStatus.Preparing => (OrderStatus.Ready, "Mark ready"),
+        OrderStatus.Ready => (OrderStatus.Served, "Mark served"),
+        OrderStatus.Served => (OrderStatus.Completed, "Complete"),
+        _ => null
+    };
+
+    private static bool CanCancel(OrderStatus status) =>
+        status is not (OrderStatus.Served or OrderStatus.Completed or OrderStatus.Cancelled);
+
+    private static string StatusTone(OrderStatus status) => status switch
+    {
+        OrderStatus.Placed => "warning",
+        OrderStatus.Confirmed => "info",
+        OrderStatus.Preparing => "primary",
+        OrderStatus.Ready => "success",
+        OrderStatus.Served => "success",
+        OrderStatus.Completed => "neutral",
+        OrderStatus.Cancelled => "danger",
+        _ => "neutral"
+    };
+}
+
+<style>
+    .order-status-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+</style>

@@ -1,0 +1,372 @@
+.nav-shell {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 264px;
+    display: flex;
+    flex-direction: column;
+    background:
+        linear-gradient(180deg, var(--hc-primary-tint) 0%, transparent 240px),
+        var(--hc-bg-card);
+    border-right: 1px solid var(--hc-border, #E2E8F0);
+    box-sizing: border-box;
+    padding: 0;
+    overflow: hidden;
+    z-index: 200;
+    box-shadow: var(--hc-shadow-xs);
+    transition: transform 240ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* Collapsed: slide the whole sidebar off the left edge. The page padding
+   collapses in MainLayout.razor.css so the content fills the freed space. */
+.nav-shell.is-collapsed {
+    transform: translateX(-100%);
+    box-shadow: none;
+}
+
+.nav-brand,
+.nav-search { flex-shrink: 0; }
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 68px;
+    padding: 0 20px;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--hc-border-soft);
+}
+
+.nav-brand-mark {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--hc-primary) 0%, var(--hc-primary-strong) 100%);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    font-weight: 800; font-style: italic;
+    font-size: 22px;
+    line-height: 1;
+    /* Soft primary glow that follows the user-picked theme color. */
+    box-shadow:
+        0 4px 12px -2px color-mix(in srgb, var(--hc-primary) 35%, transparent),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    flex-shrink: 0;
+    position: relative;
+}
+.nav-brand-mark::after {
+    /* Inner highlight curve for a glossy chip feel. */
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.28), transparent 60%);
+    pointer-events: none;
+}
+
+.nav-brand-dot { transform: translateY(-1px); position: relative; z-index: 1; }
+
+.nav-brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+.nav-brand-line1 {
+    font-weight: 700;
+    color: var(--hc-primary-strong);
+    font-size: 15px;
+    letter-spacing: -0.01em;
+}
+.nav-brand-line2 {
+    font-weight: 500;
+    color: var(--hc-text-subtle);
+    font-size: 12px;
+    letter-spacing: 0.01em;
+}
+
+.nav-search { padding: 12px 14px 8px; }
+
+.nav-search ::deep fluent-search::part(control),
+.nav-search ::deep fluent-search::part(root) {
+    border-radius: 10px;
+    background: #F8FAFC;
+}
+
+.nav-tree {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 6px 10px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* Top-level group header (Master Data, Operations, Finance, Admin) */
+.nav-group {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    background: transparent;
+    border: 0;
+    padding: 9px 12px;
+    margin-top: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #64748B;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.10em;
+    transition: background 80ms, color 80ms;
+}
+.nav-group:hover { color: #0F172A; background: #F8FAFC; }
+
+.nav-group.active-branch {
+    color: var(--brand, var(--hc-primary));
+}
+
+.nav-group-label { flex: 1; text-align: left; }
+
+/* Group/subgroup icons share the muted nav color and pick up the primary
+   tint on active branches, matching the label. */
+.nav-group ::deep .nav-group-icon,
+.nav-subgroup ::deep .nav-subgroup-icon {
+    color: var(--hc-slate-400, #94A3B8);
+    flex-shrink: 0;
+    transition: color 120ms var(--hc-ease-out, ease-out);
+}
+.nav-group:hover ::deep .nav-group-icon,
+.nav-subgroup:hover ::deep .nav-subgroup-icon {
+    color: var(--hc-slate-600, #475569);
+}
+.nav-group.active-branch ::deep .nav-group-icon {
+    color: var(--hc-primary);
+}
+
+.nav-chevron {
+    width: 14px;
+    color: #CBD5E1;
+    font-size: 18px;
+    line-height: 0.7;
+    transform: rotate(0deg);
+    transition: transform 140ms ease;
+    text-align: center;
+}
+.nav-chevron.open { transform: rotate(90deg); color: #94A3B8; }
+
+.nav-group-children {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin: 2px 0 4px 0;
+    padding-left: 4px;
+    border-left: 1px solid #F1F5F9;
+    margin-left: 12px;
+}
+
+/* Sub-group (rare; nested menu groups) */
+.nav-subgroup {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    background: transparent;
+    border: 0;
+    padding: 7px 10px 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #475569;
+    font-weight: 600;
+    font-size: 12px;
+}
+.nav-subgroup:hover { background: #F1F5F9; color: #0F172A; }
+.nav-subgroup-label { flex: 1; text-align: left; }
+
+/* Leaf link (regular menu item) */
+.nav-leaf {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px 8px 14px;
+    border-radius: 8px;
+    color: var(--hc-text-muted);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 120ms var(--hc-ease-out, ease-out),
+                color 120ms var(--hc-ease-out, ease-out),
+                padding 120ms var(--hc-ease-out, ease-out);
+    position: relative;
+}
+
+/* Top-level standalone leaf (e.g. Dashboard) — slightly different padding to align with group headers */
+.nav-leaf-root {
+    padding-left: 12px;
+    color: var(--hc-slate-700, #334155);
+}
+
+.nav-leaf:hover {
+    background: var(--hc-slate-100, #F1F5F9);
+    color: var(--hc-text, #0F172A);
+}
+
+.nav-leaf-bullet {
+    width: 6px;
+    height: 6px;
+    margin: 0 5px;
+    border-radius: 50%;
+    background: var(--hc-slate-300, #CBD5E1);
+    flex-shrink: 0;
+    transition: background 120ms ease-out,
+                transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 0 0 transparent;
+}
+.nav-leaf:hover .nav-leaf-bullet { background: var(--hc-slate-400, #94A3B8); }
+
+/* Inline SVG icon next to a leaf — same spot as .nav-leaf-bullet, picks up
+   the muted slate color and shifts to primary when the leaf is active. */
+.nav-leaf ::deep .nav-leaf-icon {
+    color: var(--hc-slate-400, #94A3B8);
+    flex-shrink: 0;
+    transition: color 120ms var(--hc-ease-out, ease-out),
+                transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nav-leaf:hover ::deep .nav-leaf-icon { color: var(--hc-slate-600, #475569); }
+
+.nav-leaf-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.005em;
+}
+
+/* Active leaf — primary-tinted background, primary text, prominent left rail. */
+.nav-leaf.active {
+    background:
+        linear-gradient(90deg,
+            color-mix(in srgb, var(--hc-primary) 12%, transparent) 0%,
+            var(--hc-primary-tint) 100%);
+    color: var(--hc-primary-strong, var(--hc-primary));
+    font-weight: 600;
+}
+.nav-leaf.active::before {
+    content: "";
+    position: absolute;
+    left: -10px; top: 6px; bottom: 6px;
+    width: 3px;
+    background: var(--hc-primary);
+    border-radius: 0 4px 4px 0;
+    box-shadow: 0 0 8px 0 color-mix(in srgb, var(--hc-primary) 60%, transparent);
+}
+.nav-leaf.active .nav-leaf-bullet {
+    background: var(--hc-primary);
+    transform: scale(1.6);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--hc-primary) 18%, transparent);
+}
+.nav-leaf.active ::deep .nav-leaf-icon {
+    color: var(--hc-primary);
+}
+
+.nav-status {
+    padding: 14px 18px;
+    color: #64748B;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-error { color: var(--brand, var(--hc-primary)); }
+
+/* Active module label above the menu tree */
+.nav-module-label {
+    flex-shrink: 0;
+    margin: 4px 16px 0;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--hc-primary, #7C3AED);
+    background: var(--hc-primary-tint, #F5F3FF);
+    border-left: 3px solid var(--hc-primary, #7C3AED);
+    border-radius: 0 6px 6px 0;
+}
+
+/* Sidebar footer: pinned to the bottom of the sidebar regardless of menu length */
+.nav-footer {
+    flex-shrink: 0;
+    margin-top: auto;
+    border-top: 1px solid var(--ink-200, #E2E8F0);
+    background: linear-gradient(180deg, #FFFFFF 0%, var(--hc-bg-soft, #F8FAFC) 100%);
+    padding: 10px 12px;
+}
+
+.nav-context {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 4px 8px;
+    border-bottom: 1px dashed var(--ink-200, #E2E8F0);
+    margin-bottom: 8px;
+}
+.nav-context:empty { display: none; }
+
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 8px;
+}
+
+.nav-user-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--hc-primary, #7C3AED);
+    color: #FFFFFF;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.nav-user-text { flex: 1; min-width: 0; line-height: 1.2; }
+.nav-user-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--hc-text, #0F172A);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nav-user-status { font-size: 11px; color: var(--hc-text-subtle, #64748B); }
+
+.nav-user-logout {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--hc-text-subtle, #64748B);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background 100ms, color 100ms, border-color 100ms;
+}
+.nav-user-logout:hover {
+    background: var(--hc-danger-soft, #FEE2E2);
+    color: var(--hc-danger, #B91C1C);
+    border-color: var(--hc-danger-soft, #FEE2E2);
+}
+.nav-user-logout svg { width: 16px; height: 16px; }
+
+.nav-user-signin {
+    display: block;
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--hc-primary, #7C3AED);
+    color: #FFFFFF;
+    border: 0;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.nav-user-signin:hover { background: var(--hc-primary-strong, #6D28D9); }

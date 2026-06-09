@@ -1,0 +1,169 @@
+@using BornoBit.Restaurant.Application.Ordering.Commands
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Domain.Ordering
+@using BornoBit.Restaurant.Shared.Common
+@using MediatR
+@inject ISender Sender
+@inject IHcToastService ToastService
+
+<HcDialogBody>
+    @if (_order is null)
+    {
+        <LoadingState Message="Loading bill…" />
+    }
+    else
+    {
+        <div style="display:flex; flex-direction:column; gap:14px;">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <HcMessageBar Intent="error">@_error</HcMessageBar>
+            }
+
+            <div class="bill-lines">
+                @foreach (var l in _order.Lines)
+                {
+                    <div class="bill-line">
+                        <span>@l.Quantity × @l.Name</span>
+                        <span>@_order.Currency @((l.LineTotal).ToString("0.##"))</span>
+                    </div>
+                }
+            </div>
+
+            <div class="bill-totals">
+                <div class="bill-row"><span>Subtotal</span><span>@_order.Currency @_subtotal.ToString("0.##")</span></div>
+                <div class="bill-row"><span>Discount</span><span>− @_order.Currency @_discount.ToString("0.##")</span></div>
+                <div class="bill-row bill-grand"><span>Grand total</span><span>@_order.Currency @_grandTotal.ToString("0.##")</span></div>
+            </div>
+
+            @if (_order.IsPaid)
+            {
+                <HcMessageBar Intent="success">
+                    Paid via @_order.PaymentMethod · tendered @_order.Currency @_order.AmountTendered?.ToString("0.##") · change @_order.Currency @_order.ChangeGiven?.ToString("0.##")
+                </HcMessageBar>
+                <a class="hc-link" href="/reports/order/@_order.Id/receipt.pdf" target="_blank">Download receipt</a>
+            }
+            else
+            {
+                <fieldset class="bill-fieldset">
+                    <legend>Discount</legend>
+                    <div class="two-col">
+                        <HcSelect TOption="string" Items="_discountKinds"
+                                  OptionValue="@(k => k)" OptionText="@(k => k)"
+                                  SelectedOption="_discountKind"
+                                  SelectedOptionChanged="@(k => _discountKind = k ?? "Percent")"
+                                  Label="Type" />
+                        <HcInput @bind-Value="_discountValue" Type="number"
+                                 Label="@(_discountKind == "Percent" ? "Percent (%)" : "Amount")" Placeholder="0" />
+                    </div>
+                    <HcInput @bind-Value="_discountReason" Label="Reason (optional)" />
+                    <HcButton Variant="outline" Size="sm" Loading="_busy" OnClick="ApplyDiscountAsync">Apply discount</HcButton>
+                </fieldset>
+
+                <fieldset class="bill-fieldset">
+                    <legend>Payment</legend>
+                    <div class="two-col">
+                        <HcSelect TOption="PaymentMethod" Items="_methods"
+                                  OptionValue="@(m => ((int)m).ToString())" OptionText="@(m => m.ToString())"
+                                  SelectedOption="_method"
+                                  SelectedOptionChanged="@(m => _method = m)"
+                                  Label="Method" />
+                        <HcInput @bind-Value="_tendered" Type="number" Label="Amount tendered" Placeholder="0" Immediate="true" />
+                    </div>
+                    <div class="bill-row bill-grand"><span>Change</span><span>@_order.Currency @Change.ToString("0.##")</span></div>
+                </fieldset>
+            }
+        </div>
+    }
+</HcDialogBody>
+
+<HcDialogFooter>
+    <HcButton Variant="ghost" OnClick="@(() => Dialog.Close(_changedAnything))" Disabled="_busy">Close</HcButton>
+    @if (_order is { IsPaid: false })
+    {
+        <HcButton Variant="primary" OnClick="PayAsync" Loading="_busy" Disabled="@(!CanPay)">Take payment</HcButton>
+    }
+</HcDialogFooter>
+
+@code {
+    [Parameter] public Guid Content { get; set; }
+    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+
+    private OrderDetailDto? _order;
+    private decimal _subtotal;
+    private decimal _discount;
+    private decimal _grandTotal;
+
+    private static readonly string[] _discountKinds = { "Percent", "Fixed" };
+    private static readonly PaymentMethod[] _methods = { PaymentMethod.Cash, PaymentMethod.Card, PaymentMethod.Mobile };
+
+    private string _discountKind = "Percent";
+    private string? _discountValue;
+    private string? _discountReason;
+    private PaymentMethod _method = PaymentMethod.Cash;
+    private string? _tendered;
+
+    private bool _busy;
+    private string? _error;
+    private bool _changedAnything;
+
+    private decimal Change => Math.Max(0m, ParseDecimal(_tendered) - _grandTotal);
+    private bool CanPay => !_busy && ParseDecimal(_tendered) >= _grandTotal && _grandTotal >= 0m;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _order = await Sender.Send(new GetOrderQuery(Content));
+        ApplySummary(_order.Subtotal, _order.DiscountAmount, _order.GrandTotal);
+        if (_order.DiscountReason is { } r) _discountReason = r;
+    }
+
+    private void ApplySummary(decimal subtotal, decimal discount, decimal grand)
+    {
+        _subtotal = subtotal;
+        _discount = discount;
+        _grandTotal = grand;
+    }
+
+    private async Task ApplyDiscountAsync()
+    {
+        _error = null; _busy = true;
+        try
+        {
+            decimal? percent = _discountKind == "Percent" ? ParseDecimal(_discountValue) : null;
+            decimal? amount = _discountKind == "Fixed" ? ParseDecimal(_discountValue) : null;
+            var summary = await Sender.Send(new ApplyDiscountCommand(Content, percent, amount, _discountReason));
+            ApplySummary(summary.Subtotal, summary.DiscountAmount, summary.GrandTotal);
+            _changedAnything = true;
+            ToastService.ShowSuccess("Discount applied.");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task PayAsync()
+    {
+        _error = null; _busy = true;
+        try
+        {
+            var summary = await Sender.Send(new RecordPaymentCommand(Content, _method, ParseDecimal(_tendered)));
+            ToastService.ShowSuccess($"Payment taken · change {summary.Change:0.##}");
+            Dialog.Close(true);
+        }
+        catch (Exception ex) { _error = ex.Message; _busy = false; }
+    }
+
+    private static decimal ParseDecimal(string? s) =>
+        decimal.TryParse(s, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0m;
+}
+
+<style>
+    .bill-lines { display:flex; flex-direction:column; gap:4px; max-height:180px; overflow-y:auto; }
+    .bill-line { display:flex; justify-content:space-between; font-size:13px; }
+    .bill-totals { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--hc-border,#ddd); padding-top:8px; }
+    .bill-row { display:flex; justify-content:space-between; }
+    .bill-grand { font-weight:700; font-size:16px; border-top:1px solid var(--hc-border,#ddd); padding-top:6px; margin-top:2px; }
+    .bill-fieldset { border:1px solid var(--hc-border,#e3e3e3); border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; gap:10px; }
+    .bill-fieldset legend { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-text-muted); padding:0 4px; }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+</style>

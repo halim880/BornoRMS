@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BornoBit.Restaurant.Api/BornoBit.Restaurant.Api.csproj" />
+    <Project Path="src/BornoBit.Restaurant.Application/BornoBit.Restaurant.Application.csproj" />
+    <Project Path="src/BornoBit.Restaurant.Domain/BornoBit.Restaurant.Domain.csproj" />
+    <Project Path="src/BornoBit.Restaurant.Infrastructure/BornoBit.Restaurant.Infrastructure.csproj" />
+    <Project Path="src/BornoBit.Restaurant.Reporting/BornoBit.Restaurant.Reporting.csproj" />
+    <Project Path="src/BornoBit.Restaurant.Shared/BornoBit.Restaurant.Shared.csproj" />
+    <Project Path="src/BornoBit.Restaurant.Web/BornoBit.Restaurant.Web.csproj" />
+  </Folder>
+</Solution>

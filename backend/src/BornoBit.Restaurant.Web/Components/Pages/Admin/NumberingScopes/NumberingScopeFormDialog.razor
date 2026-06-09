@@ -1,0 +1,112 @@
+@using BornoBit.Restaurant.Application.Numbering
+@using BornoBit.Restaurant.Domain.Numbering
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<HcDialogBody>
+    <div style="display:flex; flex-direction:column; gap:14px;">
+        @if (!string.IsNullOrEmpty(_error)) { <HcMessageBar Intent="error">@_error</HcMessageBar> }
+
+        @if (IsEdit)
+        {
+            <HcInput Value="@Content.Code" Label="Code"  ReadOnly="true" Style="width:100%;" />
+        }
+        else
+        {
+            <HcInput @bind-Value="Content.Code" Label="Code"  Required="true" Style="width:100%;" Placeholder="SALE / PURCHASE / DTO / DINV / MRN" />
+        }
+
+        <HcInput @bind-Value="Content.Name" Label="Name"  Required="true" Style="width:100%;" />
+        <HcInput @bind-Value="Content.Prefix" Label="Prefix"  Required="true" Style="width:100%;" Placeholder="S- / GRN- / INV- / R-" />
+
+        <div style="display:flex; gap:12px;">
+            <HcSelect TOption="NumberingCadence"
+                          Items="@_cadences"
+                          OptionValue="@(c => ((byte)c).ToString())"
+                          OptionText="@(c => c.ToString())"
+                          SelectedOption="@Content.Cadence"
+                          SelectedOptionChanged="@(c => Content.Cadence = c)"
+                          Label="Cadence" Style="flex:1;" />
+
+            <HcNumeric T="byte" @bind-Value="Content.Digits" Label="Digits" Style="flex:1;" Min="1" Max="10" />
+        </div>
+
+        <HcCheckbox @bind-Value="Content.ResetByOutlet" Label="Reset counter per outlet" />
+
+        <small style="color:var(--neutral-foreground-hint);">
+            Format preview:
+            <strong>@Preview</strong>
+        </small>
+    </div>
+</HcDialogBody>
+
+<HcDialogFooter>
+    <HcButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</HcButton>
+    <HcButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create scope")</HcButton>
+</HcDialogFooter>
+
+@code {
+    [Parameter] public NumberingScopeFormModel Content { get; set; } = default!;
+    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private bool IsEdit => Content.Id is not null;
+
+    private static readonly NumberingCadence[] _cadences = { NumberingCadence.Yearly, NumberingCadence.Monthly, NumberingCadence.Daily };
+
+    private string Preview
+    {
+        get
+        {
+            var prefix = Content.Prefix ?? string.Empty;
+            var period = Content.Cadence switch
+            {
+                NumberingCadence.Yearly => DateTime.UtcNow.ToString("yy"),
+                NumberingCadence.Monthly => DateTime.UtcNow.ToString("yyMM"),
+                NumberingCadence.Daily => DateTime.UtcNow.ToString("yyMMdd"),
+                _ => string.Empty
+            };
+            var digits = Math.Clamp((int)Content.Digits, 1, 10);
+            return $"{prefix}{period}{1.ToString("D" + digits)}";
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Prefix)) { _error = "Prefix is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (IsEdit)
+            {
+                await Mediator.Send(new UpdateNumberingScopeCommand(
+                    Content.Id!.Value,
+                    (Content.Name ?? string.Empty).Trim(),
+                    (Content.Prefix ?? string.Empty).Trim(),
+                    Content.Cadence,
+                    Content.Digits,
+                    Content.ResetByOutlet));
+            }
+            else
+            {
+                Content.Id = await Mediator.Send(new CreateNumberingScopeCommand(
+                    (Content.Code ?? string.Empty).Trim(),
+                    (Content.Name ?? string.Empty).Trim(),
+                    (Content.Prefix ?? string.Empty).Trim(),
+                    Content.Cadence,
+                    Content.Digits,
+                    Content.ResetByOutlet));
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

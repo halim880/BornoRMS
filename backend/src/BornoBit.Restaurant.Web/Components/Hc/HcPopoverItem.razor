@@ -1,0 +1,18 @@
+@namespace BornoBit.Restaurant.Web.Components.Hc
+
+<button type="button"
+        class="hc-pop-item @(Selected ? "is-selected" : "") @(Disabled ? "is-disabled" : "") @CssClass"
+        disabled="@Disabled"
+        @onclick="OnClick">
+    @ChildContent
+</button>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback<MouseEventArgs> OnClick { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => AdditionalAttributes is { } a && a.TryGetValue("class", out var c) ? c?.ToString() ?? "" : "";
+}

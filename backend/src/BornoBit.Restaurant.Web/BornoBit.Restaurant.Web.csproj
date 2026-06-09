@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\BornoBit.Restaurant.Application\BornoBit.Restaurant.Application.csproj" />
+    <ProjectReference Include="..\BornoBit.Restaurant.Infrastructure\BornoBit.Restaurant.Infrastructure.csproj" />
+    <ProjectReference Include="..\BornoBit.Restaurant.Domain\BornoBit.Restaurant.Domain.csproj" />
+    <ProjectReference Include="..\BornoBit.Restaurant.Shared\BornoBit.Restaurant.Shared.csproj" />
+    <ProjectReference Include="..\BornoBit.Restaurant.Reporting\BornoBit.Restaurant.Reporting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="14.1.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+</Project>

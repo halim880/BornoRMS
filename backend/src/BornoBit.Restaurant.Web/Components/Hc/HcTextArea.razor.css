@@ -1,0 +1,125 @@
+.hc-cmp-textarea-wrap {
+    position: relative;
+    background: var(--hc-bg-card);
+    border: 1px solid var(--hc-border);
+    border-radius: 10px;
+    transition: border-color 120ms, box-shadow 120ms, background 120ms;
+    overflow: hidden;
+}
+
+.hc-cmp-textarea-wrap:hover:not(.is-disabled):not(.is-readonly) {
+    border-color: var(--hc-border-strong);
+}
+
+.hc-cmp-textarea-wrap:focus-within:not(.is-disabled):not(.is-readonly) {
+    border-color: var(--hc-primary);
+    box-shadow: 0 0 0 3px var(--hc-primary-tint);
+    background: var(--hc-bg-card);
+}
+
+.hc-cmp-textarea-wrap.is-disabled {
+    background: var(--hc-bg-soft);
+    opacity: 0.7;
+}
+
+.hc-cmp-textarea-wrap.is-readonly {
+    background: var(--hc-bg-soft);
+}
+
+.is-invalid .hc-cmp-textarea-wrap {
+    border-color: var(--hc-danger);
+}
+.is-invalid .hc-cmp-textarea-wrap:focus-within {
+    box-shadow: 0 0 0 3px var(--hc-danger-soft);
+}
+
+.hc-cmp-textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 0;
+    background: transparent;
+    padding: 11px 14px 16px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--hc-text);
+    resize: vertical;
+    min-height: 64px;
+    outline: none;
+    /* Reserve room at the bottom-right so the grip + counter don't overlap text */
+    scroll-padding-bottom: 8px;
+}
+
+.hc-cmp-textarea::placeholder {
+    color: var(--hc-text-faint);
+    font-style: italic;
+}
+
+.hc-cmp-textarea:disabled {
+    cursor: not-allowed;
+    color: var(--hc-text-faint);
+}
+
+/* Hide the ugly native diagonal-lines resizer; we'll draw our own */
+.hc-cmp-textarea::-webkit-resizer {
+    display: none;
+}
+
+/* Custom resize grip — sits in bottom-right, doesn't intercept clicks */
+.hc-cmp-textarea-grip {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 14px;
+    height: 14px;
+    color: var(--hc-text-faint);
+    pointer-events: none;
+    opacity: 0.5;
+    transition: color 120ms, opacity 120ms;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hc-cmp-textarea-wrap:hover .hc-cmp-textarea-grip {
+    opacity: 0.8;
+}
+
+.hc-cmp-textarea-wrap:focus-within .hc-cmp-textarea-grip {
+    color: var(--hc-primary);
+    opacity: 0.9;
+}
+
+.hc-cmp-textarea-wrap.is-disabled .hc-cmp-textarea-grip,
+.hc-cmp-textarea-wrap.is-readonly .hc-cmp-textarea-grip {
+    display: none;
+}
+
+/* Character counter — sits above the grip, fades up on focus */
+.hc-cmp-textarea-count {
+    position: absolute;
+    right: 24px;
+    bottom: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--hc-text-faint);
+    background: var(--hc-bg-card);
+    padding: 2px 6px;
+    border-radius: 999px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 140ms, transform 140ms, color 120ms;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+.hc-cmp-textarea-wrap:hover .hc-cmp-textarea-count,
+.hc-cmp-textarea-wrap:focus-within .hc-cmp-textarea-count {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.hc-cmp-textarea-count.is-near { color: var(--hc-warning); }
+.hc-cmp-textarea-count.is-full { color: var(--hc-danger); }

@@ -1,0 +1,18 @@
+<HcDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        <p style="margin:0; color:var(--hc-text-muted);">Cancel order <strong>@Content</strong>? This cannot be undone.</p>
+        <HcInput @bind-Value="_reason" Label="Reason (optional)" Placeholder="e.g. customer left" Style="width:100%;" />
+    </div>
+</HcDialogBody>
+
+<HcDialogFooter>
+    <HcButton Variant="ghost" OnClick="@(() => Dialog.Cancel())">Keep order</HcButton>
+    <HcButton Variant="danger" OnClick="@(() => Dialog.Close(_reason))">Cancel order</HcButton>
+</HcDialogFooter>
+
+@code {
+    [Parameter] public string Content { get; set; } = "";
+    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+
+    private string? _reason;
+}

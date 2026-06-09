@@ -1,0 +1,493 @@
+@typeparam TItem
+
+<CascadingValue Value="@this" IsFixed="true">
+    @Columns
+</CascadingValue>
+
+<div class="dg @Class" style="@Style">
+    @if (HasHeader)
+    {
+        <header class="dg-head">
+            <div class="dg-head-text">
+                @if (!string.IsNullOrEmpty(Title)) { <h3 class="dg-title">@Title</h3> }
+                @if (!string.IsNullOrEmpty(Description)) { <p class="dg-description">@Description</p> }
+            </div>
+            <div class="dg-head-actions">
+                @if (EnableSearch && SearchPredicate is not null)
+                {
+                    <div class="dg-search">
+                        <svg class="dg-search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                            <circle cx="7" cy="7" r="4.5" />
+                            <path d="M10.5 10.5 L13.5 13.5" />
+                        </svg>
+                        <input type="text" class="dg-search-input" placeholder="@SearchPlaceholder"
+                               value="@_search" @oninput="OnSearchChanged" />
+                        @if (!string.IsNullOrEmpty(_search))
+                        {
+                            <button type="button" class="dg-search-clear" title="Clear" @onclick="ClearSearch">×</button>
+                        }
+                    </div>
+                }
+                @Actions
+            </div>
+        </header>
+    }
+
+    @if (Loading)
+    {
+        <div class="dg-state"><div class="dg-spinner"></div></div>
+    }
+    else if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="dg-state dg-error">@Error</div>
+    }
+    else if (_columns.Count > 0 && _processed.Count == 0)
+    {
+        <div class="dg-empty">
+            @if (!string.IsNullOrEmpty(_search))
+            {
+                <text>No matches for "@_search".</text>
+            }
+            else
+            {
+                @EmptyText
+            }
+        </div>
+    }
+    else
+    {
+        <div class="dg-table-card @(Bare ? "dg-bare" : "")">
+            <div class="dg-table-wrap">
+                <table class="dg-table">
+                    <thead>
+                        <tr>
+                            @foreach (var col in _columns)
+                            {
+                                var c = col;
+                                <th class="dg-th @AlignClass(c.Align) @(c.Sortable ? "dg-th-sortable" : "")"
+                                    style="@(c.Width is null ? "" : $"width:{c.Width};")"
+                                    @onclick="@(() => OnSort(c))">
+                                    <span class="dg-th-content">
+                                        @if (c.HeaderTemplate is not null) { @c.HeaderTemplate }
+                                        else { @c.Title }
+                                        @if (c.Sortable)
+                                        {
+                                            @if (_sortColumn == c)
+                                            {
+                                                <span class="dg-sort-arrow dg-sort-active">@(_sortDirection == DataGridSortDirection.Ascending ? "▲" : "▼")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="dg-sort-arrow dg-sort-arrow-dim">⇅</span>
+                                            }
+                                        }
+                                    </span>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in PagedItems)
+                        {
+                            var row = item;
+                            var rowCls = RowClass?.Invoke(row);
+                            <tr class="dg-row @(OnRowClick.HasDelegate ? "dg-row-clickable" : "") @rowCls"
+                                @onclick="@(() => HandleRowClick(row))">
+                                @foreach (var col in _columns)
+                                {
+                                    <td class="dg-td @AlignClass(col.Align)">
+                                        @if (col.Cell is not null)
+                                        {
+                                            @col.Cell(row)
+                                        }
+                                        else
+                                        {
+                                            @col.GetCellText(row)
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (_pageSize > 0 && _total > 0)
+            {
+                <footer class="dg-pager">
+                    <div class="dg-pager-left">
+                        <span class="dg-pager-info">
+                            Showing <strong>@PageStart</strong>–<strong>@PageEnd</strong> of <strong>@_total</strong>
+                        </span>
+                        @if (PageSizeOptions is { Length: > 0 })
+                        {
+                            <select class="dg-pager-size" @bind="_pageSize" @bind:after="OnPageSizeChanged">
+                                @foreach (var s in PageSizeOptions)
+                                {
+                                    <option value="@s">@s / page</option>
+                                }
+                            </select>
+                        }
+                    </div>
+                    <div class="dg-pager-controls">
+                        <button type="button" class="dg-pager-btn" @onclick="PrevPage" disabled="@(_page <= 1)">‹ Prev</button>
+                        <span class="dg-pager-page">Page <strong>@_page</strong> of <strong>@TotalPages</strong></span>
+                        <button type="button" class="dg-pager-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next ›</button>
+                    </div>
+                </footer>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IEnumerable<TItem>? Items { get; set; }
+    [Parameter] public RenderFragment? Columns { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string EmptyText { get; set; } = "No items.";
+    [Parameter] public EventCallback<TItem> OnRowClick { get; set; }
+    [Parameter] public Func<TItem, string?>? RowClass { get; set; }
+    [Parameter] public int PageSize { get; set; } = 25;
+    [Parameter] public int[]? PageSizeOptions { get; set; } = new[] { 10, 25, 50, 100 };
+    [Parameter] public bool EnableSearch { get; set; } = true;
+    [Parameter] public string SearchPlaceholder { get; set; } = "Search…";
+    [Parameter] public Func<TItem, string, bool>? SearchPredicate { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+    /// <summary>
+    /// Drop the inner table-card chrome (border, shadow, rounded corners,
+    /// distinct background). Use when the grid is already living inside
+    /// another card/container so the visuals don't double up.
+    /// </summary>
+    [Parameter] public bool Bare { get; set; }
+
+    private List<DataGridColumn<TItem>> _columns = new();
+    private List<TItem> _processed = new();
+    private int _total;
+    private int _page = 1;
+    private int _pageSize;
+    private string _search = string.Empty;
+    private DataGridColumn<TItem>? _sortColumn;
+    private DataGridSortDirection _sortDirection = DataGridSortDirection.Ascending;
+    private IEnumerable<TItem>? _lastItems;
+
+    private bool HasHeader =>
+        !string.IsNullOrEmpty(Title) || !string.IsNullOrEmpty(Description) ||
+        (EnableSearch && SearchPredicate is not null) || Actions is not null;
+
+    internal void RegisterColumn(DataGridColumn<TItem> col)
+    {
+        if (_columns.Contains(col)) return;
+        _columns.Add(col);
+        InvokeAsync(StateHasChanged);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_pageSize == 0) _pageSize = PageSize > 0 ? PageSize : 25;
+        if (!ReferenceEquals(_lastItems, Items))
+        {
+            _lastItems = Items;
+            _page = 1;
+        }
+        Recompute();
+    }
+
+    private void Recompute()
+    {
+        if (Items is null) { _processed = new(); _total = 0; return; }
+        IEnumerable<TItem> q = Items;
+
+        if (!string.IsNullOrWhiteSpace(_search) && SearchPredicate is not null)
+        {
+            var s = _search;
+            q = q.Where(i => SearchPredicate(i, s));
+        }
+
+        if (_sortColumn?.PropertyFunc is not null)
+        {
+            q = _sortDirection == DataGridSortDirection.Ascending
+                ? q.OrderBy(_sortColumn.PropertyFunc)
+                : q.OrderByDescending(_sortColumn.PropertyFunc);
+        }
+
+        _processed = q.ToList();
+        _total = _processed.Count;
+
+        var maxPage = TotalPages;
+        if (_page > maxPage) _page = maxPage;
+        if (_page < 1) _page = 1;
+    }
+
+    private IEnumerable<TItem> PagedItems => _pageSize > 0
+        ? _processed.Skip((_page - 1) * _pageSize).Take(_pageSize)
+        : _processed;
+
+    private int TotalPages
+    {
+        get
+        {
+            if (_pageSize <= 0 || _total == 0) return 1;
+            return Math.Max(1, (int)Math.Ceiling((double)_total / _pageSize));
+        }
+    }
+
+    private int PageStart => _total == 0 ? 0 : (_page - 1) * _pageSize + 1;
+    private int PageEnd => Math.Min(_total, _page * _pageSize);
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? string.Empty;
+        _page = 1;
+        Recompute();
+    }
+
+    private void ClearSearch()
+    {
+        _search = string.Empty;
+        _page = 1;
+        Recompute();
+    }
+
+    private void OnSort(DataGridColumn<TItem> col)
+    {
+        if (!col.Sortable || col.PropertyFunc is null) return;
+        if (_sortColumn == col)
+        {
+            _sortDirection = _sortDirection == DataGridSortDirection.Ascending
+                ? DataGridSortDirection.Descending
+                : DataGridSortDirection.Ascending;
+        }
+        else
+        {
+            _sortColumn = col;
+            _sortDirection = DataGridSortDirection.Ascending;
+        }
+        Recompute();
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1) _page--;
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages) _page++;
+    }
+
+    private void OnPageSizeChanged()
+    {
+        _page = 1;
+        Recompute();
+    }
+
+    private async Task HandleRowClick(TItem item)
+    {
+        if (OnRowClick.HasDelegate) await OnRowClick.InvokeAsync(item);
+    }
+
+    private static string AlignClass(DataGridAlign a) => a switch
+    {
+        DataGridAlign.Center => "dg-align-center",
+        DataGridAlign.Right => "dg-align-right",
+        _ => ""
+    };
+}
+
+<style>
+    .dg { display: flex; flex-direction: column; gap: 14px; }
+
+    .dg-head {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap;
+    }
+    .dg-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .dg-title { margin: 0; font-size: 18px; font-weight: 700; color: #0F172A; }
+    .dg-description { margin: 0; font-size: 13px; color: #64748B; }
+    .dg-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .dg-search { position: relative; display: flex; align-items: center; }
+    .dg-search-icon {
+        position: absolute; left: 12px;
+        width: 14px; height: 14px;
+        color: #9CA3AF;
+        pointer-events: none;
+    }
+    .dg-search-input {
+        width: 280px;
+        padding: 8px 32px 8px 34px;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        font-size: 13px; line-height: 1.4;
+        background: #fff; color: #111827;
+        outline: none;
+        transition: border-color 100ms, box-shadow 100ms;
+        font-family: inherit;
+    }
+    .dg-search-input::placeholder { color: #9CA3AF; }
+    .dg-search-input:hover:not(:focus) { border-color: #D1D5DB; }
+    .dg-search-input:focus { border-color: #94A3B8; box-shadow: 0 0 0 3px rgba(148,163,184,0.18); }
+    .dg-search-clear {
+        position: absolute; right: 8px;
+        width: 18px; height: 18px;
+        background: transparent; border: 0;
+        color: #94A3B8; font-size: 16px; line-height: 1;
+        cursor: pointer; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 0;
+        transition: background 100ms, color 100ms;
+    }
+    .dg-search-clear:hover { background: #F1F5F9; color: #0F172A; }
+
+    .dg-state {
+        display: flex; align-items: center; justify-content: center;
+        padding: 56px 24px;
+    }
+    .dg-error {
+        background: #FEF2F2;
+        border: 1px solid #FECACA;
+        color: #991B1B;
+        padding: 14px 16px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 500;
+        justify-content: flex-start;
+    }
+    .dg-empty {
+        background: #fff;
+        border: 1px dashed #E2E8F0;
+        border-radius: 12px;
+        padding: 48px 24px;
+        text-align: center;
+        color: #94A3B8;
+        font-size: 14px;
+    }
+
+    .dg-spinner {
+        width: 28px; height: 28px;
+        border: 3px solid #E5E7EB;
+        border-top-color: var(--hc-primary);
+        border-radius: 50%;
+        animation: dg-spin 0.7s linear infinite;
+    }
+    @@keyframes dg-spin { to { transform: rotate(360deg); } }
+
+    .dg-table-card {
+        background: #fff;
+        border: 1px solid #E2E8F0;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+    }
+    .dg-table-card.dg-bare {
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .dg-bare .dg-pager {
+        background: transparent;
+        border-top: 1px solid #F1F5F9;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .dg-table-wrap { overflow-x: auto; }
+    .dg-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+    .dg-table thead { background: #FAFBFC; }
+    .dg-th {
+        padding: 11px 14px;
+        font-weight: 600; color: #475569;
+        font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+        border-bottom: 1px solid #E2E8F0;
+        white-space: nowrap;
+        text-align: left;
+        user-select: none;
+        position: sticky; top: 0;
+        background: #FAFBFC;
+        z-index: 1;
+    }
+    .dg-th-content { display: inline-flex; align-items: center; gap: 6px; }
+    .dg-th-sortable { cursor: pointer; transition: color 100ms, background 100ms; }
+    .dg-th-sortable:hover { color: #0F172A; background: #F1F5F9; }
+
+    .dg-sort-arrow { font-size: 10px; line-height: 1; }
+    .dg-sort-arrow-dim { color: #CBD5E1; }
+    .dg-sort-active { color: #B91C1C; }
+
+    .dg-align-center { text-align: center; }
+    .dg-align-right { text-align: right; }
+
+    .dg-td {
+        padding: 12px 14px;
+        border-bottom: 1px solid #F1F5F9;
+        color: #0F172A;
+        vertical-align: middle;
+    }
+    .dg-table tbody tr:last-child .dg-td { border-bottom: none; }
+
+    .dg-row { transition: background 80ms; }
+    .dg-row-clickable { cursor: pointer; }
+    .dg-row:hover .dg-td { background: #FAFAFA; }
+
+    .dg-pager {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 16px;
+        border-top: 1px solid #F1F5F9;
+        background: #FAFBFC;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .dg-pager-left { display: flex; align-items: center; gap: 12px; }
+    .dg-pager-info {
+        font-size: 12px;
+        color: #64748B;
+        font-variant-numeric: tabular-nums;
+    }
+    .dg-pager-info strong { color: #0F172A; font-weight: 600; }
+    .dg-pager-controls { display: flex; gap: 6px; align-items: center; }
+    .dg-pager-page {
+        font-size: 12px; color: #64748B;
+        font-variant-numeric: tabular-nums;
+        padding: 0 6px;
+    }
+    .dg-pager-page strong { color: #0F172A; font-weight: 600; }
+
+    .dg-pager-btn {
+        padding: 6px 12px;
+        font-size: 12px; font-weight: 600;
+        background: #fff;
+        border: 1px solid #E2E8F0;
+        color: #334155;
+        border-radius: 7px;
+        cursor: pointer;
+        transition: background 100ms, border-color 100ms, color 100ms;
+        font-family: inherit;
+    }
+    .dg-pager-btn:hover:not([disabled]) { background: #F1F5F9; border-color: #CBD5E1; }
+    .dg-pager-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+    .dg-pager-size {
+        padding: 5px 24px 5px 10px;
+        font-size: 12px; font-weight: 600;
+        border: 1px solid #E2E8F0;
+        border-radius: 7px;
+        background: #fff;
+        color: #475569;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        font-family: inherit;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%236B7280'%3E%3Cpath d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        background-size: 10px;
+    }
+    .dg-pager-size:hover { border-color: #CBD5E1; }
+    .dg-pager-size:focus { outline: none; border-color: #94A3B8; box-shadow: 0 0 0 3px rgba(148,163,184,0.18); }
+</style>

@@ -1,0 +1,77 @@
+@using BornoBit.Restaurant.Application.Modules
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<HcDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <HcMessageBar Intent="error">@_error</HcMessageBar>
+        }
+        <HcInput @bind-Value="Content.Title" Label="Title"  Required="true" Style="width:100%;" Maxlength="100" />
+        <HcInput @bind-Value="Content.Icon" Label="Icon (FluentUI name, e.g. Pill)" Style="width:100%;" Maxlength="60" />
+        <HcNumeric T="int" @bind-Value="Content.DisplayOrder" Label="Display order" Style="width:100%;" Min="0" Step="1" />
+        <HcSelect TOption="string"
+                      Items="@_roles"
+                      OptionValue="@(r => r)"
+                      OptionText="@(r => string.IsNullOrEmpty(r) ? "(everyone)" : r)"
+                      SelectedOption="@(Content.RequiredRole ?? string.Empty)"
+                      SelectedOptionChanged="@(r => Content.RequiredRole = string.IsNullOrEmpty(r) ? null : r)"
+                      Label="Minimum role"
+                      Style="width:100%;" />
+        <p class="hc-text-subtle" style="margin:0;">
+            Modules are root-level menus. Permissions are managed via Menu Permissions, not here.
+        </p>
+    </div>
+</HcDialogBody>
+
+<HcDialogFooter>
+    <HcButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</HcButton>
+    <HcButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</HcButton>
+</HcDialogFooter>
+
+@code {
+    [Parameter] public ModuleFormModel Content { get; set; } = default!;
+    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private static readonly string[] _roles = new[] { "", "Admin", "SuperAdmin" };
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Title)) { _error = "Title is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateModuleCommand(
+                    Content.Title.Trim(),
+                    string.IsNullOrWhiteSpace(Content.Icon) ? null : Content.Icon.Trim(),
+                    Content.DisplayOrder,
+                    string.IsNullOrWhiteSpace(Content.RequiredRole) ? null : Content.RequiredRole));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateModuleCommand(
+                    Content.Id.Value,
+                    Content.Title.Trim(),
+                    string.IsNullOrWhiteSpace(Content.Icon) ? null : Content.Icon.Trim(),
+                    Content.DisplayOrder,
+                    string.IsNullOrWhiteSpace(Content.RequiredRole) ? null : Content.RequiredRole));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

@@ -1,0 +1,144 @@
+@page "/admin/numbering-scopes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin,SuperAdmin")]
+@using BornoBit.Restaurant.Application.Numbering
+@using BornoBit.Restaurant.Domain.Numbering
+@using MediatR
+@inject ISender Mediator
+@inject IHcDialogService DialogService
+@inject IHcToastService ToastService
+
+<PageTitle>Numbering Scopes · BornoBit.Restaurant</PageTitle>
+
+<DataGrid TItem="NumberingScopeDto"
+          Items="@_scopes"
+          Loading="@_loading"
+          Error="@_error"
+          PageSize="25"
+          Title="Numbering Scopes"
+          Description="Document number generation rules per tenant. Each scope = code + prefix + cadence (yearly/monthly/daily) + digits. Counters reset on cadence period rollover."
+          EmptyText="No scopes yet."
+          SearchPlaceholder="Search by code, name, prefix…"
+          SearchPredicate="@Matches"
+          OnRowClick="@(s => ShowEditAsync(s))">
+    <Actions>
+        <button type="button" class="ph-btn ph-btn-primary" @onclick="ShowCreateAsync">+ New scope</button>
+    </Actions>
+    <Columns>
+        <DataGridColumn TItem="NumberingScopeDto" Title="Code" Property="@(s => s.Code)" Sortable="true" Width="140px">
+            <span class="ph-code">@context.Code</span>
+        </DataGridColumn>
+        <DataGridColumn TItem="NumberingScopeDto" Title="Name" Property="@(s => s.Name)" Sortable="true">
+            <strong>@context.Name</strong>
+        </DataGridColumn>
+        <DataGridColumn TItem="NumberingScopeDto" Title="Prefix" Width="120px">
+            <span class="ph-code ph-code-violet">@context.Prefix</span>
+        </DataGridColumn>
+        <DataGridColumn TItem="NumberingScopeDto" Title="Cadence" Width="120px">
+            @context.Cadence
+        </DataGridColumn>
+        <DataGridColumn TItem="NumberingScopeDto" Title="Digits" Align="DataGridAlign.Center" Width="80px">
+            @context.Digits
+        </DataGridColumn>
+        <DataGridColumn TItem="NumberingScopeDto" Title="Per outlet?" Align="DataGridAlign.Center" Width="100px">
+            @if (context.ResetByOutlet) { <span class="ph-pill ph-pill-active">Yes</span> }
+            else { <span class="ph-pill ph-pill-inactive">No</span> }
+        </DataGridColumn>
+        <DataGridColumn TItem="NumberingScopeDto" Title="Status" Align="DataGridAlign.Center" Width="110px">
+            @if (context.IsActive) { <span class="ph-pill ph-pill-active">Active</span> }
+            else { <span class="ph-pill ph-pill-inactive">Inactive</span> }
+        </DataGridColumn>
+        <DataGridColumn TItem="NumberingScopeDto" Title="" Align="DataGridAlign.Right" Width="200px">
+            <div class="ph-actions" @onclick:stopPropagation="true">
+                <button type="button" class="ph-btn ph-btn-ghost" @onclick="@(() => ShowEditAsync(context))">Edit</button>
+                @if (context.IsActive)
+                {
+                    <button type="button" class="ph-btn ph-btn-ghost" @onclick="@(() => ConfirmSetActiveAsync(context, false))">Deactivate</button>
+                }
+                else
+                {
+                    <button type="button" class="ph-btn ph-btn-ghost" @onclick="@(() => ConfirmSetActiveAsync(context, true))">Activate</button>
+                }
+            </div>
+        </DataGridColumn>
+    </Columns>
+</DataGrid>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<NumberingScopeDto> _scopes = new();
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var list = await Mediator.Send(new GetNumberingScopesQuery(IncludeInactive: true));
+            _scopes = list.ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load scopes: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private static bool Matches(NumberingScopeDto s, string q)
+    {
+        if (string.IsNullOrWhiteSpace(q)) return true;
+        var c = StringComparison.OrdinalIgnoreCase;
+        return s.Code.Contains(q, c) || s.Name.Contains(q, c) || s.Prefix.Contains(q, c);
+    }
+
+    private async Task ShowCreateAsync()
+    {
+        var model = new NumberingScopeFormModel();
+        var result = await DialogService.ShowAsync<NumberingScopeFormDialog, NumberingScopeFormModel>(model, new HcDialogOptions
+        {
+            Title = "New numbering scope",
+            Width = "560px",
+            DismissOnOverlayClick = false,});
+        if (!result.Cancelled && result.Data is NumberingScopeFormModel saved)
+        {
+            ToastService.ShowSuccess($"Scope '{saved.Code}' created.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ShowEditAsync(NumberingScopeDto s)
+    {
+        var model = new NumberingScopeFormModel
+        {
+            Id = s.Id,
+            Code = s.Code,
+            Name = s.Name,
+            Prefix = s.Prefix,
+            Cadence = s.Cadence,
+            Digits = s.Digits,
+            ResetByOutlet = s.ResetByOutlet
+        };
+        var result = await DialogService.ShowAsync<NumberingScopeFormDialog, NumberingScopeFormModel>(model, new HcDialogOptions
+        {
+            Title = $"Edit '{s.Code}'",
+            Width = "560px",
+            DismissOnOverlayClick = false,});
+        if (!result.Cancelled)
+        {
+            ToastService.ShowSuccess($"Scope '{s.Code}' updated.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ConfirmSetActiveAsync(NumberingScopeDto s, bool activate)
+    {
+        var verb = activate ? "Activate" : "Deactivate";
+        var confirmed = await DialogService.ConfirmAsync($"{verb} scope", $"{verb} scope '{s.Code}'?", confirmLabel: verb, cancelLabel: "Cancel");
+        if (!confirmed) return;
+        try
+        {
+            await Mediator.Send(new SetNumberingScopeActiveCommand(s.Id, activate));
+            ToastService.ShowSuccess($"Scope '{s.Code}' {(activate ? "activated" : "deactivated")}.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+    }
+}

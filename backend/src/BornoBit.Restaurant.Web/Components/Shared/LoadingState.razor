@@ -1,0 +1,11 @@
+<div class="hc-loading">
+    <div class="hc-spinner"></div>
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <div style="margin-top: 8px; font-size: var(--hc-font-sm);">@Message</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Message { get; set; }
+}

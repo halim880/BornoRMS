@@ -1,0 +1,91 @@
+@namespace BornoBit.Restaurant.Web.Components.Hc.Toast
+@implements IDisposable
+@inject IHcToastService ToastService
+
+<div class="hc-toast-stack" role="region" aria-live="polite" aria-label="Notifications">
+    @foreach (var entry in _entries)
+    {
+        <div class="hc-toast hc-toast--@KindClass(entry.Kind)" @key="entry.Id" role="status">
+            <span class="hc-toast-icon" aria-hidden="true">@KindIcon(entry.Kind)</span>
+            <div class="hc-toast-body">
+                @if (!string.IsNullOrEmpty(entry.Title))
+                {
+                    <div class="hc-toast-title">@entry.Title</div>
+                }
+                <div class="hc-toast-msg">@entry.Message</div>
+            </div>
+            <button type="button" class="hc-toast-close" title="Dismiss" @onclick="@(() => ToastService.Dismiss(entry.Id))">×</button>
+            <div class="hc-toast-progress" style="animation-duration:@(entry.DurationMs)ms;"></div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<HcToastEntry> _entries = new();
+    private readonly Dictionary<Guid, System.Threading.Timer> _timers = new();
+
+    protected override void OnInitialized()
+    {
+        if (ToastService is HcToastService svc)
+        {
+            svc.Changed += OnChanged;
+            _entries = svc.Entries.ToList();
+            ScheduleDismissals();
+        }
+    }
+
+    private void OnChanged()
+    {
+        if (ToastService is HcToastService svc)
+        {
+            _entries = svc.Entries.ToList();
+            ScheduleDismissals();
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ScheduleDismissals()
+    {
+        var openIds = _entries.Select(e => e.Id).ToHashSet();
+        foreach (var id in _timers.Keys.ToList())
+        {
+            if (!openIds.Contains(id))
+            {
+                _timers[id].Dispose();
+                _timers.Remove(id);
+            }
+        }
+        foreach (var entry in _entries)
+        {
+            if (_timers.ContainsKey(entry.Id)) continue;
+            var capturedId = entry.Id;
+            _timers[entry.Id] = new System.Threading.Timer(_ =>
+            {
+                ToastService.Dismiss(capturedId);
+            }, null, entry.DurationMs, System.Threading.Timeout.Infinite);
+        }
+    }
+
+    private static string KindClass(HcToastKind kind) => kind switch
+    {
+        HcToastKind.Success => "success",
+        HcToastKind.Warning => "warning",
+        HcToastKind.Error => "error",
+        _ => "info"
+    };
+
+    private static string KindIcon(HcToastKind kind) => kind switch
+    {
+        HcToastKind.Success => "✓",
+        HcToastKind.Warning => "!",
+        HcToastKind.Error => "×",
+        _ => "i"
+    };
+
+    public void Dispose()
+    {
+        if (ToastService is HcToastService svc) svc.Changed -= OnChanged;
+        foreach (var t in _timers.Values) t.Dispose();
+        _timers.Clear();
+    }
+}

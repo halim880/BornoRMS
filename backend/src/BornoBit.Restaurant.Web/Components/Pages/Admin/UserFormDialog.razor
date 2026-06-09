@@ -1,0 +1,123 @@
+@using BornoBit.Restaurant.Application.Users
+@using BornoBit.Restaurant.Domain.Identity
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<HcDialogBody>
+    <div style="display:flex; flex-direction:column; gap:14px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <HcMessageBar Intent="error">@_error</HcMessageBar>
+        }
+        @if (!string.IsNullOrEmpty(_generatedPassword))
+        {
+            <HcMessageBar Intent="warning">
+                Save this password — it won't be shown again: <strong style="font-family:monospace;">@_generatedPassword</strong>
+            </HcMessageBar>
+        }
+
+        <HcInput @bind-Value="Content.UserName" Label="Username"  Required="true" Style="width:100%;" Placeholder="e.g. j.doe" />
+        <HcInput @bind-Value="Content.Email" Label="Email"  Required="true" Style="width:100%;" Placeholder="user@tenant.com" />
+        <HcInput @bind-Value="Content.FullName" Label="Full name"  Required="true" Style="width:100%;" />
+
+        <div>
+            <label style="font-size:13px;font-weight:600;color:var(--neutral-foreground-rest);">Roles</label>
+            <small style="display:block;color:var(--neutral-foreground-hint);margin-bottom:6px;">Choose one or more.</small>
+            @foreach (var role in _selectableRoles)
+            {
+                <div style="display:flex;align-items:center;gap:8px;padding:2px 0;">
+                    <HcCheckbox @key="role"
+                                    Value="@Content.Roles.Contains(role)"
+                                    ValueChanged="@(v => ToggleRole(role, v))" />
+                    <span>@role</span>
+                </div>
+            }
+        </div>
+
+        @if (!IsEdit)
+        {
+            <HcInput @bind-Value="Content.InitialPassword" Label="Initial password (optional)" Style="width:100%;" />
+            <small style="color:var(--neutral-foreground-hint);margin-top:-8px;">Leave blank to auto-generate a strong temporary password.</small>
+        }
+    </div>
+</HcDialogBody>
+
+<HcDialogFooter>
+    <HcButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">@(_generatedPassword is null ? "Cancel" : "Close")</HcButton>
+    @if (_generatedPassword is null)
+    {
+        <HcButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create user")</HcButton>
+    }
+</HcDialogFooter>
+
+@code {
+    [Parameter] public UserFormModel Content { get; set; } = default!;
+    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private string? _generatedPassword;
+    private bool _busy;
+    private bool IsEdit => Content.Id is not null;
+    private static readonly string[] _selectableRoles = Roles.All.Where(r => r != Roles.SuperAdmin).ToArray();
+
+    private void ToggleRole(string role, bool isChecked)
+    {
+        if (isChecked)
+        {
+            if (!Content.Roles.Contains(role)) Content.Roles.Add(role);
+        }
+        else
+        {
+            Content.Roles.Remove(role);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null; _busy = true;
+        try
+        {
+            if (IsEdit)
+            {
+                await Mediator.Send(new UpdateUserCommand(
+                    Content.Id!.Value,
+                    (Content.UserName ?? string.Empty).Trim(),
+                    (Content.Email ?? string.Empty).Trim(),
+                    (Content.FullName ?? string.Empty).Trim(),
+                    Content.Roles.ToArray()));
+                Dialog.Close(Content);
+            }
+            else
+            {
+                var result = await Mediator.Send(new CreateUserCommand(
+                    (Content.UserName ?? string.Empty).Trim(),
+                    (Content.Email ?? string.Empty).Trim(),
+                    (Content.FullName ?? string.Empty).Trim(),
+                    Content.Roles.ToArray(),
+                    string.IsNullOrWhiteSpace(Content.InitialPassword) ? null : Content.InitialPassword));
+                Content.Id = result.UserId;
+                if (string.IsNullOrWhiteSpace(Content.InitialPassword))
+                {
+                    _generatedPassword = result.GeneratedPassword;
+                    StateHasChanged();
+                }
+                else
+                {
+                    Dialog.Close(Content);
+                }
+            }
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (_generatedPassword is not null)
+            Dialog.Close(Content);
+        else
+            Dialog.Cancel();
+    }
+}

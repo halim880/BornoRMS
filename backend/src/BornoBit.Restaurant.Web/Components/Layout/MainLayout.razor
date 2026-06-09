@@ -1,0 +1,84 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Routing
+@implements IDisposable
+
+<HcDialogProvider />
+<HcToastProvider />
+
+<CascadingValue Name="ActiveModuleId" Value="_activeModuleId">
+    <div class="app-shell @(_sidebarCollapsed ? "is-collapsed" : "")">
+        <header class="app-header">
+            <div class="header-left">
+                <button type="button"
+                        class="header-toggle"
+                        title="@(_sidebarCollapsed ? "Show menu" : "Hide menu")"
+                        aria-label="Toggle sidebar"
+                        aria-pressed="@(_sidebarCollapsed ? "true" : "false")"
+                        @onclick="ToggleSidebar">
+                    <HcIcon Name="Menu" Size="20" />
+                </button>
+                <AuthorizeView>
+                    <Authorized>
+                        <ModuleSwitcher ActiveModuleId="_activeModuleId"
+                                        ActiveModuleIdChanged="OnModuleSelected" />
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+            <div class="header-actions">
+                <AuthorizeView>
+                    <NotAuthorized>
+                        <button type="button" class="header-btn header-btn-primary"
+                                @onclick="@(() => Navigation.NavigateTo("/login"))">
+                            Sign in
+                        </button>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </header>
+
+        <div class="app-body">
+            <NavMenu IsCollapsed="_sidebarCollapsed" />
+            <main class="content-pane">
+                <div class="content">
+                    @Body
+                </div>
+            </main>
+        </div>
+    </div>
+</CascadingValue>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">x</span>
+</div>
+
+@code {
+    [Inject] public NavigationManager Navigation { get; set; } = default!;
+
+    private Guid? _activeModuleId;
+    private bool _sidebarCollapsed;
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        // URL navigation supersedes the click-override: clear the explicit module so URL-derived
+        // state takes over in both ModuleSwitcher and NavMenu.
+        _activeModuleId = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnModuleSelected(Guid? moduleId)
+    {
+        _activeModuleId = moduleId;
+        StateHasChanged();
+    }
+
+    private void ToggleSidebar() => _sidebarCollapsed = !_sidebarCollapsed;
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

@@ -1,0 +1,145 @@
+@page "/admin/modules"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "SuperAdmin")]
+@using BornoBit.Restaurant.Application.Modules
+@using MediatR
+@inject ISender Mediator
+@inject IHcDialogService DialogService
+@inject IHcToastService ToastService
+
+<PageTitle>Modules · BornoBit.Restaurant</PageTitle>
+
+<div class="hc-page">
+    <PageHeader Title="Modules"
+                Description="Top-bar modules of the app. Each module is a root-level menu; its descendants form the sidebar tree.">
+        <Actions>
+            <button type="button" class="hc-btn hc-btn-primary" @onclick="ShowCreateAsync">+ New Module</button>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading modules…" />
+    }
+    else if (_error is not null)
+    {
+        <HcMessageBar Intent="error">@_error</HcMessageBar>
+    }
+    else if (_modules.Count == 0)
+    {
+        <EmptyState Description="No modules yet. Click '+ New Module' to add one." />
+    }
+    else
+    {
+        <div class="hc-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--hc-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size: var(--hc-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--hc-text-muted);">Order</th>
+                        <th style="padding:10px 14px; font-size: var(--hc-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--hc-text-muted);">Title</th>
+                        <th style="padding:10px 14px; font-size: var(--hc-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--hc-text-muted);">Icon</th>
+                        <th style="padding:10px 14px; font-size: var(--hc-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--hc-text-muted);">Min role</th>
+                        <th style="padding:10px 14px; font-size: var(--hc-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--hc-text-muted); text-align:center;">Children</th>
+                        <th style="padding:10px 14px; font-size: var(--hc-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--hc-text-muted); text-align:center;">Status</th>
+                        <th style="padding:10px 14px; font-size: var(--hc-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--hc-text-muted); text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in _modules)
+                    {
+                        <tr style="border-top:1px solid var(--hc-border-soft);">
+                            <td style="padding:10px 14px; font-family: ui-monospace, monospace; color: var(--hc-text-subtle);">@m.DisplayOrder</td>
+                            <td style="padding:10px 14px;"><strong>@m.Title</strong></td>
+                            <td style="padding:10px 14px;"><span class="hc-code hc-code-slate">@(m.Icon ?? "—")</span></td>
+                            <td style="padding:10px 14px; color: var(--hc-text-muted);">@(m.RequiredRole ?? "(everyone)")</td>
+                            <td style="padding:10px 14px; text-align:center;">@m.AccessibleMenuCount</td>
+                            <td style="padding:10px 14px; text-align:center;">
+                                <span class="hc-pill @(m.IsActive ? "hc-pill-active" : "hc-pill-inactive")">@(m.IsActive ? "Active" : "Inactive")</span>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                <button type="button" class="hc-btn hc-btn-ghost" @onclick="@(() => ShowEditAsync(m))">Edit</button>
+                                @if (m.IsActive)
+                                {
+                                    <button type="button" class="hc-btn hc-btn-ghost" @onclick="@(() => ToggleActiveAsync(m, false))">Deactivate</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="hc-btn hc-btn-ghost" @onclick="@(() => ToggleActiveAsync(m, true))">Activate</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<ModuleDto> _modules = new();
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            _modules = (await Mediator.Send(new GetAllModulesQuery())).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load modules: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task ShowCreateAsync()
+    {
+        var nextOrder = _modules.Count == 0 ? 0 : _modules.Max(m => m.DisplayOrder) + 1;
+        var model = new ModuleFormModel { DisplayOrder = nextOrder };
+        var result = await DialogService.ShowAsync<ModuleFormDialog, ModuleFormModel>(model, new HcDialogOptions
+        {
+            Title = "New module",
+            Width = "480px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is ModuleFormModel saved && saved.SavedId.HasValue)
+        {
+            ToastService.ShowSuccess($"Module '{saved.Title}' created.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ShowEditAsync(ModuleDto m)
+    {
+        var model = new ModuleFormModel
+        {
+            Id = m.Id,
+            Title = m.Title,
+            Icon = m.Icon,
+            DisplayOrder = m.DisplayOrder,
+            RequiredRole = m.RequiredRole
+        };
+        var result = await DialogService.ShowAsync<ModuleFormDialog, ModuleFormModel>(model, new HcDialogOptions
+        {
+            Title = $"Edit module · {m.Title}",
+            Width = "480px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is ModuleFormModel saved && saved.SavedId.HasValue)
+        {
+            ToastService.ShowSuccess("Module updated.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ToggleActiveAsync(ModuleDto m, bool active)
+    {
+        try
+        {
+            await Mediator.Send(new SetModuleActiveCommand(m.Id, active));
+            ToastService.ShowSuccess($"Module '{m.Title}' {(active ? "activated" : "deactivated")}.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+    }
+}

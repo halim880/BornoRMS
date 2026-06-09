@@ -1,0 +1,199 @@
+@page "/admin/menu-permissions"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.MenuPermissions
+@using MediatR
+@inject ISender Mediator
+@inject IHcToastService ToastService
+
+<PageTitle>Menu permissions · BornoBit.Restaurant</PageTitle>
+
+<div style="display:flex; flex-direction:column; gap:16px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+        <h1>Menu permissions</h1>
+        <HcButton Variant="primary"
+                      OnClick="SaveAsync"
+                      Disabled="@(_selectedRoleId is null || _saving || _loadingTree)"
+                      Loading="_saving">
+            Save changes
+        </HcButton>
+    </div>
+
+    <p style="color:var(--neutral-foreground-hint);">
+        Choose a role and check the menus it should be able to see. Users see a menu when at least one of their roles permits it.
+        SuperAdmin always sees every menu.
+    </p>
+
+    @if (_loadingRoles)
+    {
+        <HcSpinner />
+    }
+    else if (_loadError is not null)
+    {
+        <HcMessageBar Intent="error">@_loadError</HcMessageBar>
+    }
+    else
+    {
+        <div style="max-width:320px;">
+            <HcSelect TOption="RoleDto"
+                      Items="_roles"
+                      OptionText="@(r => r.Name)"
+                      OptionValue="@(r => r.Id.ToString())"
+                      SelectedOption="@_selectedRole"
+                      SelectedOptionChanged="OnRoleChangedAsync"
+                      Label="Role"
+                      Placeholder="Select a role…" />
+        </div>
+
+        @if (_selectedRoleId is null)
+        {
+            <div class="hc-cmp-cardish">
+                <p style="margin:0;color:var(--neutral-foreground-hint);">Select a role to view and edit its menu permissions.</p>
+            </div>
+        }
+        else if (_loadingTree)
+        {
+            <HcSpinner />
+        }
+        else if (_treeError is not null)
+        {
+            <HcMessageBar Intent="error">@_treeError</HcMessageBar>
+        }
+        else if (_nodes.Count == 0)
+        {
+            <div class="hc-cmp-cardish"><p style="margin:0;">No menus found.</p></div>
+        }
+        else
+        {
+            <div class="hc-cmp-cardish">
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <HcButton Variant="ghost" OnClick="SelectAll">Select all</HcButton>
+                    <HcButton Variant="ghost" OnClick="ClearAll">Clear all</HcButton>
+                </div>
+                <div class="menu-perm-tree">
+                    @foreach (var node in _nodes)
+                    {
+                        @RenderNode(node, 0)
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .menu-perm-tree { display:flex; flex-direction:column; gap:4px; }
+    .menu-perm-row { display:flex; align-items:center; gap:8px; padding:4px 0; }
+    .menu-perm-title { font-weight:500; }
+    .menu-perm-url { color:var(--neutral-foreground-hint); font-size:12px; margin-left:8px; }
+</style>
+
+@code {
+    private bool _loadingRoles = true;
+    private bool _loadingTree;
+    private bool _saving;
+    private string? _loadError;
+    private string? _treeError;
+
+    private List<RoleDto> _roles = new();
+    private RoleDto? _selectedRole;
+    private Guid? _selectedRoleId => _selectedRole?.Id;
+
+    private List<MenuPermissionNodeDto> _nodes = new();
+    private HashSet<Guid> _checked = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var list = await Mediator.Send(new GetRolesQuery());
+            _roles = list.ToList();
+        }
+        catch (Exception ex) { _loadError = $"Failed to load roles: {ex.Message}"; }
+        finally { _loadingRoles = false; }
+    }
+
+    private async Task OnRoleChangedAsync(RoleDto? role)
+    {
+        _selectedRole = role;
+        _nodes = new();
+        _checked = new();
+        if (role is null) return;
+        await LoadTreeAsync(role.Id);
+    }
+
+    private async Task LoadTreeAsync(Guid roleId)
+    {
+        _loadingTree = true; _treeError = null;
+        try
+        {
+            var nodes = await Mediator.Send(new GetMenuPermissionsTreeQuery(roleId));
+            _nodes = nodes.ToList();
+            _checked = CollectPermitted(_nodes, new HashSet<Guid>());
+        }
+        catch (Exception ex) { _treeError = $"Failed to load menu tree: {ex.Message}"; }
+        finally { _loadingTree = false; }
+    }
+
+    private static HashSet<Guid> CollectPermitted(IReadOnlyList<MenuPermissionNodeDto> nodes, HashSet<Guid> set)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.IsPermitted) set.Add(n.Id);
+            CollectPermitted(n.Children, set);
+        }
+        return set;
+    }
+
+    private void Toggle(MenuPermissionNodeDto node, bool isChecked)
+    {
+        if (isChecked) _checked.Add(node.Id); else _checked.Remove(node.Id);
+    }
+
+    private void SelectAll()
+    {
+        _checked = CollectAll(_nodes, new HashSet<Guid>());
+    }
+
+    private void ClearAll() => _checked.Clear();
+
+    private static HashSet<Guid> CollectAll(IReadOnlyList<MenuPermissionNodeDto> nodes, HashSet<Guid> set)
+    {
+        foreach (var n in nodes)
+        {
+            set.Add(n.Id);
+            CollectAll(n.Children, set);
+        }
+        return set;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_selectedRoleId is null) return;
+        _saving = true;
+        try
+        {
+            await Mediator.Send(new SaveMenuPermissionsCommand(_selectedRoleId.Value, _checked.ToList()));
+            ToastService.ShowSuccess($"Saved menu permissions for '{_selectedRole?.Name}'.");
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _saving = false; }
+    }
+
+    private RenderFragment RenderNode(MenuPermissionNodeDto node, int depth) => __builder =>
+    {
+        <div class="menu-perm-row" style="padding-left:@(depth * 20)px;">
+            <HcCheckbox @key="node.Id"
+                            Value="@_checked.Contains(node.Id)"
+                            ValueChanged="@(v => Toggle(node, v))" />
+            <span class="menu-perm-title">@node.Title</span>
+            @if (!string.IsNullOrWhiteSpace(node.Url))
+            {
+                <span class="menu-perm-url">@node.Url</span>
+            }
+        </div>
+        @foreach (var child in node.Children)
+        {
+            @RenderNode(child, depth + 1)
+        }
+    };
+}
