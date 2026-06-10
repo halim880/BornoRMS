@@ -11,7 +11,7 @@
 
 <PageHeader Title="Incoming Orders" Description="Live customer orders. Download a receipt for any order.">
     <Actions>
-        <HcButton Variant="ghost" OnClick="Load">Refresh</HcButton>
+        <BoButton Variant="ghost" OnClick="Load">Refresh</BoButton>
     </Actions>
 </PageHeader>
 
@@ -53,11 +53,11 @@ else
             </DataGridColumn>
             <DataGridColumn TItem="OrderListItemDto" Title="Placed" Property="@(o => (object?)o.OrderedAtUtc)" Format="g" Width="150px" />
             <DataGridColumn TItem="OrderListItemDto" Title="" Align="DataGridAlign.Right" Width="110px">
-                <a class="hc-link" href="/reports/order/@context.Id/receipt.pdf" target="_blank">Invoice</a>
+                <a class="bo-link" href="/reports/order/@context.Id/receipt.pdf" target="_blank">Invoice</a>
             </DataGridColumn>
         </Columns>
     </DataGrid>
-    <p style="color:var(--hc-text-muted); font-size:var(--hc-font-sm); margin-top:8px;">@_result.TotalCount total</p>
+    <p style="color:var(--bo-text-muted); font-size:var(--bo-font-sm); margin-top:8px;">@_result.TotalCount total</p>
 }
 
 @code {

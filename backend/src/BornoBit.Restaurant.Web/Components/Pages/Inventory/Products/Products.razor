@@ -1,0 +1,84 @@
+@page "/inventory/products"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Products
+
+<PageTitle>Products · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Products"
+                Description="Manage products: image, English & Bangla name, category, code and price.">
+        <Actions>
+            <button type="button" class="bo-btn bo-btn-primary" @onclick="ShowCreateAsync">+ New Product</button>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading products…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_products.Count == 0)
+    {
+        <EmptyState Description="No products yet. Click '+ New Product' to add one." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);">Order</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);">Image</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);">Code</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);">Name</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);">Bangla name</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);">Category</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted); text-align:right;">Price</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted); text-align:center;">Status</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted); text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _products)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px; font-family: ui-monospace, monospace; color: var(--bo-text-subtle);">@p.DisplayOrder</td>
+                            <td style="padding:10px 14px;">
+                                @if (!string.IsNullOrEmpty(p.ImagePath))
+                                {
+                                    <img src="@p.ImagePath" alt="@p.Name" style="height:40px; width:40px; object-fit:cover; border-radius:6px; display:block;" />
+                                }
+                                else
+                                {
+                                    <span style="color: var(--bo-text-subtle);">—</span>
+                                }
+                            </td>
+                            <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@p.Code</span></td>
+                            <td style="padding:10px 14px;"><strong>@p.Name</strong></td>
+                            <td style="padding:10px 14px;">@(string.IsNullOrEmpty(p.BanglaName) ? "—" : p.BanglaName)</td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@p.CategoryName</td>
+                            <td style="padding:10px 14px; text-align:right;">@p.Price.ToString("0.00") @p.Currency</td>
+                            <td style="padding:10px 14px; text-align:center;">
+                                <span class="bo-pill @(p.IsActive ? "bo-pill-active" : "bo-pill-inactive")">@(p.IsActive ? "Active" : "Inactive")</span>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowEditAsync(p))">Edit</button>
+                                @if (p.IsActive)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(p, false))">Deactivate</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(p, true))">Activate</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

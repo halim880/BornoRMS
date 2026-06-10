@@ -1,0 +1,74 @@
+.bo-cmp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bo-cmp-field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bo-text-muted);
+    line-height: 1.3;
+}
+
+.bo-cmp-field-required {
+    color: var(--bo-danger);
+    margin-left: 2px;
+}
+
+.bo-cmp-field-input {
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--bo-text);
+    background: var(--bo-bg-card);
+    border: 1px solid var(--bo-border);
+    border-radius: var(--bo-radius-sm, 6px);
+    padding: 8px 10px;
+    line-height: 1.4;
+    transition: border-color 100ms, box-shadow 100ms;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.bo-cmp-field-input::placeholder {
+    color: var(--bo-text-faint);
+}
+
+.bo-cmp-field-input:hover:not(:disabled) {
+    border-color: var(--bo-border-strong);
+}
+
+.bo-cmp-field-input:focus {
+    outline: none;
+    border-color: var(--bo-primary);
+    box-shadow: 0 0 0 3px var(--bo-primary-tint);
+}
+
+.bo-cmp-field-input:disabled {
+    background: var(--bo-bg-soft);
+    color: var(--bo-text-faint);
+    cursor: not-allowed;
+}
+
+.bo-cmp-field-input:read-only {
+    background: var(--bo-bg-soft);
+}
+
+.bo-cmp-field.is-invalid .bo-cmp-field-input {
+    border-color: var(--bo-danger);
+}
+.bo-cmp-field.is-invalid .bo-cmp-field-input:focus {
+    box-shadow: 0 0 0 3px var(--bo-danger-soft);
+}
+
+.bo-cmp-field-error {
+    font-size: 11px;
+    color: var(--bo-danger);
+    line-height: 1.3;
+}
+
+.bo-cmp-field-hint {
+    font-size: 11px;
+    color: var(--bo-text-subtle);
+    line-height: 1.3;
+}

@@ -1,0 +1,63 @@
+@using BornoBit.Restaurant.Application.ProductCategories
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="200" />
+        <BoInput @bind-Value="Content.Description" Label="Description" Style="width:100%;" Maxlength="1000" />
+        <BoNumeric T="int" @bind-Value="Content.DisplayOrder" Label="Display order" Style="width:100%;" Min="0" Step="1" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public ProductCategoryFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateProductCategoryCommand(
+                    Content.Name.Trim(),
+                    string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim(),
+                    Content.DisplayOrder));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateProductCategoryCommand(
+                    Content.Id.Value,
+                    Content.Name.Trim(),
+                    string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim(),
+                    Content.DisplayOrder));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

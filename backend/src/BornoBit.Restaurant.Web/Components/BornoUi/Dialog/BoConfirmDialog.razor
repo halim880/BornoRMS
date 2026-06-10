@@ -1,0 +1,19 @@
+@namespace BornoBit.Restaurant.Web.Components.BornoUi.Dialog
+@using BornoBit.Restaurant.Web.Components.BornoUi
+
+<BoDialogBody>
+    <p style="margin:0; color:var(--bo-text); line-height:1.5;">@Content.Message</p>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="Cancel">@Content.CancelLabel</BoButton>
+    <BoButton Variant="@Content.Variant" OnClick="Confirm">@Content.ConfirmLabel</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter, EditorRequired] public BoConfirmContent Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private void Confirm() => Dialog.Close(true);
+    private void Cancel() => Dialog.Cancel();
+}

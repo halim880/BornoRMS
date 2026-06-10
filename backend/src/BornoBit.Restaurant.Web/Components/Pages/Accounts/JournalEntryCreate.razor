@@ -1,0 +1,209 @@
+@page "/accounts/journals/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.Accounts
+@using BornoBit.Restaurant.Application.Accounting.Journals
+@using BornoBit.Restaurant.Domain.Accounting
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+@inject NavigationManager Nav
+
+<PageTitle>New Journal Entry · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="New Journal Entry"
+                Description="Record a balanced double-entry transaction. Total debits must equal total credits." />
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading accounts…" />
+    }
+    else if (_loadError is not null)
+    {
+        <BoMessageBar Intent="error">@_loadError</BoMessageBar>
+    }
+    else
+    {
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                <BoDatePicker DateTimeValue="_entryDate" DateTimeValueChanged="@(d => _entryDate = d ?? _entryDate)" Label="Entry date" Required="true" />
+                <BoSelect TOption="VoucherType"
+                          Items="@_voucherTypes"
+                          OptionValue="@(t => ((int)t).ToString())"
+                          OptionText="@(t => t.ToString())"
+                          SelectedOption="@_voucherType"
+                          SelectedOptionChanged="@(t => _voucherType = t)"
+                          Label="Voucher type" Style="width:180px;" />
+                <BoInput @bind-Value="_reference" Label="Reference (optional)" Style="flex:1; min-width:200px;" Maxlength="80" />
+            </div>
+
+            <BoInput @bind-Value="_narration" Label="Narration" Style="width:100%;" Maxlength="1000" />
+
+            <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                    <strong>Lines</strong>
+                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="AddLine">+ Add line</button>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th style="padding:8px 10px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Account</th>
+                            <th style="padding:8px 10px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); width:150px; text-align:right;">Debit</th>
+                            <th style="padding:8px 10px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); width:150px; text-align:right;">Credit</th>
+                            <th style="padding:8px 10px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Narration</th>
+                            <th style="width:40px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr style="border-top:1px solid var(--bo-border-soft);">
+                                <td style="padding:6px 10px;">
+                                    <BoSelect TOption="AccountDto"
+                                              Items="@_accounts"
+                                              OptionValue="@(a => a.Id.ToString())"
+                                              OptionText="@(a => a.Code + " · " + a.Name)"
+                                              SelectedOption="@_accounts.FirstOrDefault(a => a.Id == line.AccountId)"
+                                              SelectedOptionChanged="@(a => line.AccountId = a?.Id ?? Guid.Empty)"
+                                              Placeholder="Select account" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px;">
+                                    <BoNumeric T="decimal" Value="line.Debit" ValueChanged="@(v => OnDebitChanged(line, v))" Min="0" Step="0.01" Decimals="2" ShowStepper="false" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px;">
+                                    <BoNumeric T="decimal" Value="line.Credit" ValueChanged="@(v => OnCreditChanged(line, v))" Min="0" Step="0.01" Decimals="2" ShowStepper="false" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px;">
+                                    <BoInput Value="line.Narration" ValueChanged="@(v => line.Narration = v)" Style="width:100%;" Maxlength="500" />
+                                </td>
+                                <td style="padding:6px 10px; text-align:center;">
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => RemoveLine(line))">✕</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr style="border-top:2px solid var(--bo-border-soft); font-weight:600;">
+                            <td style="padding:8px 10px; text-align:right;">Totals</td>
+                            <td style="padding:8px 10px; text-align:right;">@TotalDebit.ToString("0.00")</td>
+                            <td style="padding:8px 10px; text-align:right;">@TotalCredit.ToString("0.00")</td>
+                            <td colspan="2" style="padding:8px 10px;">
+                                @if (IsBalanced)
+                                {
+                                    <BoBadge Tone="success">Balanced</BoBadge>
+                                }
+                                else
+                                {
+                                    <BoBadge Tone="danger">Difference @((TotalDebit - TotalCredit).ToString("0.00"))</BoBadge>
+                                }
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+                @if (_lines.Count == 0)
+                {
+                    <div style="padding:12px; color:var(--bo-text-subtle);">No lines yet. Click "+ Add line".</div>
+                }
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <a class="bo-btn bo-btn-ghost" href="/accounts/journals">Cancel</a>
+                <BoButton Variant="ghost" OnClick="@(() => SaveAsync(false))" Loading="_busy">Save draft</BoButton>
+                <BoButton Variant="primary" OnClick="@(() => SaveAsync(true))" Loading="_busy" Disabled="@(!IsBalanced)">Save &amp; post</BoButton>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private string? _loadError;
+    private string? _error;
+
+    private List<AccountDto> _accounts = new();
+
+    private DateTime _entryDate = DateTime.UtcNow.Date;
+    private VoucherType _voucherType = VoucherType.Journal;
+    private string? _reference;
+    private string? _narration;
+
+    private static readonly VoucherType[] _voucherTypes = Enum.GetValues<VoucherType>();
+    private readonly List<LineRow> _lines = new();
+
+    private class LineRow
+    {
+        public Guid AccountId { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public string? Narration { get; set; }
+    }
+
+    private decimal TotalDebit => _lines.Sum(l => l.Debit);
+    private decimal TotalCredit => _lines.Sum(l => l.Credit);
+    private bool IsBalanced => TotalDebit == TotalCredit && TotalDebit > 0m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = (await Mediator.Send(new GetAccountsQuery(PostableOnly: true, ActiveOnly: true))).ToList();
+            AddLine();
+            AddLine();
+        }
+        catch (Exception ex) { _loadError = $"Failed to load: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private void AddLine() => _lines.Add(new LineRow());
+    private void RemoveLine(LineRow line) => _lines.Remove(line);
+
+    // A line is debit XOR credit — entering one clears the other.
+    private void OnDebitChanged(LineRow line, decimal v)
+    {
+        line.Debit = v;
+        if (v > 0m) line.Credit = 0m;
+    }
+
+    private void OnCreditChanged(LineRow line, decimal v)
+    {
+        line.Credit = v;
+        if (v > 0m) line.Debit = 0m;
+    }
+
+    private async Task SaveAsync(bool post)
+    {
+        _error = null;
+
+        var valid = _lines.Where(l => l.AccountId != Guid.Empty && (l.Debit > 0m || l.Credit > 0m)).ToList();
+        if (valid.Count < 2) { _error = "Add at least two lines with an account and an amount."; return; }
+        if (valid.Any(l => l.Debit > 0m && l.Credit > 0m)) { _error = "Each line must be either a debit or a credit, not both."; return; }
+        if (valid.Sum(l => l.Debit) != valid.Sum(l => l.Credit)) { _error = "The entry is not balanced."; return; }
+
+        _busy = true;
+        try
+        {
+            var inputs = valid.Select(l => new JournalLineInput(l.AccountId, l.Debit, l.Credit,
+                string.IsNullOrWhiteSpace(l.Narration) ? null : l.Narration!.Trim())).ToList();
+
+            await Mediator.Send(new CreateJournalEntryCommand(
+                _entryDate, _voucherType,
+                string.IsNullOrWhiteSpace(_reference) ? null : _reference!.Trim(),
+                string.IsNullOrWhiteSpace(_narration) ? null : _narration!.Trim(),
+                inputs, PostImmediately: post));
+
+            ToastService.ShowSuccess(post ? "Journal entry posted." : "Draft journal entry saved.");
+            Nav.NavigateTo("/accounts/journals");
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

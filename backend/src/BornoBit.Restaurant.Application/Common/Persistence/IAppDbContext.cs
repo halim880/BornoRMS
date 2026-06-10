@@ -1,9 +1,12 @@
+using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Catalog;
 using BornoBit.Restaurant.Domain.Customers;
 using BornoBit.Restaurant.Domain.Dining;
+using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Domain.Menus;
 using BornoBit.Restaurant.Domain.Numbering;
 using BornoBit.Restaurant.Domain.Ordering;
+using BornoBit.Restaurant.Domain.Store;
 using BornoBit.Restaurant.Domain.Tenants;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +16,8 @@ public interface IAppDbContext
 {
     DbSet<MenuCategory> MenuCategories { get; }
     DbSet<MenuItem> MenuItems { get; }
+    DbSet<ProductCategory> ProductCategories { get; }
+    DbSet<Product> Products { get; }
     DbSet<Customer> Customers { get; }
     DbSet<CustomerOtp> CustomerOtps { get; }
     DbSet<RestaurantTable> RestaurantTables { get; }
@@ -23,6 +28,29 @@ public interface IAppDbContext
     DbSet<AppMenu> AppMenus { get; }
     DbSet<AppMenuRolePermission> AppMenuRolePermissions { get; }
     DbSet<NumberingScope> NumberingScopes { get; }
+
+    DbSet<Unit> Units { get; }
+    DbSet<InventoryCategory> InventoryCategories { get; }
+    DbSet<InventoryItem> InventoryItems { get; }
+    DbSet<StockMovement> StockMovements { get; }
+    DbSet<Supplier> Suppliers { get; }
+    DbSet<GoodsReceipt> GoodsReceipts { get; }
+    DbSet<GoodsReceiptLine> GoodsReceiptLines { get; }
+
+    // Store / warehouse (isolated from POS Inventory)
+    DbSet<StoreUnit> StoreUnits { get; }
+    DbSet<StoreCategory> StoreCategories { get; }
+    DbSet<StoreItem> StoreItems { get; }
+    DbSet<StoreSupplier> StoreSuppliers { get; }
+    DbSet<StoreGoodsReceipt> StoreGoodsReceipts { get; }
+    DbSet<StoreGoodsReceiptLine> StoreGoodsReceiptLines { get; }
+    DbSet<StoreIssue> StoreIssues { get; }
+    DbSet<StoreIssueLine> StoreIssueLines { get; }
+    DbSet<StoreStockMovement> StoreStockMovements { get; }
+
+    DbSet<Account> Accounts { get; }
+    DbSet<JournalEntry> JournalEntries { get; }
+    DbSet<JournalLine> JournalLines { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

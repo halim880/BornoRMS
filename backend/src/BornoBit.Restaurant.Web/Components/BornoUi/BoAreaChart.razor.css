@@ -1,0 +1,48 @@
+.bo-area-chart {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.bo-area-svg {
+    flex: 1 1 auto;
+    display: block;
+    overflow: visible;
+}
+
+.bo-area-empty {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bo-text-faint, #94A3B8);
+    font-size: 13px;
+    border: 1px dashed var(--bo-border-soft, #EEF2F7);
+    border-radius: var(--bo-radius-md, 10px);
+}
+
+.bo-area-axis {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--bo-text-subtle, #64748B);
+    font-variant-numeric: tabular-nums;
+}
+
+.bo-area-axis-label {
+    font-weight: 500;
+}
+
+.bo-area-axis-peak {
+    font-size: 11px;
+    color: var(--bo-text-subtle, #64748B);
+}
+
+.bo-area-axis-peak strong {
+    color: var(--bo-text, #0F172A);
+    font-weight: 700;
+    margin-left: 2px;
+}

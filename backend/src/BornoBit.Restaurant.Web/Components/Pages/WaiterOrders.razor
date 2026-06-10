@@ -9,14 +9,14 @@
 @using BornoBit.Restaurant.Shared.Common
 @using MediatR
 @inject ISender Sender
-@inject IHcToastService ToastService
+@inject IBoToastService ToastService
 @rendermode InteractiveServer
 
 <PageTitle>Take Order · BornoBit</PageTitle>
 
 <PageHeader Title="Take Order" Description="Build and place an order on behalf of a guest.">
     <Actions>
-        <HcButton Variant="ghost" OnClick="LoadRecent">Refresh list</HcButton>
+        <BoButton Variant="ghost" OnClick="LoadRecent">Refresh list</BoButton>
     </Actions>
 </PageHeader>
 
@@ -28,21 +28,21 @@ else
 {
     <div class="waiter-grid">
         <!-- ORDER BUILDER -->
-        <HcCard Title="New order">
+        <BoCard Title="New order">
             <div class="builder">
                 <div class="field-row">
                     <span class="field-label">Order type</span>
                     <div class="type-toggle">
-                        <HcButton Variant="@(_type == OrderType.DineIn ? "primary" : "outline")"
-                                  Size="sm" OnClick="@(() => SetType(OrderType.DineIn))">Dine-in</HcButton>
-                        <HcButton Variant="@(_type == OrderType.Takeaway ? "primary" : "outline")"
-                                  Size="sm" OnClick="@(() => SetType(OrderType.Takeaway))">Takeaway</HcButton>
+                        <BoButton Variant="@(_type == OrderType.DineIn ? "primary" : "outline")"
+                                  Size="sm" OnClick="@(() => SetType(OrderType.DineIn))">Dine-in</BoButton>
+                        <BoButton Variant="@(_type == OrderType.Takeaway ? "primary" : "outline")"
+                                  Size="sm" OnClick="@(() => SetType(OrderType.Takeaway))">Takeaway</BoButton>
                     </div>
                 </div>
 
                 @if (_type == OrderType.DineIn)
                 {
-                    <HcSelect TOption="TableDto" Items="_tables"
+                    <BoSelect TOption="TableDto" Items="_tables"
                               OptionValue="@(t => t.Id.ToString())"
                               OptionText="@(t => $"{t.TableNumber} · seats {t.Capacity}")"
                               SelectedOption="_selectedTable"
@@ -51,8 +51,8 @@ else
                 }
 
                 <div class="two-col">
-                    <HcInput @bind-Value="_phone" Label="Customer phone (optional)" Placeholder="01XXXXXXXXX" />
-                    <HcInput @bind-Value="_name" Label="Customer name (optional)" />
+                    <BoInput @bind-Value="_phone" Label="Customer phone (optional)" Placeholder="01XXXXXXXXX" />
+                    <BoInput @bind-Value="_name" Label="Customer name (optional)" />
                 </div>
 
                 <div class="field-row">
@@ -76,7 +76,7 @@ else
                                                 <span class="menu-item-name">@item.Name</span>
                                                 <span class="menu-item-price">@item.Currency @item.Price.ToString("0.##")</span>
                                             </div>
-                                            <HcButton Variant="outline" Size="sm" OnClick="@(() => AddItem(item))">Add</HcButton>
+                                            <BoButton Variant="outline" Size="sm" OnClick="@(() => AddItem(item))">Add</BoButton>
                                         </div>
                                     }
                                 </div>
@@ -85,10 +85,10 @@ else
                     }
                 </div>
             </div>
-        </HcCard>
+        </BoCard>
 
         <!-- CART -->
-        <HcCard Title="Order summary">
+        <BoCard Title="Order summary">
             <div class="cart">
                 @if (_cart.Count == 0)
                 {
@@ -105,12 +105,12 @@ else
                                     <span class="cart-line-sub">@line.Item.Currency @line.Item.Price.ToString("0.##")</span>
                                 </div>
                                 <div class="qty">
-                                    <HcButton Variant="ghost" Size="sm" OnClick="@(() => Decrement(line))">−</HcButton>
+                                    <BoButton Variant="ghost" Size="sm" OnClick="@(() => Decrement(line))">−</BoButton>
                                     <span class="qty-val">@line.Qty</span>
-                                    <HcButton Variant="ghost" Size="sm" OnClick="@(() => Increment(line))">+</HcButton>
+                                    <BoButton Variant="ghost" Size="sm" OnClick="@(() => Increment(line))">+</BoButton>
                                 </div>
                                 <span class="cart-line-total">@line.Item.Currency @((line.Item.Price * line.Qty).ToString("0.##"))</span>
-                                <HcButton Variant="ghost" Size="sm" OnClick="@(() => Remove(line))">✕</HcButton>
+                                <BoButton Variant="ghost" Size="sm" OnClick="@(() => Remove(line))">✕</BoButton>
                             </div>
                         }
                     </div>
@@ -121,23 +121,23 @@ else
                     </div>
                 }
 
-                <HcInput @bind-Value="_notes" Label="Notes (optional)" Placeholder="e.g. no onions" />
+                <BoInput @bind-Value="_notes" Label="Notes (optional)" Placeholder="e.g. no onions" />
 
                 @if (!string.IsNullOrEmpty(_error))
                 {
-                    <HcMessageBar Intent="error">@_error</HcMessageBar>
+                    <BoMessageBar Intent="error">@_error</BoMessageBar>
                 }
 
-                <HcButton Variant="primary" OnClick="PlaceAsync" Loading="_placing" Disabled="@(!CanPlace)">
+                <BoButton Variant="primary" OnClick="PlaceAsync" Loading="_placing" Disabled="@(!CanPlace)">
                     Place order
-                </HcButton>
+                </BoButton>
             </div>
-        </HcCard>
+        </BoCard>
     </div>
 
     <!-- RECENT ORDERS -->
     <div style="margin-top:24px;">
-        <HcCard Title="Recent orders">
+        <BoCard Title="Recent orders">
             @if (_recent is null || _recent.Items.Count == 0)
             {
                 <EmptyState Icon="DocumentBulletList" Title="No orders yet"
@@ -174,7 +174,7 @@ else
                     </Columns>
                 </DataGrid>
             }
-        </HcCard>
+        </BoCard>
     </div>
 }
 
@@ -289,36 +289,36 @@ else
     .builder { display: flex; flex-direction: column; gap: 16px; }
     .field-row { display: flex; flex-direction: column; gap: 6px; }
     .field-label {
-        font-size: 13px; font-weight: 600; color: var(--hc-text-muted, var(--neutral-foreground-rest));
+        font-size: 13px; font-weight: 600; color: var(--bo-text-muted, var(--neutral-foreground-rest));
     }
     .type-toggle { display: flex; gap: 8px; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .menu { display: flex; flex-direction: column; gap: 14px; max-height: 460px; overflow-y: auto; padding-right: 4px; }
     .menu-cat-name {
         font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-        color: var(--hc-text-muted); margin-bottom: 6px;
+        color: var(--bo-text-muted); margin-bottom: 6px;
     }
     .menu-item {
         display: flex; align-items: center; justify-content: space-between; gap: 12px;
-        padding: 8px 10px; border: 1px solid var(--hc-border, #e3e3e3); border-radius: 8px; margin-bottom: 6px;
+        padding: 8px 10px; border: 1px solid var(--bo-border, #e3e3e3); border-radius: 8px; margin-bottom: 6px;
     }
     .menu-item-info { display: flex; flex-direction: column; }
     .menu-item-name { font-weight: 600; }
-    .menu-item-price { font-size: 12px; color: var(--hc-text-muted); }
+    .menu-item-price { font-size: 12px; color: var(--bo-text-muted); }
     .cart { display: flex; flex-direction: column; gap: 14px; }
     .cart-lines { display: flex; flex-direction: column; gap: 8px; }
     .cart-line {
         display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 10px;
-        padding: 6px 0; border-bottom: 1px solid var(--hc-border, #eee);
+        padding: 6px 0; border-bottom: 1px solid var(--bo-border, #eee);
     }
     .cart-line-info { display: flex; flex-direction: column; }
     .cart-line-name { font-weight: 600; }
-    .cart-line-sub { font-size: 12px; color: var(--hc-text-muted); }
+    .cart-line-sub { font-size: 12px; color: var(--bo-text-muted); }
     .qty { display: flex; align-items: center; gap: 4px; }
     .qty-val { min-width: 24px; text-align: center; font-weight: 600; }
     .cart-line-total { font-weight: 600; min-width: 80px; text-align: right; }
     .cart-total {
         display: flex; justify-content: space-between; align-items: center;
-        font-size: 18px; padding-top: 8px; border-top: 2px solid var(--hc-border, #ddd);
+        font-size: 18px; padding-top: 8px; border-top: 2px solid var(--bo-border, #ddd);
     }
 </style>

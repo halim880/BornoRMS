@@ -1,0 +1,79 @@
+@page "/stock/wastage"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@using BornoBit.Restaurant.Application.Inventory.Items
+@using BornoBit.Restaurant.Application.Inventory.Movements
+
+<PageTitle>Wastage · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Wastage / Nosto"
+                Description="Record spoiled or discarded stock. A reason is required; the item's on-hand quantity drops and a ledger entry is written." />
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading…" />
+    }
+    else if (_loadError is not null)
+    {
+        <BoMessageBar Intent="error">@_loadError</BoMessageBar>
+    }
+    else
+    {
+        <div class="bo-card" style="padding:16px; max-width:640px;">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+            <div style="display:flex; flex-direction:column; gap:12px;">
+                <BoSelect TOption="InventoryItemDto"
+                          Items="@_items"
+                          OptionValue="@(i => i.Id.ToString())"
+                          OptionText="@ItemLabel"
+                          SelectedOption="@_selectedItem"
+                          SelectedOptionChanged="OnItemChanged"
+                          Label="Item" Placeholder="Select an item" Required="true" Style="width:100%;" />
+
+                <BoNumeric T="decimal" @bind-Value="_qty" Label="@($"Quantity wasted ({_unitCode})")" Style="width:100%;" Min="0" Step="0.001" Decimals="3" />
+                <BoInput @bind-Value="_reason" Label="Reason" Required="true" Style="width:100%;" Maxlength="500" Placeholder="e.g. spoiled overnight, dropped, expired" />
+
+                <div>
+                    <BoButton Variant="primary" OnClick="SubmitAsync" Loading="_busy">Record wastage</BoButton>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top:20px;">
+            <h3 style="margin:0 0 8px;">Recent wastage</h3>
+            @if (_recent.Count == 0)
+            {
+                <EmptyState Description="No wastage recorded yet." />
+            }
+            else
+            {
+                <div class="bo-card" style="padding:0; overflow:hidden;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:var(--bo-bg-soft); text-align:left;">
+                                <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">When (UTC)</th>
+                                <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                                <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Qty</th>
+                                <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in _recent)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:8px 14px; color: var(--bo-text-muted);">@m.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td style="padding:8px 14px;"><strong>@m.ItemName</strong></td>
+                                    <td style="padding:8px 14px; text-align:right;">@Math.Abs(m.QtyBase).ToString("0.###") @m.UnitCode</td>
+                                    <td style="padding:8px 14px; color: var(--bo-text-muted);">@m.Reason</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>

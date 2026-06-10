@@ -1,0 +1,74 @@
+@*
+    Compact inline SVG sparkline. Stretches to fill its container width;
+    keeps the supplied Height for vertical sizing. Pass a flat list of
+    numbers — the first becomes the leftmost point.
+
+    Usage:
+        <BoSparkline Values="@trend" Height="28" />
+
+    Tone matches a CSS color or var() expression so it adopts the active
+    theme (default = --bo-primary).
+*@
+
+@if (Values is { Count: > 1 })
+{
+    <svg class="bo-sparkline @Class"
+         width="100%" height="@Height"
+         viewBox="0 0 @W @H"
+         preserveAspectRatio="none"
+         aria-hidden="true">
+        @if (Filled)
+        {
+            <path d="@_areaPath" fill="@Color" opacity="0.16" />
+        }
+        <path d="@_linePath" fill="none" stroke="@Color" stroke-width="@StrokeWidth"
+              stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+        @if (ShowEndDot)
+        {
+            <circle cx="@_endX" cy="@_endY" r="2.6" fill="@Color" />
+        }
+    </svg>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<double> Values { get; set; } = Array.Empty<double>();
+    [Parameter] public int Height { get; set; } = 28;
+    [Parameter] public string Color { get; set; } = "var(--bo-primary)";
+    [Parameter] public bool Filled { get; set; } = true;
+    [Parameter] public bool ShowEndDot { get; set; } = true;
+    [Parameter] public double StrokeWidth { get; set; } = 1.6;
+    [Parameter] public string? Class { get; set; }
+
+    // Fixed internal viewBox; the outer SVG scales to fill the container.
+    private const int W = 100;
+    private const int H = 28;
+
+    private string _linePath = string.Empty;
+    private string _areaPath = string.Empty;
+    private double _endX;
+    private double _endY;
+
+    protected override void OnParametersSet()
+    {
+        if (Values is null || Values.Count < 2) { _linePath = _areaPath = string.Empty; return; }
+
+        var min = Values.Min();
+        var max = Values.Max();
+        var range = Math.Max(1e-9, max - min);
+        var n = Values.Count;
+        var pts = new (double X, double Y)[n];
+        for (int i = 0; i < n; i++)
+        {
+            var x = (double)i / (n - 1) * W;
+            // Pad 2px top/bottom so the line never clips against the edge.
+            var y = H - 2 - (Values[i] - min) / range * (H - 4);
+            pts[i] = (x, y);
+        }
+        _endX = pts[^1].X;
+        _endY = pts[^1].Y;
+
+        _linePath = ChartGeometry.SmoothPath(pts);
+        // Area: line path + drop to the bottom-right and bottom-left corners, then close.
+        _areaPath = $"{_linePath} L {pts[^1].X:F2} {H} L {pts[0].X:F2} {H} Z";
+    }
+}

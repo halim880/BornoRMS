@@ -4,22 +4,22 @@
 @using MediatR
 @inject ISender Mediator
 
-<HcDialogBody>
+<BoDialogBody>
     <div style="display:flex; flex-direction:column; gap:14px;">
         @if (!string.IsNullOrEmpty(_error))
         {
-            <HcMessageBar Intent="error">@_error</HcMessageBar>
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
         }
         @if (!string.IsNullOrEmpty(_generatedPassword))
         {
-            <HcMessageBar Intent="warning">
+            <BoMessageBar Intent="warning">
                 Save this password — it won't be shown again: <strong style="font-family:monospace;">@_generatedPassword</strong>
-            </HcMessageBar>
+            </BoMessageBar>
         }
 
-        <HcInput @bind-Value="Content.UserName" Label="Username"  Required="true" Style="width:100%;" Placeholder="e.g. j.doe" />
-        <HcInput @bind-Value="Content.Email" Label="Email"  Required="true" Style="width:100%;" Placeholder="user@tenant.com" />
-        <HcInput @bind-Value="Content.FullName" Label="Full name"  Required="true" Style="width:100%;" />
+        <BoInput @bind-Value="Content.UserName" Label="Username"  Required="true" Style="width:100%;" Placeholder="e.g. j.doe" />
+        <BoInput @bind-Value="Content.Email" Label="Email"  Required="true" Style="width:100%;" Placeholder="user@tenant.com" />
+        <BoInput @bind-Value="Content.FullName" Label="Full name"  Required="true" Style="width:100%;" />
 
         <div>
             <label style="font-size:13px;font-weight:600;color:var(--neutral-foreground-rest);">Roles</label>
@@ -27,7 +27,7 @@
             @foreach (var role in _selectableRoles)
             {
                 <div style="display:flex;align-items:center;gap:8px;padding:2px 0;">
-                    <HcCheckbox @key="role"
+                    <BoCheckbox @key="role"
                                     Value="@Content.Roles.Contains(role)"
                                     ValueChanged="@(v => ToggleRole(role, v))" />
                     <span>@role</span>
@@ -37,23 +37,23 @@
 
         @if (!IsEdit)
         {
-            <HcInput @bind-Value="Content.InitialPassword" Label="Initial password (optional)" Style="width:100%;" />
+            <BoInput @bind-Value="Content.InitialPassword" Label="Initial password (optional)" Style="width:100%;" />
             <small style="color:var(--neutral-foreground-hint);margin-top:-8px;">Leave blank to auto-generate a strong temporary password.</small>
         }
     </div>
-</HcDialogBody>
+</BoDialogBody>
 
-<HcDialogFooter>
-    <HcButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">@(_generatedPassword is null ? "Cancel" : "Close")</HcButton>
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">@(_generatedPassword is null ? "Cancel" : "Close")</BoButton>
     @if (_generatedPassword is null)
     {
-        <HcButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create user")</HcButton>
+        <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create user")</BoButton>
     }
-</HcDialogFooter>
+</BoDialogFooter>
 
 @code {
     [Parameter] public UserFormModel Content { get; set; } = default!;
-    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
 
     private string? _error;
     private string? _generatedPassword;

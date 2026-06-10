@@ -3,40 +3,40 @@
 @using MediatR
 @inject ISender Mediator
 
-<HcDialogBody>
+<BoDialogBody>
     <div style="display:flex; flex-direction:column; gap:14px;">
         @if (!string.IsNullOrEmpty(_error))
         {
-            <HcMessageBar Intent="error">@_error</HcMessageBar>
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
         }
 
-        <HcInput @bind-Value="Content.Name" Label="Name"  Required="true" Style="width:100%;" Placeholder="Acme Diagnostics" />
+        <BoInput @bind-Value="Content.Name" Label="Name"  Required="true" Style="width:100%;" Placeholder="Acme Diagnostics" />
 
         @if (IsEdit)
         {
-            <HcInput Value="@Content.Subdomain" Label="Subdomain"  ReadOnly="true" Style="width:100%;" />
+            <BoInput Value="@Content.Subdomain" Label="Subdomain"  ReadOnly="true" Style="width:100%;" />
             <small style="color:var(--neutral-foreground-hint);margin-top:-8px;">Subdomain is immutable once a tenant is created.</small>
         }
         else
         {
-            <HcInput @bind-Value="Content.Subdomain" Label="Subdomain"  Required="true" Style="width:100%;" Placeholder="acme" />
+            <BoInput @bind-Value="Content.Subdomain" Label="Subdomain"  Required="true" Style="width:100%;" Placeholder="acme" />
             <small style="color:var(--neutral-foreground-hint);margin-top:-8px;">Lowercase letters, digits, and hyphens. Becomes acme.@(_rootDomain).</small>
         }
 
-        <HcInput @bind-Value="Content.ContactEmail" Label="Contact email"  Required="true" Style="width:100%;" Placeholder="admin@acme.com" />
+        <BoInput @bind-Value="Content.ContactEmail" Label="Contact email"  Required="true" Style="width:100%;" Placeholder="admin@acme.com" />
 
-        <HcDatePicker DateTimeValue="Content.LicenseExpiresOnUtc" DateTimeValueChanged="@(v => Content.LicenseExpiresOnUtc = v)" Label="License expires (optional)" />
+        <BoDatePicker DateTimeValue="Content.LicenseExpiresOnUtc" DateTimeValueChanged="@(v => Content.LicenseExpiresOnUtc = v)" Label="License expires (optional)" />
     </div>
-</HcDialogBody>
+</BoDialogBody>
 
-<HcDialogFooter>
-    <HcButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</HcButton>
-    <HcButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create tenant")</HcButton>
-</HcDialogFooter>
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create tenant")</BoButton>
+</BoDialogFooter>
 
 @code {
     [Parameter] public TenantFormModel Content { get; set; } = default!;
-    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
 
     [Inject] public IConfiguration Config { get; set; } = default!;
 

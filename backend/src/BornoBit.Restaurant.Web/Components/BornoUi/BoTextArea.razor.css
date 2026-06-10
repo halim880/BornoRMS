@@ -1,0 +1,125 @@
+.bo-cmp-textarea-wrap {
+    position: relative;
+    background: var(--bo-bg-card);
+    border: 1px solid var(--bo-border);
+    border-radius: 10px;
+    transition: border-color 120ms, box-shadow 120ms, background 120ms;
+    overflow: hidden;
+}
+
+.bo-cmp-textarea-wrap:hover:not(.is-disabled):not(.is-readonly) {
+    border-color: var(--bo-border-strong);
+}
+
+.bo-cmp-textarea-wrap:focus-within:not(.is-disabled):not(.is-readonly) {
+    border-color: var(--bo-primary);
+    box-shadow: 0 0 0 3px var(--bo-primary-tint);
+    background: var(--bo-bg-card);
+}
+
+.bo-cmp-textarea-wrap.is-disabled {
+    background: var(--bo-bg-soft);
+    opacity: 0.7;
+}
+
+.bo-cmp-textarea-wrap.is-readonly {
+    background: var(--bo-bg-soft);
+}
+
+.is-invalid .bo-cmp-textarea-wrap {
+    border-color: var(--bo-danger);
+}
+.is-invalid .bo-cmp-textarea-wrap:focus-within {
+    box-shadow: 0 0 0 3px var(--bo-danger-soft);
+}
+
+.bo-cmp-textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 0;
+    background: transparent;
+    padding: 11px 14px 16px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--bo-text);
+    resize: vertical;
+    min-height: 64px;
+    outline: none;
+    /* Reserve room at the bottom-right so the grip + counter don't overlap text */
+    scroll-padding-bottom: 8px;
+}
+
+.bo-cmp-textarea::placeholder {
+    color: var(--bo-text-faint);
+    font-style: italic;
+}
+
+.bo-cmp-textarea:disabled {
+    cursor: not-allowed;
+    color: var(--bo-text-faint);
+}
+
+/* Hide the ugly native diagonal-lines resizer; we'll draw our own */
+.bo-cmp-textarea::-webkit-resizer {
+    display: none;
+}
+
+/* Custom resize grip — sits in bottom-right, doesn't intercept clicks */
+.bo-cmp-textarea-grip {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 14px;
+    height: 14px;
+    color: var(--bo-text-faint);
+    pointer-events: none;
+    opacity: 0.5;
+    transition: color 120ms, opacity 120ms;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bo-cmp-textarea-wrap:hover .bo-cmp-textarea-grip {
+    opacity: 0.8;
+}
+
+.bo-cmp-textarea-wrap:focus-within .bo-cmp-textarea-grip {
+    color: var(--bo-primary);
+    opacity: 0.9;
+}
+
+.bo-cmp-textarea-wrap.is-disabled .bo-cmp-textarea-grip,
+.bo-cmp-textarea-wrap.is-readonly .bo-cmp-textarea-grip {
+    display: none;
+}
+
+/* Character counter — sits above the grip, fades up on focus */
+.bo-cmp-textarea-count {
+    position: absolute;
+    right: 24px;
+    bottom: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--bo-text-faint);
+    background: var(--bo-bg-card);
+    padding: 2px 6px;
+    border-radius: 999px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 140ms, transform 140ms, color 120ms;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+.bo-cmp-textarea-wrap:hover .bo-cmp-textarea-count,
+.bo-cmp-textarea-wrap:focus-within .bo-cmp-textarea-count {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.bo-cmp-textarea-count.is-near { color: var(--bo-warning); }
+.bo-cmp-textarea-count.is-full { color: var(--bo-danger); }

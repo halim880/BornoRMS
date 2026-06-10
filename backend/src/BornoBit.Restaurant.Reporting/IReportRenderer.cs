@@ -5,4 +5,5 @@ namespace BornoBit.Restaurant.Reporting;
 public interface IReportRenderer
 {
     Task<byte[]> RenderOrderReceiptAsync(OrderReceiptReportData data, CancellationToken cancellationToken = default);
+    Task<byte[]> RenderStockValuationAsync(StockValuationReportData data, CancellationToken cancellationToken = default);
 }

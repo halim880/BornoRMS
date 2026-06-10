@@ -1,0 +1,106 @@
+.bo-cmp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: var(--bo-radius-sm, 6px);
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background 100ms, border-color 100ms, color 100ms, transform 100ms, box-shadow 100ms;
+    user-select: none;
+}
+
+.bo-cmp-btn:disabled,
+.bo-cmp-btn.is-loading {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.bo-cmp-btn:active:not(:disabled):not(.is-loading) {
+    transform: translateY(1px);
+}
+
+.bo-cmp-btn:focus-visible {
+    outline: 2px solid var(--bo-primary);
+    outline-offset: 2px;
+}
+
+/* Sizes */
+.bo-cmp-btn--sm { padding: 6px 12px; font-size: 12px; }
+.bo-cmp-btn--md { padding: 9px 16px; font-size: 13px; }
+.bo-cmp-btn--lg { padding: 11px 20px; font-size: 14px; }
+
+/* Variants */
+.bo-cmp-btn--primary {
+    background: var(--bo-primary);
+    color: var(--bo-on-primary);
+    border-color: var(--bo-primary);
+}
+.bo-cmp-btn--primary:hover:not(:disabled):not(.is-loading) {
+    background: var(--bo-primary-strong);
+    border-color: var(--bo-primary-strong);
+}
+
+.bo-cmp-btn--accent {
+    background: var(--bo-success);
+    color: #fff;
+    border-color: var(--bo-success);
+}
+.bo-cmp-btn--accent:hover:not(:disabled):not(.is-loading) {
+    background: var(--bo-success-strong);
+    border-color: var(--bo-success-strong);
+}
+
+.bo-cmp-btn--ghost {
+    background: var(--bo-bg-card);
+    color: var(--bo-text-muted);
+    border-color: var(--bo-border);
+}
+.bo-cmp-btn--ghost:hover:not(:disabled):not(.is-loading) {
+    background: var(--bo-bg-soft);
+    border-color: var(--bo-border-strong);
+    color: var(--bo-text);
+}
+
+.bo-cmp-btn--outline {
+    background: transparent;
+    color: var(--bo-primary);
+    border-color: var(--bo-primary);
+}
+.bo-cmp-btn--outline:hover:not(:disabled):not(.is-loading) {
+    background: var(--bo-primary-tint);
+}
+
+.bo-cmp-btn--danger {
+    background: var(--bo-danger);
+    color: #fff;
+    border-color: var(--bo-danger);
+}
+.bo-cmp-btn--danger:hover:not(:disabled):not(.is-loading) {
+    filter: brightness(0.92);
+}
+
+.bo-cmp-btn--success {
+    background: var(--bo-success);
+    color: #fff;
+    border-color: var(--bo-success);
+}
+
+/* Loading spinner */
+.bo-cmp-btn-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: bo-cmp-btn-spin 0.7s linear infinite;
+}
+
+@keyframes bo-cmp-btn-spin {
+    to { transform: rotate(360deg); }
+}

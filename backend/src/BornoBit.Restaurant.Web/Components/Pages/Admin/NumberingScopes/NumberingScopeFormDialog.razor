@@ -4,24 +4,24 @@
 @using MediatR
 @inject ISender Mediator
 
-<HcDialogBody>
+<BoDialogBody>
     <div style="display:flex; flex-direction:column; gap:14px;">
-        @if (!string.IsNullOrEmpty(_error)) { <HcMessageBar Intent="error">@_error</HcMessageBar> }
+        @if (!string.IsNullOrEmpty(_error)) { <BoMessageBar Intent="error">@_error</BoMessageBar> }
 
         @if (IsEdit)
         {
-            <HcInput Value="@Content.Code" Label="Code"  ReadOnly="true" Style="width:100%;" />
+            <BoInput Value="@Content.Code" Label="Code"  ReadOnly="true" Style="width:100%;" />
         }
         else
         {
-            <HcInput @bind-Value="Content.Code" Label="Code"  Required="true" Style="width:100%;" Placeholder="SALE / PURCHASE / DTO / DINV / MRN" />
+            <BoInput @bind-Value="Content.Code" Label="Code"  Required="true" Style="width:100%;" Placeholder="SALE / PURCHASE / DTO / DINV / MRN" />
         }
 
-        <HcInput @bind-Value="Content.Name" Label="Name"  Required="true" Style="width:100%;" />
-        <HcInput @bind-Value="Content.Prefix" Label="Prefix"  Required="true" Style="width:100%;" Placeholder="S- / GRN- / INV- / R-" />
+        <BoInput @bind-Value="Content.Name" Label="Name"  Required="true" Style="width:100%;" />
+        <BoInput @bind-Value="Content.Prefix" Label="Prefix"  Required="true" Style="width:100%;" Placeholder="S- / GRN- / INV- / R-" />
 
         <div style="display:flex; gap:12px;">
-            <HcSelect TOption="NumberingCadence"
+            <BoSelect TOption="NumberingCadence"
                           Items="@_cadences"
                           OptionValue="@(c => ((byte)c).ToString())"
                           OptionText="@(c => c.ToString())"
@@ -29,26 +29,26 @@
                           SelectedOptionChanged="@(c => Content.Cadence = c)"
                           Label="Cadence" Style="flex:1;" />
 
-            <HcNumeric T="byte" @bind-Value="Content.Digits" Label="Digits" Style="flex:1;" Min="1" Max="10" />
+            <BoNumeric T="byte" @bind-Value="Content.Digits" Label="Digits" Style="flex:1;" Min="1" Max="10" />
         </div>
 
-        <HcCheckbox @bind-Value="Content.ResetByOutlet" Label="Reset counter per outlet" />
+        <BoCheckbox @bind-Value="Content.ResetByOutlet" Label="Reset counter per outlet" />
 
         <small style="color:var(--neutral-foreground-hint);">
             Format preview:
             <strong>@Preview</strong>
         </small>
     </div>
-</HcDialogBody>
+</BoDialogBody>
 
-<HcDialogFooter>
-    <HcButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</HcButton>
-    <HcButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create scope")</HcButton>
-</HcDialogFooter>
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create scope")</BoButton>
+</BoDialogFooter>
 
 @code {
     [Parameter] public NumberingScopeFormModel Content { get; set; } = default!;
-    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
 
     private string? _error;
     private bool _busy;

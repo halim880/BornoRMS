@@ -1,0 +1,35 @@
+@namespace BornoBit.Restaurant.Web.Components.BornoUi
+
+<div class="bo-cmp-card @CssClass" style="@Style">
+    @if (!string.IsNullOrEmpty(Title) || HeaderActions is not null || Subtitle is not null)
+    {
+        <div class="bo-cmp-card-header">
+            <div>
+                @if (!string.IsNullOrEmpty(Title))
+                {
+                    <h3 class="bo-cmp-card-title">@Title</h3>
+                }
+                @if (!string.IsNullOrEmpty(Subtitle))
+                {
+                    <p class="bo-cmp-card-subtitle">@Subtitle</p>
+                }
+            </div>
+            @if (HeaderActions is not null)
+            {
+                <div class="bo-cmp-card-actions">@HeaderActions</div>
+            }
+        </div>
+    }
+    <div class="bo-cmp-card-body">@ChildContent</div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => AdditionalAttributes is { } a && a.TryGetValue("class", out var c) ? c?.ToString() ?? "" : "";
+}

@@ -1,0 +1,53 @@
+@using BornoBit.Restaurant.Application.Inventory.Items
+@using BornoBit.Restaurant.Application.Inventory.Movements
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="color: var(--bo-text-muted);">
+            <strong>@Content.ItemName</strong> · current on hand:
+            <strong>@Content.CurrentQty.ToString("0.###") @Content.UnitCode</strong>
+        </div>
+
+        <BoNumeric T="decimal" @bind-Value="Content.CountedQty" Label="@($"Counted quantity ({Content.UnitCode})")" Style="width:100%;" Min="0" Step="0.001" Decimals="3" />
+        <BoInput @bind-Value="Content.Reason" Label="Reason (optional)" Style="width:100%;" Maxlength="500" Placeholder="e.g. monthly physical count" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Apply adjustment</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public StockAdjustModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new AdjustStockCommand(Content.ItemId, Content.CountedQty,
+                string.IsNullOrWhiteSpace(Content.Reason) ? null : Content.Reason.Trim()));
+            Content.Saved = true;
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

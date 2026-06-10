@@ -1,0 +1,144 @@
+@using BornoBit.Restaurant.Application.Products
+@using BornoBit.Restaurant.Application.ProductCategories
+@using BornoBit.Restaurant.Web.Services
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject IImageUploadService ImageUploadService
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="display:flex; gap:12px;">
+            <BoInput @bind-Value="Content.Code" Label="Code" Required="true" Style="flex:1;" Maxlength="40" />
+            <BoNumeric T="int" @bind-Value="Content.DisplayOrder" Label="Display order" Style="width:140px;" Min="0" Step="1" />
+        </div>
+
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="200" />
+        <BoInput @bind-Value="Content.BanglaName" Label="Bangla name (বাংলা নাম)" Style="width:100%;" Maxlength="200" />
+
+        <BoSelect TOption="ProductCategoryDto"
+                  Items="@_categories"
+                  OptionValue="@(c => c.Id.ToString())"
+                  OptionText="@(c => c.Name)"
+                  SelectedOption="@_selectedCategory"
+                  SelectedOptionChanged="@(c => Content.ProductCategoryId = c?.Id ?? Guid.Empty)"
+                  Label="Category"
+                  Placeholder="Select a category"
+                  Required="true"
+                  Style="width:100%;" />
+
+        <BoNumeric T="decimal" @bind-Value="Content.Price" Label="Price (Tk)" Style="width:100%;" Min="0" Step="0.01" />
+        <BoInput @bind-Value="Content.Description" Label="Description" Style="width:100%;" Maxlength="1000" />
+
+        <div class="bo-cmp-field">
+            <label class="bo-cmp-field-label">Image</label>
+            <div style="display:flex; align-items:center; gap:12px;">
+                @if (!string.IsNullOrEmpty(Content.ImagePath))
+                {
+                    <img src="@Content.ImagePath" alt="preview" style="height:64px; width:64px; object-fit:cover; border-radius:8px; border:1px solid var(--bo-border-soft);" />
+                }
+                else
+                {
+                    <span style="color: var(--bo-text-subtle);">No image</span>
+                }
+                <InputFile OnChange="OnFileSelectedAsync" accept="image/png,image/jpeg,image/webp" disabled="@_uploading" />
+                @if (_uploading)
+                {
+                    <span class="bo-text-subtle">Uploading…</span>
+                }
+            </div>
+            <div class="bo-cmp-field-hint">JPG, PNG or WebP, up to 2 MB.</div>
+        </div>
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy" Disabled="_uploading">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public ProductFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private bool _uploading;
+    private List<ProductCategoryDto> _categories = new();
+
+    private ProductCategoryDto? _selectedCategory =>
+        _categories.FirstOrDefault(c => c.Id == Content.ProductCategoryId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var all = await Mediator.Send(new GetProductCategoriesQuery());
+            _categories = all.Where(c => c.IsActive).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load categories: {ex.Message}"; }
+    }
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _uploading = true;
+        try
+        {
+            Content.ImagePath = await ImageUploadService.SaveAsync(e.File);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _uploading = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Code)) { _error = "Code is required."; return; }
+        if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
+        if (Content.ProductCategoryId == Guid.Empty) { _error = "Category is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateProductCommand(
+                    Content.ProductCategoryId,
+                    Content.Code.Trim(),
+                    Content.Name.Trim(),
+                    string.IsNullOrWhiteSpace(Content.BanglaName) ? null : Content.BanglaName.Trim(),
+                    Content.Price,
+                    string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim(),
+                    Content.ImagePath,
+                    Content.DisplayOrder));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateProductCommand(
+                    Content.Id.Value,
+                    Content.ProductCategoryId,
+                    Content.Code.Trim(),
+                    Content.Name.Trim(),
+                    string.IsNullOrWhiteSpace(Content.BanglaName) ? null : Content.BanglaName.Trim(),
+                    Content.Price,
+                    string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim(),
+                    Content.ImagePath,
+                    Content.DisplayOrder));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

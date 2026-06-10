@@ -3,19 +3,19 @@
 @using BornoBit.Restaurant.Application.MenuPermissions
 @using MediatR
 @inject ISender Mediator
-@inject IHcToastService ToastService
+@inject IBoToastService ToastService
 
 <PageTitle>Menu permissions · BornoBit.Restaurant</PageTitle>
 
 <div style="display:flex; flex-direction:column; gap:16px;">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
         <h1>Menu permissions</h1>
-        <HcButton Variant="primary"
+        <BoButton Variant="primary"
                       OnClick="SaveAsync"
                       Disabled="@(_selectedRoleId is null || _saving || _loadingTree)"
                       Loading="_saving">
             Save changes
-        </HcButton>
+        </BoButton>
     </div>
 
     <p style="color:var(--neutral-foreground-hint);">
@@ -25,16 +25,16 @@
 
     @if (_loadingRoles)
     {
-        <HcSpinner />
+        <BoSpinner />
     }
     else if (_loadError is not null)
     {
-        <HcMessageBar Intent="error">@_loadError</HcMessageBar>
+        <BoMessageBar Intent="error">@_loadError</BoMessageBar>
     }
     else
     {
         <div style="max-width:320px;">
-            <HcSelect TOption="RoleDto"
+            <BoSelect TOption="RoleDto"
                       Items="_roles"
                       OptionText="@(r => r.Name)"
                       OptionValue="@(r => r.Id.ToString())"
@@ -46,28 +46,28 @@
 
         @if (_selectedRoleId is null)
         {
-            <div class="hc-cmp-cardish">
+            <div class="bo-cmp-cardish">
                 <p style="margin:0;color:var(--neutral-foreground-hint);">Select a role to view and edit its menu permissions.</p>
             </div>
         }
         else if (_loadingTree)
         {
-            <HcSpinner />
+            <BoSpinner />
         }
         else if (_treeError is not null)
         {
-            <HcMessageBar Intent="error">@_treeError</HcMessageBar>
+            <BoMessageBar Intent="error">@_treeError</BoMessageBar>
         }
         else if (_nodes.Count == 0)
         {
-            <div class="hc-cmp-cardish"><p style="margin:0;">No menus found.</p></div>
+            <div class="bo-cmp-cardish"><p style="margin:0;">No menus found.</p></div>
         }
         else
         {
-            <div class="hc-cmp-cardish">
+            <div class="bo-cmp-cardish">
                 <div style="display:flex; gap:8px; margin-bottom:12px;">
-                    <HcButton Variant="ghost" OnClick="SelectAll">Select all</HcButton>
-                    <HcButton Variant="ghost" OnClick="ClearAll">Clear all</HcButton>
+                    <BoButton Variant="ghost" OnClick="SelectAll">Select all</BoButton>
+                    <BoButton Variant="ghost" OnClick="ClearAll">Clear all</BoButton>
                 </div>
                 <div class="menu-perm-tree">
                     @foreach (var node in _nodes)
@@ -182,7 +182,7 @@
     private RenderFragment RenderNode(MenuPermissionNodeDto node, int depth) => __builder =>
     {
         <div class="menu-perm-row" style="padding-left:@(depth * 20)px;">
-            <HcCheckbox @key="node.Id"
+            <BoCheckbox @key="node.Id"
                             Value="@_checked.Contains(node.Id)"
                             ValueChanged="@(v => Toggle(node, v))" />
             <span class="menu-perm-title">@node.Title</span>

@@ -1,0 +1,69 @@
+@using BornoBit.Restaurant.Application.Store.Suppliers
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="display:flex; gap:12px;">
+            <BoInput @bind-Value="Content.Code" Label="Code" Required="true" Style="flex:1;" Maxlength="40" Disabled="@(Content.Id is not null)" />
+            <BoNumeric T="int" @bind-Value="Content.PaymentTermsDays" Label="Payment terms (days)" Style="width:180px;" Min="0" Step="1" />
+        </div>
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="200" />
+        <BoInput @bind-Value="Content.Phone" Label="Phone" Style="width:100%;" Maxlength="40" />
+        <BoInput @bind-Value="Content.Address" Label="Address" Style="width:100%;" Maxlength="500" />
+        <BoTextArea @bind-Value="Content.Notes" Label="Notes" Style="width:100%;" Maxlength="1000" Rows="2" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public StoreSupplierFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Code)) { _error = "Code is required."; return; }
+        if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateStoreSupplierCommand(
+                    Content.Code.Trim(), Content.Name.Trim(), Norm(Content.Phone), Norm(Content.Address),
+                    Content.PaymentTermsDays, Norm(Content.Notes)));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateStoreSupplierCommand(
+                    Content.Id.Value, Content.Name.Trim(), Norm(Content.Phone), Norm(Content.Address),
+                    Content.PaymentTermsDays, Norm(Content.Notes)));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+
+    private static string? Norm(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+}

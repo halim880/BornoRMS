@@ -1,0 +1,45 @@
+@namespace BornoBit.Restaurant.Web.Components.BornoUi
+
+<div class="bo-cmp-stack" style="@BuildStyle()">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    /// <summary>vertical | horizontal</summary>
+    [Parameter] public string Orientation { get; set; } = "vertical";
+    [Parameter] public int Gap { get; set; } = 12;
+    /// <summary>start | center | end | stretch | between | around</summary>
+    [Parameter] public string Align { get; set; } = "stretch";
+    /// <summary>start | center | end | between | around</summary>
+    [Parameter] public string Justify { get; set; } = "start";
+    [Parameter] public bool Wrap { get; set; }
+    [Parameter] public string? Style { get; set; }
+
+    private string BuildStyle()
+    {
+        var dir = Orientation == "horizontal" ? "row" : "column";
+        var alignItems = Align switch
+        {
+            "start" => "flex-start",
+            "center" => "center",
+            "end" => "flex-end",
+            "between" => "space-between",
+            "around" => "space-around",
+            _ => "stretch"
+        };
+        var justifyContent = Justify switch
+        {
+            "start" => "flex-start",
+            "center" => "center",
+            "end" => "flex-end",
+            "between" => "space-between",
+            "around" => "space-around",
+            _ => "flex-start"
+        };
+        var s = $"display:flex; flex-direction:{dir}; gap:{Gap}px; align-items:{alignItems}; justify-content:{justifyContent};";
+        if (Wrap) s += " flex-wrap:wrap;";
+        if (!string.IsNullOrEmpty(Style)) s += " " + Style;
+        return s;
+    }
+}

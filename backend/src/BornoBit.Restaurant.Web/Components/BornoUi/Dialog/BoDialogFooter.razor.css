@@ -1,0 +1,10 @@
+.bo-dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--bo-border-soft);
+    background: var(--bo-bg-soft);
+    flex-shrink: 0;
+}

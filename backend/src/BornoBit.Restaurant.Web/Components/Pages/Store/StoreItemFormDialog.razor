@@ -1,0 +1,121 @@
+@using BornoBit.Restaurant.Application.Store.Categories
+@using BornoBit.Restaurant.Application.Store.Items
+@using BornoBit.Restaurant.Application.Store.Units
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="display:flex; gap:12px;">
+            <BoInput @bind-Value="Content.Code" Label="Code" Required="true" Style="flex:1;" Maxlength="40" />
+            <BoCheckbox @bind-Value="Content.IsPerishable" Label="Perishable" />
+        </div>
+
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="200" />
+        <BoInput @bind-Value="Content.BanglaName" Label="Bangla name (বাংলা নাম)" Style="width:100%;" Maxlength="200" />
+
+        <div style="display:flex; gap:12px;">
+            <BoSelect TOption="StoreCategoryDto"
+                      Items="@_categories"
+                      OptionValue="@(c => c.Id.ToString())"
+                      OptionText="@(c => c.Name)"
+                      SelectedOption="@_selectedCategory"
+                      SelectedOptionChanged="@(c => Content.StoreCategoryId = c?.Id ?? Guid.Empty)"
+                      Label="Category" Placeholder="Select a category" Required="true" Style="flex:1;" />
+
+            <BoSelect TOption="StoreUnitDto"
+                      Items="@_units"
+                      OptionValue="@(u => u.Id.ToString())"
+                      OptionText="@UnitLabel"
+                      SelectedOption="@_selectedUnit"
+                      SelectedOptionChanged="@(u => Content.BaseUnitId = u?.Id ?? Guid.Empty)"
+                      Label="Base unit" Placeholder="Select a unit" Required="true" Style="flex:1;" />
+        </div>
+
+        <div style="display:flex; gap:12px;">
+            <BoNumeric T="decimal" @bind-Value="Content.ReorderLevel" Label="Reorder level (base unit)" Style="flex:1;" Min="0" Step="0.001" Decimals="3" />
+            <BoNumeric T="decimal" @bind-Value="Content.ReorderQty" Label="Reorder qty (base unit)" Style="flex:1;" Min="0" Step="0.001" Decimals="3" />
+        </div>
+
+        <div style="display:flex; gap:12px; align-items:flex-end;">
+            <BoNumeric T="decimal?" @bind-Value="Content.PackSize" Label="Pack size (base units, optional)" Style="width:220px;" Min="0" Step="0.001" Decimals="3" />
+            <BoInput @bind-Value="Content.PackNote" Label="Pack note" Style="flex:1;" Maxlength="200" Placeholder="e.g. 1 bosta = 50 kg" />
+        </div>
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public StoreItemFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private List<StoreCategoryDto> _categories = new();
+    private List<StoreUnitDto> _units = new();
+
+    private StoreCategoryDto? _selectedCategory => _categories.FirstOrDefault(c => c.Id == Content.StoreCategoryId);
+    private StoreUnitDto? _selectedUnit => _units.FirstOrDefault(u => u.Id == Content.BaseUnitId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _categories = (await Mediator.Send(new GetStoreCategoriesQuery())).Where(c => c.IsActive).ToList();
+            _units = (await Mediator.Send(new GetStoreUnitsQuery())).Where(u => u.IsActive).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load reference data: {ex.Message}"; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Code)) { _error = "Code is required."; return; }
+        if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
+        if (Content.StoreCategoryId == Guid.Empty) { _error = "Category is required."; return; }
+        if (Content.BaseUnitId == Guid.Empty) { _error = "Base unit is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateStoreItemCommand(
+                    Content.Code.Trim(), Content.Name.Trim(), Norm(Content.BanglaName),
+                    Content.StoreCategoryId, Content.BaseUnitId,
+                    Content.ReorderLevel, Content.ReorderQty, Content.IsPerishable,
+                    Content.PackSize, Norm(Content.PackNote)));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateStoreItemCommand(
+                    Content.Id.Value, Content.Code.Trim(), Content.Name.Trim(), Norm(Content.BanglaName),
+                    Content.StoreCategoryId, Content.BaseUnitId,
+                    Content.ReorderLevel, Content.ReorderQty, Content.IsPerishable,
+                    Content.PackSize, Norm(Content.PackNote)));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+
+    private static string UnitLabel(StoreUnitDto u) => $"{u.Code} · {u.Name}";
+
+    private static string? Norm(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+}

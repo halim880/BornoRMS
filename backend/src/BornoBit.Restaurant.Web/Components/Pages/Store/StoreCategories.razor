@@ -1,0 +1,73 @@
+@page "/store/categories"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Categories
+
+<PageTitle>Store Categories · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Store Categories"
+                Description="Group warehouse items into categories.">
+        <Actions>
+            <button type="button" class="bo-btn bo-btn-primary" @onclick="ShowCreateAsync">+ New Category</button>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading categories…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_categories.Count == 0)
+    {
+        <EmptyState Description="No store categories yet. Click '+ New Category' to add one." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Order</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Name</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Description</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:center;">Status</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _categories)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft); @(c.IsActive ? "" : "opacity:0.55;")">
+                            <td style="padding:10px 14px;">@c.DisplayOrder</td>
+                            <td style="padding:10px 14px;">
+                                <strong>@c.Name</strong>
+                                @if (!string.IsNullOrEmpty(c.BanglaName))
+                                {
+                                    <div style="color: var(--bo-text-subtle); font-size: var(--bo-font-xs);">@c.BanglaName</div>
+                                }
+                            </td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@(c.Description ?? "—")</td>
+                            <td style="padding:10px 14px; text-align:center;">
+                                <span class="bo-pill @(c.IsActive ? "bo-pill-active" : "bo-pill-inactive")">@(c.IsActive ? "Active" : "Inactive")</span>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowEditAsync(c))">Edit</button>
+                                @if (c.IsActive)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(c, false))">Deactivate</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(c, true))">Activate</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

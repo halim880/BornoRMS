@@ -1,19 +1,19 @@
 @inject IJSRuntime JS
 
-<div class="hc-row" style="gap:10px; align-items:center;">
-    <span class="hc-section-title" style="margin:0;">Theme</span>
-    <div class="hc-theme-swatches">
+<div class="bo-row" style="gap:10px; align-items:center;">
+    <span class="bo-section-title" style="margin:0;">Theme</span>
+    <div class="bo-theme-swatches">
         @foreach (var c in _palette)
         {
             var active = string.Equals(c.Hex, _current, StringComparison.OrdinalIgnoreCase);
             <button type="button"
-                    class="hc-theme-swatch @(active ? "active" : "")"
+                    class="bo-theme-swatch @(active ? "active" : "")"
                     title="@c.Name"
                     style="background:@c.Hex"
                     @onclick="() => SetAsync(c.Hex)"></button>
         }
     </div>
-    <button type="button" class="hc-btn hc-btn-ghost" @onclick="ResetAsync">Reset</button>
+    <button type="button" class="bo-btn bo-btn-ghost" @onclick="ResetAsync">Reset</button>
 </div>
 
 @code {
@@ -44,7 +44,7 @@
     {
         if (firstRender)
         {
-            _current = await JS.InvokeAsync<string?>("hcTheme.get");
+            _current = await JS.InvokeAsync<string?>("boTheme.get");
             if (string.IsNullOrEmpty(_current)) _current = DefaultColor;
             StateHasChanged();
         }
@@ -53,12 +53,12 @@
     private async Task SetAsync(string hex)
     {
         _current = hex;
-        await JS.InvokeVoidAsync("hcTheme.set", hex);
+        await JS.InvokeVoidAsync("boTheme.set", hex);
     }
 
     private async Task ResetAsync()
     {
         _current = DefaultColor;
-        await JS.InvokeVoidAsync("hcTheme.reset");
+        await JS.InvokeVoidAsync("boTheme.reset");
     }
 }

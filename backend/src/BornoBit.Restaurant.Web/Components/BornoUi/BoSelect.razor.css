@@ -1,0 +1,87 @@
+.bo-cmp-select-shell {
+    position: relative;
+    display: block;
+}
+
+.bo-cmp-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: none;
+    background: var(--bo-bg-card);
+    color: var(--bo-text);
+    border: 1px solid var(--bo-border);
+    border-radius: var(--bo-radius-sm, 6px);
+    padding: 8px 34px 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: border-color 100ms, box-shadow 100ms;
+}
+
+.bo-cmp-select:hover:not(:disabled) {
+    border-color: var(--bo-border-strong);
+}
+
+.bo-cmp-select:focus,
+.bo-cmp-select:focus-visible {
+    outline: none;
+    border-color: var(--bo-primary);
+    box-shadow: 0 0 0 3px var(--bo-primary-tint);
+}
+
+.bo-cmp-select:disabled {
+    background: var(--bo-bg-soft);
+    color: var(--bo-text-faint);
+    cursor: not-allowed;
+}
+
+.bo-cmp-field.is-invalid .bo-cmp-select {
+    border-color: var(--bo-danger);
+}
+
+.bo-cmp-field.is-invalid .bo-cmp-select:focus {
+    box-shadow: 0 0 0 3px var(--bo-danger-soft);
+}
+
+/* Suppress the Windows Chromium "selected-option highlight" rectangle
+   that paints inside the closed select after focus. */
+.bo-cmp-select:focus::-ms-value {
+    background: transparent;
+    color: inherit;
+}
+
+.bo-cmp-select-chevron {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--bo-text-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 120ms ease, transform 150ms ease;
+}
+
+.bo-cmp-select-shell:hover .bo-cmp-select:not(:disabled) ~ .bo-cmp-select-chevron {
+    color: var(--bo-text-muted);
+}
+
+.bo-cmp-select-shell:focus-within .bo-cmp-select-chevron {
+    color: var(--bo-primary);
+}
+
+.bo-cmp-select:disabled ~ .bo-cmp-select-chevron {
+    color: var(--bo-text-faint);
+}
+
+.bo-cmp-field.is-invalid .bo-cmp-select-chevron {
+    color: var(--bo-danger);
+}

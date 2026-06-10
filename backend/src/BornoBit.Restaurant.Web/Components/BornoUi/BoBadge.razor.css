@@ -1,0 +1,18 @@
+.bo-cmp-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.bo-cmp-badge--neutral { background: var(--bo-bg-soft); color: var(--bo-text-subtle); }
+.bo-cmp-badge--primary { background: var(--bo-primary-tint); color: var(--bo-primary-strong); }
+.bo-cmp-badge--success { background: var(--bo-success-soft); color: var(--bo-success-strong); }
+.bo-cmp-badge--warning { background: var(--bo-warning-soft); color: var(--bo-warning-strong); }
+.bo-cmp-badge--danger  { background: var(--bo-danger-soft); color: var(--bo-danger); }
+.bo-cmp-badge--info    { background: var(--bo-info-soft); color: var(--bo-info); }

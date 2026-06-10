@@ -1,0 +1,69 @@
+@page "/store/issues"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Issues
+@using BornoBit.Restaurant.Domain.Store
+
+<PageTitle>Store Issues · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Store Issues"
+                Description="Issue stock out of the warehouse to a destination (kitchen / department). Posting an issue lowers on-hand quantities.">
+        <Actions>
+            <a class="bo-btn bo-btn-primary" href="/store/issues/new">+ New Issue</a>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading issues…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_rows.Count == 0)
+    {
+        <EmptyState Description="No issues yet. Click '+ New Issue' to issue stock to a destination." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Issue #</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Destination</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Issued (UTC)</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Lines</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:center;">Status</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var g in _rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@g.IssueNumber</span></td>
+                            <td style="padding:10px 14px;"><strong>@g.Destination</strong></td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@g.IssuedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td style="padding:10px 14px; text-align:right;">@g.LineCount</td>
+                            <td style="padding:10px 14px; text-align:center;">
+                                <BoBadge Tone="@(g.Status == StoreIssueStatus.Posted ? "success" : "warning")">@g.Status</BoBadge>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                @if (g.Status == StoreIssueStatus.Draft)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-primary" @onclick="@(() => PostAsync(g))" disabled="@_posting">Post</button>
+                                }
+                                else
+                                {
+                                    <span style="color: var(--bo-text-subtle);">Posted</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

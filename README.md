@@ -66,7 +66,7 @@ dotnet run --urls http://localhost:5002     # http://localhost:5002
 
 ## Staff console (Blazor Server)
 
-The `Web` project uses an imported design system (the `Hc` component library + design-token theme) ported
+The `Web` project uses an imported design system (the **Borno UI** component library, `Bo*` prefix + design-token theme) ported
 from the reference app. It talks to the database directly via MediatR (not through the REST API).
 
 - **DB-driven navigation**: the left sidebar is built from the `AppMenus` / `AppMenuRolePermissions` tables,
@@ -77,7 +77,7 @@ from the reference app. It talks to the database directly via MediatR (not throu
   - **Numbering Scopes** (`/admin/numbering-scopes`) — CRUD document-numbering config rows.
   - **Tenants** (`/admin/tenants`, SuperAdmin) — CRUD tenant rows.
   - **Modules** (`/admin/modules`, SuperAdmin) — CRUD the root nav modules.
-- **Settings** (`/settings/app`) — theme picker; changes `--hc-primary` live (persisted in browser localStorage).
+- **Settings** (`/settings/app`) — theme picker; changes `--bo-primary` live (persisted in browser localStorage).
 
 > **Note on tenancy:** the Tenants/Numbering/Modules admin pages are present and functional, but the app is
 > **single-restaurant** — there is no per-record tenant isolation. The `Tenants` table is a manageable list,

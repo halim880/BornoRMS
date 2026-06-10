@@ -4,8 +4,8 @@
 @using BornoBit.Restaurant.Domain.Numbering
 @using MediatR
 @inject ISender Mediator
-@inject IHcDialogService DialogService
-@inject IHcToastService ToastService
+@inject IBoDialogService DialogService
+@inject IBoToastService ToastService
 
 <PageTitle>Numbering Scopes · BornoBit.Restaurant</PageTitle>
 
@@ -92,7 +92,7 @@
     private async Task ShowCreateAsync()
     {
         var model = new NumberingScopeFormModel();
-        var result = await DialogService.ShowAsync<NumberingScopeFormDialog, NumberingScopeFormModel>(model, new HcDialogOptions
+        var result = await DialogService.ShowAsync<NumberingScopeFormDialog, NumberingScopeFormModel>(model, new BoDialogOptions
         {
             Title = "New numbering scope",
             Width = "560px",
@@ -116,7 +116,7 @@
             Digits = s.Digits,
             ResetByOutlet = s.ResetByOutlet
         };
-        var result = await DialogService.ShowAsync<NumberingScopeFormDialog, NumberingScopeFormModel>(model, new HcDialogOptions
+        var result = await DialogService.ShowAsync<NumberingScopeFormDialog, NumberingScopeFormModel>(model, new BoDialogOptions
         {
             Title = $"Edit '{s.Code}'",
             Width = "560px",

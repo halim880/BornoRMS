@@ -1,0 +1,68 @@
+@page "/stock/history"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@using BornoBit.Restaurant.Application.Inventory.Items
+@using BornoBit.Restaurant.Domain.Inventory
+
+<PageTitle>Stock History · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Stock History"
+                Description="Every change to stock — purchases, wastage, adjustments — newest first." />
+
+    <div class="bo-card" style="padding:12px; margin-bottom:16px; max-width:420px;">
+        <BoSelect TOption="InventoryItemDto"
+                  Items="@_filterItems"
+                  OptionValue="@(i => i.Id.ToString())"
+                  OptionText="@(i => i.Name)"
+                  SelectedOption="@_selectedItem"
+                  SelectedOptionChanged="OnFilterChanged"
+                  Label="Filter by item" Placeholder="All items" Style="width:100%;" />
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading ledger…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_rows.Count == 0)
+    {
+        <EmptyState Description="No stock movements yet." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">When (UTC)</th>
+                        <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                        <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Type</th>
+                        <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Qty</th>
+                        <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Unit cost</th>
+                        <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Reason / Ref</th>
+                        <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in _rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:8px 14px; color: var(--bo-text-muted); white-space:nowrap;">@m.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td style="padding:8px 14px;"><strong>@m.ItemName</strong></td>
+                            <td style="padding:8px 14px;"><BoBadge Tone="@ToneFor(m.MovementType)">@Label(m.MovementType)</BoBadge></td>
+                            <td style="padding:8px 14px; text-align:right; font-weight:600; color:@(m.QtyBase < 0 ? "var(--bo-danger,#c0392b)" : "var(--bo-success,#1e7e34)");">
+                                @(m.QtyBase > 0 ? "+" : "")@m.QtyBase.ToString("0.###") @m.UnitCode
+                            </td>
+                            <td style="padding:8px 14px; text-align:right; color: var(--bo-text-muted);">@m.UnitCost.ToString("0.00")</td>
+                            <td style="padding:8px 14px; color: var(--bo-text-muted);">@(m.Reason ?? m.ReferenceType)</td>
+                            <td style="padding:8px 14px; color: var(--bo-text-subtle);">@m.CreatedBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

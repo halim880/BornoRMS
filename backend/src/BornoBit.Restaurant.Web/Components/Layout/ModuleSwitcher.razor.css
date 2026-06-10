@@ -11,7 +11,7 @@
 .module-switcher.empty {
     padding: 6px 14px;
     font-size: 12px;
-    color: var(--hc-text-subtle, #64748B);
+    color: var(--bo-text-subtle, #64748B);
     border-radius: 8px;
     background: transparent;
     border: 0;
@@ -22,15 +22,15 @@
     align-items: center;
     gap: 7px;
     padding: 6px 13px 6px 7px;
-    background: var(--hc-bg-card, #FFFFFF);
-    border: 1px solid var(--hc-border, #E2E8F0);
+    background: var(--bo-bg-card, #FFFFFF);
+    border: 1px solid var(--bo-border, #E2E8F0);
     border-radius: 999px;
     cursor: pointer;
     font-family: inherit;
     font-size: 13px;
     font-weight: 500;
-    color: var(--hc-text-muted, #475569);
-    box-shadow: var(--hc-shadow-xs, 0 1px 1px rgba(15, 23, 42, 0.04));
+    color: var(--bo-text-muted, #475569);
+    box-shadow: var(--bo-shadow-xs, 0 1px 1px rgba(15, 23, 42, 0.04));
     transition: background 140ms cubic-bezier(0.22, 1, 0.36, 1),
                 color 140ms cubic-bezier(0.22, 1, 0.36, 1),
                 border-color 140ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -42,9 +42,9 @@
 }
 
 .module-pill:hover {
-    color: var(--hc-text, #0F172A);
-    border-color: color-mix(in srgb, var(--hc-primary) 35%, var(--hc-border));
-    box-shadow: 0 2px 6px -2px color-mix(in srgb, var(--hc-primary) 22%, transparent);
+    color: var(--bo-text, #0F172A);
+    border-color: color-mix(in srgb, var(--bo-primary) 35%, var(--bo-border));
+    box-shadow: 0 2px 6px -2px color-mix(in srgb, var(--bo-primary) 22%, transparent);
 }
 
 .module-pill:active {
@@ -52,17 +52,17 @@
 }
 
 .module-pill.active {
-    background: color-mix(in srgb, var(--hc-primary) 14%, #FFFFFF);
-    color: var(--hc-primary);
+    background: color-mix(in srgb, var(--bo-primary) 14%, #FFFFFF);
+    color: var(--bo-primary);
     font-weight: 600;
-    border-color: color-mix(in srgb, var(--hc-primary) 30%, transparent);
-    box-shadow: 0 1px 2px -1px color-mix(in srgb, var(--hc-primary) 25%, transparent);
+    border-color: color-mix(in srgb, var(--bo-primary) 30%, transparent);
+    box-shadow: 0 1px 2px -1px color-mix(in srgb, var(--bo-primary) 25%, transparent);
 }
 
 .module-pill.active .module-pill-glyph {
-    background: color-mix(in srgb, var(--hc-primary) 22%, #FFFFFF);
-    color: var(--hc-primary);
-    border-color: color-mix(in srgb, var(--hc-primary) 35%, transparent);
+    background: color-mix(in srgb, var(--bo-primary) 22%, #FFFFFF);
+    color: var(--bo-primary);
+    border-color: color-mix(in srgb, var(--bo-primary) 35%, transparent);
 }
 
 .module-pill-glyph {
@@ -72,17 +72,17 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--hc-bg-card, #FFFFFF);
-    color: var(--hc-primary, #0E7490);
+    background: var(--bo-bg-card, #FFFFFF);
+    color: var(--bo-primary, #0E7490);
     font-size: 11px;
     font-weight: 700;
-    border: 1px solid var(--hc-border, #E2E8F0);
+    border: 1px solid var(--bo-border, #E2E8F0);
     transition: background 140ms ease-out, color 140ms ease-out, box-shadow 140ms ease-out;
 }
 
-/* When the glyph hosts an SVG icon (HcIcon), shave a touch of weight so it
+/* When the glyph hosts an SVG icon (BoIcon), shave a touch of weight so it
    reads as a glyph rather than a heavy stroke at small sizes. */
-.module-pill-glyph ::deep .hc-icon {
+.module-pill-glyph ::deep .bo-icon {
     stroke-width: 1.5;
 }
 

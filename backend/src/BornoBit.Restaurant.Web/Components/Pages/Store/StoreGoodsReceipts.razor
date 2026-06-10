@@ -1,0 +1,73 @@
+@page "/store/grn"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Purchases
+@using BornoBit.Restaurant.Domain.Store
+
+<PageTitle>Store Goods Receipts · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Store Goods Receipts"
+                Description="Record stock received into the warehouse. Posting a receipt raises on-hand quantities and recomputes average cost.">
+        <Actions>
+            <a class="bo-btn bo-btn-primary" href="/store/grn/new">+ New Receipt</a>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading goods receipts…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_rows.Count == 0)
+    {
+        <EmptyState Description="No goods receipts yet. Click '+ New Receipt' to record a delivery." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">GRN #</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Supplier</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Invoice</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Received (UTC)</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Lines</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Subtotal</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:center;">Status</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var g in _rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@g.GrnNumber</span></td>
+                            <td style="padding:10px 14px;"><strong>@g.SupplierName</strong></td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@(string.IsNullOrEmpty(g.InvoiceNo) ? "— (cash)" : g.InvoiceNo)</td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@g.ReceivedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td style="padding:10px 14px; text-align:right;">@g.LineCount</td>
+                            <td style="padding:10px 14px; text-align:right;">@g.Subtotal.ToString("0.00") @g.Currency</td>
+                            <td style="padding:10px 14px; text-align:center;">
+                                <BoBadge Tone="@(g.Status == StoreGoodsReceiptStatus.Posted ? "success" : "warning")">@g.Status</BoBadge>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                @if (g.Status == StoreGoodsReceiptStatus.Draft)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-primary" @onclick="@(() => PostAsync(g))" disabled="@_posting">Post</button>
+                                }
+                                else
+                                {
+                                    <span style="color: var(--bo-text-subtle);">Posted</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

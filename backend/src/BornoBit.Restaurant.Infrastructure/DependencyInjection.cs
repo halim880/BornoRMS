@@ -43,6 +43,7 @@ public static class DependencyInjection
             sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 
         services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();
+        services.AddScoped<IJournalNumberGenerator, JournalNumberGenerator>();
         services.AddScoped<ISmsSender, StubSmsSender>();
         services.AddScoped<ICustomerTokenService, CustomerTokenService>();
         services.AddScoped<IStaffTokenService, StaffTokenService>();
@@ -54,6 +55,11 @@ public static class DependencyInjection
         services.AddScoped<CustomerSeeder>();
         services.AddScoped<TenantSeeder>();
         services.AddScoped<AppMenuSeeder>();
+        services.AddScoped<InventorySeeder>();
+        services.AddScoped<UnitSeeder>();
+        services.AddScoped<StockSeeder>();
+        services.AddScoped<StoreUnitSeeder>();
+        services.AddScoped<ChartOfAccountsSeeder>();
 
         services
             .AddIdentityCore<ApplicationUser>(options =>

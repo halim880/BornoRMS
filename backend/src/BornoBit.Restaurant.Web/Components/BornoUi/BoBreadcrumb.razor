@@ -1,0 +1,51 @@
+@*
+    Compact breadcrumb trail. Pass an Items list — earlier entries with an
+    Href render as anchors; the last entry (or any without an Href) renders
+    as plain text representing the current location.
+*@
+
+<nav class="bo-breadcrumb @Class" aria-label="Breadcrumb">
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var item = Items[i];
+        var isLast = i == Items.Count - 1;
+        var clickable = !isLast && !string.IsNullOrEmpty(item.Href);
+
+        @if (clickable)
+        {
+            <a class="bo-breadcrumb-item" href="@item.Href">
+                @if (!string.IsNullOrWhiteSpace(item.Icon))
+                {
+                    <BoIcon Name="@item.Icon" Size="14" Class="bo-breadcrumb-icon" />
+                }
+                <span>@item.Label</span>
+            </a>
+        }
+        else
+        {
+            <span class="bo-breadcrumb-item @(isLast ? "is-current" : "")"
+                  aria-current="@(isLast ? "page" : null)">
+                @if (!string.IsNullOrWhiteSpace(item.Icon))
+                {
+                    <BoIcon Name="@item.Icon" Size="14" Class="bo-breadcrumb-icon" />
+                }
+                <span>@item.Label</span>
+            </span>
+        }
+
+        @if (!isLast)
+        {
+            <span class="bo-breadcrumb-sep" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m6 4 4 4-4 4" />
+                </svg>
+            </span>
+        }
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<BoBreadcrumbItem> Items { get; set; } = Array.Empty<BoBreadcrumbItem>();
+    [Parameter] public string? Class { get; set; }
+}

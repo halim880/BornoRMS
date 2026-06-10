@@ -21,7 +21,7 @@
     </div>
 
     <div class="nav-search">
-        <HcSearch Placeholder="Search menus…"
+        <BoSearch Placeholder="Search menus…"
                   Value="@_search"
                   ValueChanged="OnSearchValueChanged"
                   DebounceMs="120" />
@@ -34,7 +34,7 @@
 
     @if (_loading)
     {
-        <div class="nav-status"><HcSpinner Size="sm" /> <span>Loading…</span></div>
+        <div class="nav-status"><BoSpinner Size="sm" /> <span>Loading…</span></div>
     }
     else if (_loadError is not null)
     {
@@ -280,7 +280,7 @@
                     @onclick="@(() => ToggleGroup(item.Title))">
                 @if (!string.IsNullOrWhiteSpace(item.Icon))
                 {
-                    <HcIcon Name="@item.Icon" Size="15" Class="nav-group-icon" />
+                    <BoIcon Name="@item.Icon" Size="15" Class="nav-group-icon" />
                 }
                 <span class="nav-group-label">@item.Title</span>
                 <span class="nav-chevron @(expanded ? "open" : "")">›</span>
@@ -314,7 +314,7 @@
                     @onclick="@(() => ToggleGroup(item.Title))">
                 @if (!string.IsNullOrWhiteSpace(item.Icon))
                 {
-                    <HcIcon Name="@item.Icon" Size="15" Class="nav-subgroup-icon" />
+                    <BoIcon Name="@item.Icon" Size="15" Class="nav-subgroup-icon" />
                 }
                 <span class="nav-subgroup-label">@item.Title</span>
                 <span class="nav-chevron @(expanded ? "open" : "")">›</span>
@@ -343,7 +343,7 @@
     {
         if (!string.IsNullOrWhiteSpace(item.Icon))
         {
-            <HcIcon Name="@item.Icon" Size="16" Class="nav-leaf-icon" />
+            <BoIcon Name="@item.Icon" Size="16" Class="nav-leaf-icon" />
         }
         else
         {

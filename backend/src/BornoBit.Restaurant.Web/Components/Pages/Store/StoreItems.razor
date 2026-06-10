@@ -1,0 +1,82 @@
+@page "/store/items"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Items
+
+<PageTitle>Store Items · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Store Items"
+                Description="Warehouse stock. On-hand and average cost update as you receive, issue and adjust stock.">
+        <Actions>
+            <button type="button" class="bo-btn bo-btn-primary" @onclick="ShowCreateAsync">+ New Item</button>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading store items…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_items.Count == 0)
+    {
+        <EmptyState Description="No store items yet. Click '+ New Item' to add one." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Code</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Name</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Category</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">On hand</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Reorder</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Avg cost</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in _items)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft); @(i.IsActive ? "" : "opacity:0.55;")">
+                            <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@i.Code</span></td>
+                            <td style="padding:10px 14px;">
+                                <strong>@i.Name</strong>
+                                @if (!string.IsNullOrEmpty(i.BanglaName))
+                                {
+                                    <div style="color: var(--bo-text-subtle); font-size: var(--bo-font-xs);">@i.BanglaName</div>
+                                }
+                            </td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@i.CategoryName</td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                @i.QtyOnHand.ToString("0.###") @i.UnitCode
+                                @if (i.IsLowStock)
+                                {
+                                    <BoBadge Tone="danger">Low</BoBadge>
+                                }
+                            </td>
+                            <td style="padding:10px 14px; text-align:right; color: var(--bo-text-muted);">@i.ReorderLevel.ToString("0.###")</td>
+                            <td style="padding:10px 14px; text-align:right;">@i.AvgCost.ToString("0.00") @i.Currency</td>
+                            <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowEditAsync(i))">Edit</button>
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowAdjustAsync(i))">Adjust</button>
+                                @if (i.IsActive)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(i, false))">Deactivate</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(i, true))">Activate</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

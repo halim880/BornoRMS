@@ -90,6 +90,11 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<MenuSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<TableSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<CustomerSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<InventorySeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<UnitSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<StockSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<ChartOfAccountsSeeder>().SeedAsync();
     }
     catch (Exception ex)
     {

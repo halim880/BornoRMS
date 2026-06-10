@@ -6,21 +6,21 @@
 <PageTitle>Sign in · BornoBit Staff</PageTitle>
 
 <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
-            background:var(--hc-bg, #f1f5f9);">
-    <div style="width:100%; max-width:400px; background:var(--hc-bg-card, #fff);
-                border:1px solid var(--hc-border, #e2e8f0); border-radius:var(--hc-radius-xl, 16px);
-                padding:36px; box-shadow:var(--hc-shadow-lg);">
+            background:var(--bo-bg, #f1f5f9);">
+    <div style="width:100%; max-width:400px; background:var(--bo-bg-card, #fff);
+                border:1px solid var(--bo-border, #e2e8f0); border-radius:var(--bo-radius-xl, 16px);
+                padding:36px; box-shadow:var(--bo-shadow-lg);">
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
             <span style="width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center;
-                         justify-content:center; background:var(--hc-primary, #0f766e); color:#fff; font-weight:700;">B</span>
+                         justify-content:center; background:var(--bo-primary, #0f766e); color:#fff; font-weight:700;">B</span>
             <div>
-                <div style="font-weight:700; color:var(--hc-text, #0f172a);">BornoBit</div>
-                <div style="font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--hc-text-muted, #64748b);">Staff Console</div>
+                <div style="font-weight:700; color:var(--bo-text, #0f172a);">BornoBit</div>
+                <div style="font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--bo-text-muted, #64748b);">Staff Console</div>
             </div>
         </div>
 
-        <h1 style="font-size:22px; margin:0 0 4px; color:var(--hc-text, #0f172a);">Welcome back</h1>
-        <p style="color:var(--hc-text-muted, #64748b); font-size:14px; margin:0 0 20px;">Sign in to manage orders.</p>
+        <h1 style="font-size:22px; margin:0 0 4px; color:var(--bo-text, #0f172a);">Welcome back</h1>
+        <p style="color:var(--bo-text-muted, #64748b); font-size:14px; margin:0 0 20px;">Sign in to manage orders.</p>
 
         @if (!string.IsNullOrEmpty(_error))
         {
@@ -31,15 +31,15 @@
         <form action="/account/login" method="post" style="display:flex; flex-direction:column; gap:6px;">
             <input type="hidden" name="returnUrl" value="@ReturnUrl" />
 
-            <label for="userName" style="font-size:13px; font-weight:600; margin-top:8px; color:var(--hc-text, #334155);">Email / Username</label>
+            <label for="userName" style="font-size:13px; font-weight:600; margin-top:8px; color:var(--bo-text, #334155);">Email / Username</label>
             <input id="userName" name="userName" type="text" required autofocus value="admin@bornobit.local"
                    autocomplete="username" style="@FieldStyle" />
 
-            <label for="password" style="font-size:13px; font-weight:600; margin-top:8px; color:var(--hc-text, #334155);">Password</label>
+            <label for="password" style="font-size:13px; font-weight:600; margin-top:8px; color:var(--bo-text, #334155);">Password</label>
             <input id="password" name="password" type="password" required autocomplete="current-password"
                    placeholder="Enter your password" style="@FieldStyle" />
 
-            <button type="submit" style="margin-top:18px; padding:11px 16px; background:var(--hc-primary, #0f766e);
+            <button type="submit" style="margin-top:18px; padding:11px 16px; background:var(--bo-primary, #0f766e);
                     color:#fff; border:0; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer;">Sign in</button>
         </form>
     </div>
@@ -50,7 +50,7 @@
     [SupplyParameterFromQuery(Name = "error")] public string? ErrorCode { get; set; }
 
     private const string FieldStyle =
-        "width:100%; padding:10px 12px; border:1px solid var(--hc-border, #e2e8f0); border-radius:8px; font-size:14px;";
+        "width:100%; padding:10px 12px; border:1px solid var(--bo-border, #e2e8f0); border-radius:8px; font-size:14px;";
 
     private string? _error => ErrorCode switch
     {

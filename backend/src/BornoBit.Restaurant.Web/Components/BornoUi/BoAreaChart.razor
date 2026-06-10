@@ -1,0 +1,122 @@
+@*
+    Polished smooth-curve area chart. Generic over TItem so callers can pass
+    any list and project the value + label/tooltip with selectors.
+
+        <BoAreaChart TItem="SalesTrendPointDto"
+                     Data="@_sales"
+                     ValueSelector="p => (double)p.Total"
+                     LabelSelector="p => p.Date.ToString("MMM d")"
+                     TooltipSelector='p => $"{p.Date:yyyy-MM-dd}: {p.Total:N2}"'
+                     Height="180" />
+
+    The chart auto-fits its container width; height is configurable.
+*@
+
+@typeparam TItem
+
+@if (Data is null || Data.Count < 2)
+{
+    <div class="bo-area-empty" style="height:@(Height)px;">@EmptyText</div>
+}
+else
+{
+    <div class="bo-area-chart" style="height:@(Height)px;">
+        <svg class="bo-area-svg"
+             width="100%" height="100%"
+             viewBox="0 0 @W @H"
+             preserveAspectRatio="none"
+             role="img" aria-label="@(Label ?? "Trend chart")">
+            <defs>
+                <linearGradient id="@_gradId" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"  stop-color="@Color" stop-opacity="0.30" />
+                    <stop offset="60%" stop-color="@Color" stop-opacity="0.10" />
+                    <stop offset="100%" stop-color="@Color" stop-opacity="0.00" />
+                </linearGradient>
+            </defs>
+
+            @* Soft horizontal guide lines at 25% / 50% / 75% of the plot height. *@
+            @foreach (var y in _gridLines)
+            {
+                <line x1="0" y1="@y" x2="@W" y2="@y"
+                      stroke="var(--bo-border-soft, #EEF2F7)"
+                      stroke-width="1" vector-effect="non-scaling-stroke" />
+            }
+
+            <path d="@_areaPath" fill="url(#@_gradId)" />
+            <path d="@_linePath" fill="none" stroke="@Color" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke" />
+        </svg>
+
+        @if (!string.IsNullOrEmpty(StartLabel) || !string.IsNullOrEmpty(EndLabel) || PeakValue is not null)
+        {
+            <div class="bo-area-axis">
+                <span class="bo-area-axis-label">@StartLabel</span>
+                @if (PeakValue is not null)
+                {
+                    <span class="bo-area-axis-peak">Peak <strong>@PeakValue</strong></span>
+                }
+                <span class="bo-area-axis-label">@EndLabel</span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TItem>? Data { get; set; }
+    [Parameter, EditorRequired] public Func<TItem, double> ValueSelector { get; set; } = default!;
+    [Parameter] public Func<TItem, string>? TooltipSelector { get; set; }
+    [Parameter] public int Height { get; set; } = 180;
+    [Parameter] public string Color { get; set; } = "var(--bo-primary)";
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? StartLabel { get; set; }
+    [Parameter] public string? EndLabel { get; set; }
+    [Parameter] public string? PeakValue { get; set; }
+    [Parameter] public string EmptyText { get; set; } = "No data";
+
+    // Fixed internal viewBox — the outer SVG scales to fill its container.
+    private const int W = 600;
+    private const int H = 180;
+    private const int PadTop = 8;
+    private const int PadBottom = 6;
+
+    private string _linePath = string.Empty;
+    private string _areaPath = string.Empty;
+    private readonly string _gradId = $"bo-area-grad-{Guid.NewGuid():N}";
+    private readonly double[] _gridLines =
+    {
+        PadTop + (H - PadTop - PadBottom) * 0.25,
+        PadTop + (H - PadTop - PadBottom) * 0.50,
+        PadTop + (H - PadTop - PadBottom) * 0.75
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (Data is null || Data.Count < 2) { _linePath = _areaPath = string.Empty; return; }
+
+        double max = double.MinValue, min = double.MaxValue;
+        for (int i = 0; i < Data.Count; i++)
+        {
+            var v = ValueSelector(Data[i]);
+            if (v > max) max = v;
+            if (v < min) min = v;
+        }
+        // Anchor the baseline at zero so a flat-zero series doesn't get a misleading shape.
+        if (min > 0) min = 0;
+        var range = Math.Max(1e-9, max - min);
+        var n = Data.Count;
+        var pts = new (double X, double Y)[n];
+        var plotH = H - PadTop - PadBottom;
+
+        for (int i = 0; i < n; i++)
+        {
+            var x = (double)i / (n - 1) * W;
+            var v = ValueSelector(Data[i]);
+            var y = PadTop + plotH - (v - min) / range * plotH;
+            pts[i] = (x, y);
+        }
+
+        _linePath = ChartGeometry.SmoothPath(pts);
+        _areaPath = $"{_linePath} L {pts[^1].X.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} {H} L {pts[0].X.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} {H} Z";
+    }
+}

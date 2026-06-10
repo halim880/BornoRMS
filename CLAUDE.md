@@ -76,8 +76,8 @@ There is **no test project** yet.
   `admin@bornobit.local` / `ChangeMe!2026`.
 
 ### Staff console UI
-Imported design system from the reference: the `Hc` component library (`Web/Components/Hc/**`), shared components
-(`Web/Components/Shared/**`), design tokens (`wwwroot/app.css` `--hc-*` vars) + runtime theme switch (`wwwroot/hc-theme.js`,
+Imported design system from the reference: the **Borno UI** component library (`Web/Components/BornoUi/**`, `Bo*` prefix),
+shared components (`Web/Components/Shared/**`), design tokens (`wwwroot/app.css` `--bo-*` vars) + runtime theme switch (`wwwroot/bo-theme.js`,
 the Settings ThemePicker). **Navigation is DB-driven**: the sidebar is built from the `AppMenus` / `AppMenuRolePermissions`
 tables, role-filtered by `GetMenuTreeQuery`, seeded by `AppMenuSeeder`. Admin pages (`Web/Components/Pages/Admin/**`) CRUD
 users, tenants, modules, menu-permissions, numbering scopes.

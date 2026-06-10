@@ -17,4 +17,10 @@ public class QuestPdfReportRenderer : IReportRenderer
         var doc = new OrderReceiptDocument(data);
         return Task.FromResult(doc.GeneratePdf());
     }
+
+    public Task<byte[]> RenderStockValuationAsync(StockValuationReportData data, CancellationToken cancellationToken = default)
+    {
+        var doc = new StockValuationDocument(data);
+        return Task.FromResult(doc.GeneratePdf());
+    }
 }

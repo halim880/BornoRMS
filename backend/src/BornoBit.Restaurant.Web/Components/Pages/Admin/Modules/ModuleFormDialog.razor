@@ -3,16 +3,16 @@
 @using MediatR
 @inject ISender Mediator
 
-<HcDialogBody>
+<BoDialogBody>
     <div style="display:flex; flex-direction:column; gap:12px;">
         @if (!string.IsNullOrEmpty(_error))
         {
-            <HcMessageBar Intent="error">@_error</HcMessageBar>
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
         }
-        <HcInput @bind-Value="Content.Title" Label="Title"  Required="true" Style="width:100%;" Maxlength="100" />
-        <HcInput @bind-Value="Content.Icon" Label="Icon (FluentUI name, e.g. Pill)" Style="width:100%;" Maxlength="60" />
-        <HcNumeric T="int" @bind-Value="Content.DisplayOrder" Label="Display order" Style="width:100%;" Min="0" Step="1" />
-        <HcSelect TOption="string"
+        <BoInput @bind-Value="Content.Title" Label="Title"  Required="true" Style="width:100%;" Maxlength="100" />
+        <BoInput @bind-Value="Content.Icon" Label="Icon (FluentUI name, e.g. Pill)" Style="width:100%;" Maxlength="60" />
+        <BoNumeric T="int" @bind-Value="Content.DisplayOrder" Label="Display order" Style="width:100%;" Min="0" Step="1" />
+        <BoSelect TOption="string"
                       Items="@_roles"
                       OptionValue="@(r => r)"
                       OptionText="@(r => string.IsNullOrEmpty(r) ? "(everyone)" : r)"
@@ -20,20 +20,20 @@
                       SelectedOptionChanged="@(r => Content.RequiredRole = string.IsNullOrEmpty(r) ? null : r)"
                       Label="Minimum role"
                       Style="width:100%;" />
-        <p class="hc-text-subtle" style="margin:0;">
+        <p class="bo-text-subtle" style="margin:0;">
             Modules are root-level menus. Permissions are managed via Menu Permissions, not here.
         </p>
     </div>
-</HcDialogBody>
+</BoDialogBody>
 
-<HcDialogFooter>
-    <HcButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</HcButton>
-    <HcButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</HcButton>
-</HcDialogFooter>
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
 
 @code {
     [Parameter] public ModuleFormModel Content { get; set; } = default!;
-    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
 
     private string? _error;
     private bool _busy;

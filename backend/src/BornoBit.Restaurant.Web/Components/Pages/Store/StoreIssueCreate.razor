@@ -1,0 +1,181 @@
+@page "/store/issues/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Items
+@using BornoBit.Restaurant.Application.Store.Issues
+@using BornoBit.Restaurant.Application.Store.Units
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+@inject NavigationManager Nav
+
+<PageTitle>New Store Issue · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="New Store Issue"
+                Description="Issue stock to a destination (e.g. Main Kitchen). Saved as a draft — post it from the list to lower stock." />
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading…" />
+    }
+    else if (_loadError is not null)
+    {
+        <BoMessageBar Intent="error">@_loadError</BoMessageBar>
+    }
+    else
+    {
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                <BoInput @bind-Value="_destination" Label="Destination" Required="true" Style="flex:1; min-width:220px;" Maxlength="200" Placeholder="e.g. Main Kitchen" />
+            </div>
+
+            <BoInput @bind-Value="_notes" Label="Notes" Style="width:100%;" Maxlength="1000" />
+
+            <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                    <strong>Lines</strong>
+                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="AddLine">+ Add line</button>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:140px;">On hand</th>
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:120px;">Qty</th>
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:150px;">Unit</th>
+                            <th style="width:40px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            var item = _items.FirstOrDefault(i => i.Id == line.ItemId);
+                            <tr style="border-top:1px solid var(--bo-border-soft);">
+                                <td style="padding:6px 10px;">
+                                    <BoSelect TOption="StoreItemDto"
+                                              Items="@_items"
+                                              OptionValue="@(i => i.Id.ToString())"
+                                              OptionText="@(i => i.Name)"
+                                              SelectedOption="@item"
+                                              SelectedOptionChanged="@(i => OnLineItemChanged(line, i))"
+                                              Placeholder="Select item" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px; color: var(--bo-text-muted);">
+                                    @(item is null ? "—" : $"{item.QtyOnHand:0.###} {item.UnitCode}")
+                                </td>
+                                <td style="padding:6px 10px;">
+                                    <BoNumeric T="decimal" Value="line.Qty" ValueChanged="@(v => line.Qty = v)" Min="0" Step="0.001" Decimals="3" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px;">
+                                    <BoSelect TOption="StoreUnitDto"
+                                              Items="@CompatibleUnits(line)"
+                                              OptionValue="@(u => u.Id.ToString())"
+                                              OptionText="@(u => u.Code)"
+                                              SelectedOption="@_units.FirstOrDefault(u => u.Id == line.UnitId)"
+                                              SelectedOptionChanged="@(u => line.UnitId = u?.Id ?? Guid.Empty)"
+                                              Placeholder="Unit" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px; text-align:center;">
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => RemoveLine(line))">✕</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_lines.Count == 0)
+                {
+                    <div style="padding:12px; color: var(--bo-text-subtle);">No lines yet. Click "+ Add line".</div>
+                }
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; align-items:center;">
+                <div style="display:flex; gap:8px;">
+                    <a class="bo-btn bo-btn-ghost" href="/store/issues">Cancel</a>
+                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Save draft</BoButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private string? _loadError;
+    private string? _error;
+
+    private List<StoreItemDto> _items = new();
+    private List<StoreUnitDto> _units = new();
+
+    private string? _destination;
+    private string? _notes;
+
+    private readonly List<LineRow> _lines = new();
+
+    private class LineRow
+    {
+        public Guid ItemId { get; set; }
+        public decimal Qty { get; set; }
+        public Guid UnitId { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _items = (await Mediator.Send(new GetStoreItemsQuery(PageSize: 200, IncludeInactive: false))).Items.ToList();
+            _units = (await Mediator.Send(new GetStoreUnitsQuery())).Where(u => u.IsActive).ToList();
+        }
+        catch (Exception ex) { _loadError = $"Failed to load: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private void AddLine() => _lines.Add(new LineRow());
+    private void RemoveLine(LineRow line) => _lines.Remove(line);
+
+    private void OnLineItemChanged(LineRow line, StoreItemDto? item)
+    {
+        line.ItemId = item?.Id ?? Guid.Empty;
+        line.UnitId = item?.BaseUnitId ?? Guid.Empty;
+    }
+
+    private IEnumerable<StoreUnitDto> CompatibleUnits(LineRow line)
+    {
+        var item = _items.FirstOrDefault(i => i.Id == line.ItemId);
+        if (item is null) return _units;
+        var baseUnit = _units.FirstOrDefault(u => u.Id == item.BaseUnitId);
+        if (baseUnit is null) return _units;
+        return _units.Where(u => u.Dimension == baseUnit.Dimension);
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_destination)) { _error = "Destination is required."; return; }
+        var valid = _lines.Where(l => l.ItemId != Guid.Empty && l.UnitId != Guid.Empty && l.Qty > 0).ToList();
+        if (valid.Count == 0) { _error = "Add at least one line with an item, unit and quantity."; return; }
+
+        _busy = true;
+        try
+        {
+            var inputs = valid.Select(l => new StoreIssueLineInput(l.ItemId, l.Qty, l.UnitId)).ToList();
+            await Mediator.Send(new CreateStoreIssueCommand(
+                _destination.Trim(),
+                null,
+                string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
+                inputs));
+            ToastService.ShowSuccess("Draft issue created. Post it to lower stock.");
+            Nav.NavigateTo("/store/issues");
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

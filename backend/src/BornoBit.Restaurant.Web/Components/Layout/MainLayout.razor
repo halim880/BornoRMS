@@ -2,8 +2,8 @@
 @using Microsoft.AspNetCore.Components.Routing
 @implements IDisposable
 
-<HcDialogProvider />
-<HcToastProvider />
+<BoDialogProvider />
+<BoToastProvider />
 
 <CascadingValue Name="ActiveModuleId" Value="_activeModuleId">
     <div class="app-shell @(_sidebarCollapsed ? "is-collapsed" : "")">
@@ -15,7 +15,7 @@
                         aria-label="Toggle sidebar"
                         aria-pressed="@(_sidebarCollapsed ? "true" : "false")"
                         @onclick="ToggleSidebar">
-                    <HcIcon Name="Menu" Size="20" />
+                    <BoIcon Name="Menu" Size="20" />
                 </button>
                 <AuthorizeView>
                     <Authorized>

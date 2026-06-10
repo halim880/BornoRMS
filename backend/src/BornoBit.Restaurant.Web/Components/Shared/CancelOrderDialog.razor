@@ -1,18 +1,18 @@
-<HcDialogBody>
+<BoDialogBody>
     <div style="display:flex; flex-direction:column; gap:12px;">
-        <p style="margin:0; color:var(--hc-text-muted);">Cancel order <strong>@Content</strong>? This cannot be undone.</p>
-        <HcInput @bind-Value="_reason" Label="Reason (optional)" Placeholder="e.g. customer left" Style="width:100%;" />
+        <p style="margin:0; color:var(--bo-text-muted);">Cancel order <strong>@Content</strong>? This cannot be undone.</p>
+        <BoInput @bind-Value="_reason" Label="Reason (optional)" Placeholder="e.g. customer left" Style="width:100%;" />
     </div>
-</HcDialogBody>
+</BoDialogBody>
 
-<HcDialogFooter>
-    <HcButton Variant="ghost" OnClick="@(() => Dialog.Cancel())">Keep order</HcButton>
-    <HcButton Variant="danger" OnClick="@(() => Dialog.Close(_reason))">Cancel order</HcButton>
-</HcDialogFooter>
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Cancel())">Keep order</BoButton>
+    <BoButton Variant="danger" OnClick="@(() => Dialog.Close(_reason))">Cancel order</BoButton>
+</BoDialogFooter>
 
 @code {
     [Parameter] public string Content { get; set; } = "";
-    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
 
     private string? _reason;
 }

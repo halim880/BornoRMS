@@ -4,9 +4,9 @@
 @using BornoBit.Restaurant.Shared.Common
 @using MediatR
 @inject ISender Sender
-@inject IHcToastService ToastService
+@inject IBoToastService ToastService
 
-<HcDialogBody>
+<BoDialogBody>
     @if (_order is null)
     {
         <LoadingState Message="Loading bill…" />
@@ -16,7 +16,7 @@
         <div style="display:flex; flex-direction:column; gap:14px;">
             @if (!string.IsNullOrEmpty(_error))
             {
-                <HcMessageBar Intent="error">@_error</HcMessageBar>
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
             }
 
             <div class="bill-lines">
@@ -37,56 +37,56 @@
 
             @if (_order.IsPaid)
             {
-                <HcMessageBar Intent="success">
+                <BoMessageBar Intent="success">
                     Paid via @_order.PaymentMethod · tendered @_order.Currency @_order.AmountTendered?.ToString("0.##") · change @_order.Currency @_order.ChangeGiven?.ToString("0.##")
-                </HcMessageBar>
-                <a class="hc-link" href="/reports/order/@_order.Id/receipt.pdf" target="_blank">Download receipt</a>
+                </BoMessageBar>
+                <a class="bo-link" href="/reports/order/@_order.Id/receipt.pdf" target="_blank">Download receipt</a>
             }
             else
             {
                 <fieldset class="bill-fieldset">
                     <legend>Discount</legend>
                     <div class="two-col">
-                        <HcSelect TOption="string" Items="_discountKinds"
+                        <BoSelect TOption="string" Items="_discountKinds"
                                   OptionValue="@(k => k)" OptionText="@(k => k)"
                                   SelectedOption="_discountKind"
                                   SelectedOptionChanged="@(k => _discountKind = k ?? "Percent")"
                                   Label="Type" />
-                        <HcInput @bind-Value="_discountValue" Type="number"
+                        <BoInput @bind-Value="_discountValue" Type="number"
                                  Label="@(_discountKind == "Percent" ? "Percent (%)" : "Amount")" Placeholder="0" />
                     </div>
-                    <HcInput @bind-Value="_discountReason" Label="Reason (optional)" />
-                    <HcButton Variant="outline" Size="sm" Loading="_busy" OnClick="ApplyDiscountAsync">Apply discount</HcButton>
+                    <BoInput @bind-Value="_discountReason" Label="Reason (optional)" />
+                    <BoButton Variant="outline" Size="sm" Loading="_busy" OnClick="ApplyDiscountAsync">Apply discount</BoButton>
                 </fieldset>
 
                 <fieldset class="bill-fieldset">
                     <legend>Payment</legend>
                     <div class="two-col">
-                        <HcSelect TOption="PaymentMethod" Items="_methods"
+                        <BoSelect TOption="PaymentMethod" Items="_methods"
                                   OptionValue="@(m => ((int)m).ToString())" OptionText="@(m => m.ToString())"
                                   SelectedOption="_method"
                                   SelectedOptionChanged="@(m => _method = m)"
                                   Label="Method" />
-                        <HcInput @bind-Value="_tendered" Type="number" Label="Amount tendered" Placeholder="0" Immediate="true" />
+                        <BoInput @bind-Value="_tendered" Type="number" Label="Amount tendered" Placeholder="0" Immediate="true" />
                     </div>
                     <div class="bill-row bill-grand"><span>Change</span><span>@_order.Currency @Change.ToString("0.##")</span></div>
                 </fieldset>
             }
         </div>
     }
-</HcDialogBody>
+</BoDialogBody>
 
-<HcDialogFooter>
-    <HcButton Variant="ghost" OnClick="@(() => Dialog.Close(_changedAnything))" Disabled="_busy">Close</HcButton>
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close(_changedAnything))" Disabled="_busy">Close</BoButton>
     @if (_order is { IsPaid: false })
     {
-        <HcButton Variant="primary" OnClick="PayAsync" Loading="_busy" Disabled="@(!CanPay)">Take payment</HcButton>
+        <BoButton Variant="primary" OnClick="PayAsync" Loading="_busy" Disabled="@(!CanPay)">Take payment</BoButton>
     }
-</HcDialogFooter>
+</BoDialogFooter>
 
 @code {
     [Parameter] public Guid Content { get; set; }
-    [CascadingParameter] public HcDialogInstance Dialog { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
 
     private OrderDetailDto? _order;
     private decimal _subtotal;
@@ -160,10 +160,10 @@
 <style>
     .bill-lines { display:flex; flex-direction:column; gap:4px; max-height:180px; overflow-y:auto; }
     .bill-line { display:flex; justify-content:space-between; font-size:13px; }
-    .bill-totals { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--hc-border,#ddd); padding-top:8px; }
+    .bill-totals { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--bo-border,#ddd); padding-top:8px; }
     .bill-row { display:flex; justify-content:space-between; }
-    .bill-grand { font-weight:700; font-size:16px; border-top:1px solid var(--hc-border,#ddd); padding-top:6px; margin-top:2px; }
-    .bill-fieldset { border:1px solid var(--hc-border,#e3e3e3); border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; gap:10px; }
-    .bill-fieldset legend { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--hc-text-muted); padding:0 4px; }
+    .bill-grand { font-weight:700; font-size:16px; border-top:1px solid var(--bo-border,#ddd); padding-top:6px; margin-top:2px; }
+    .bill-fieldset { border:1px solid var(--bo-border,#e3e3e3); border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; gap:10px; }
+    .bill-fieldset legend { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--bo-text-muted); padding:0 4px; }
     .two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 </style>

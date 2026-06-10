@@ -3,15 +3,15 @@
 @using BornoBit.Restaurant.Application.Tenants
 @using MediatR
 @inject ISender Mediator
-@inject IHcDialogService DialogService
-@inject IHcToastService ToastService
+@inject IBoDialogService DialogService
+@inject IBoToastService ToastService
 
 <PageTitle>Tenants · BornoBit.Restaurant</PageTitle>
 
 <div style="display:flex; flex-direction:column; gap:16px;">
     <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
         <h1>Tenants</h1>
-        <HcButton Variant="primary" OnClick="ShowCreateAsync">New tenant</HcButton>
+        <BoButton Variant="primary" OnClick="ShowCreateAsync">New tenant</BoButton>
     </div>
 
     <p style="color:var(--neutral-foreground-hint);">
@@ -20,15 +20,15 @@
 
     @if (_loading)
     {
-        <HcSpinner />
+        <BoSpinner />
     }
     else if (_error is not null)
     {
-        <HcMessageBar Intent="error">@_error</HcMessageBar>
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
     }
     else if (_tenants.Count == 0)
     {
-        <div class="hc-cmp-cardish">
+        <div class="bo-cmp-cardish">
             <p style="margin:0;">No tenants yet. Click <strong>New tenant</strong> to create the first one.</p>
         </div>
     }
@@ -40,26 +40,26 @@
                     <strong>@context.Name</strong>
                 </DataGridColumn>
                 <DataGridColumn TItem="TenantDto" Title="Subdomain" Property="@(t => t.Subdomain)" Sortable="true">
-                    <span class="hc-code">@context.Subdomain</span>
+                    <span class="bo-code">@context.Subdomain</span>
                 </DataGridColumn>
                 <DataGridColumn TItem="TenantDto" Title="Contact email" Property="@(t => t.ContactEmail)">
                     @(context.ContactEmail ?? "—")
                 </DataGridColumn>
                 <DataGridColumn TItem="TenantDto" Title="Active" Align="DataGridAlign.Center" Width="100px">
-                    @if (context.IsActive) { <HcBadge Tone="success">Active</HcBadge> }
-                    else { <HcBadge>Inactive</HcBadge> }
+                    @if (context.IsActive) { <BoBadge Tone="success">Active</BoBadge> }
+                    else { <BoBadge>Inactive</BoBadge> }
                 </DataGridColumn>
                 <DataGridColumn TItem="TenantDto" Title="License expires" Property="@(t => (object?)t.LicenseExpiresOnUtc)" Format="yyyy-MM-dd" Width="140px" />
                 <DataGridColumn TItem="TenantDto" Title="Created" Property="@(t => (object?)t.CreatedAtUtc)" Format="yyyy-MM-dd HH:mm" Width="160px" />
                 <DataGridColumn TItem="TenantDto" Title="" Align="DataGridAlign.Right" Width="220px">
-                    <HcButton Variant="ghost" OnClick="@(() => ShowEditAsync(context))">Edit</HcButton>
+                    <BoButton Variant="ghost" OnClick="@(() => ShowEditAsync(context))">Edit</BoButton>
                     @if (context.IsActive)
                     {
-                        <HcButton Variant="ghost" OnClick="@(() => ConfirmSetActiveAsync(context, false))">Deactivate</HcButton>
+                        <BoButton Variant="ghost" OnClick="@(() => ConfirmSetActiveAsync(context, false))">Deactivate</BoButton>
                     }
                     else
                     {
-                        <HcButton Variant="ghost" OnClick="@(() => ConfirmSetActiveAsync(context, true))">Activate</HcButton>
+                        <BoButton Variant="ghost" OnClick="@(() => ConfirmSetActiveAsync(context, true))">Activate</BoButton>
                     }
                 </DataGridColumn>
             </Columns>
@@ -96,7 +96,7 @@
     private async Task ShowCreateAsync()
     {
         var model = new TenantFormModel();
-        var result = await DialogService.ShowAsync<TenantFormDialog, TenantFormModel>(model, new HcDialogOptions
+        var result = await DialogService.ShowAsync<TenantFormDialog, TenantFormModel>(model, new BoDialogOptions
         {
             Title = "New tenant",
             Width = "480px",
@@ -118,7 +118,7 @@
             ContactEmail = tenant.ContactEmail,
             LicenseExpiresOnUtc = tenant.LicenseExpiresOnUtc
         };
-        var result = await DialogService.ShowAsync<TenantFormDialog, TenantFormModel>(model, new HcDialogOptions
+        var result = await DialogService.ShowAsync<TenantFormDialog, TenantFormModel>(model, new BoDialogOptions
         {
             Title = "Edit tenant",
             Width = "480px",

@@ -1,0 +1,63 @@
+@page "/stock/low"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@using BornoBit.Restaurant.Application.Inventory.Items
+
+<PageTitle>Low Stock · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Low Stock"
+                Description="Active items at or below their reorder level — buy these next.">
+        <Actions>
+            <a class="bo-btn bo-btn-ghost" href="/stock/grn">Go to Goods Receipts</a>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Checking stock levels…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_items.Count == 0)
+    {
+        <EmptyState Description="Nothing is low on stock right now. 🎉" />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);">Item</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);">Category</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted); text-align:right;">On hand</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted); text-align:right;">Reorder level</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted); text-align:right;">Suggested buy</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in _items)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px;">
+                                <strong>@i.Name</strong>
+                                @if (!string.IsNullOrEmpty(i.BanglaName))
+                                {
+                                    <span style="color: var(--bo-text-subtle); font-size: var(--bo-font-xs);"> · @i.BanglaName</span>
+                                }
+                            </td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@i.CategoryName</td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                <span style="color: var(--bo-danger, #c0392b); font-weight:600;">@i.QtyOnHand.ToString("0.###") @i.UnitCode</span>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right; color: var(--bo-text-muted);">@i.ReorderLevel.ToString("0.###") @i.UnitCode</td>
+                            <td style="padding:10px 14px; text-align:right;">@i.ReorderQty.ToString("0.###") @i.UnitCode</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

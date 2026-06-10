@@ -1,0 +1,15 @@
+.bo-cmp-spinner {
+    display: inline-block;
+    border-radius: 50%;
+    border-style: solid;
+    border-color: var(--bo-border);
+    border-top-color: var(--bo-primary);
+    animation: bo-cmp-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+.bo-cmp-spinner--sm { width: 14px; height: 14px; border-width: 2px; }
+.bo-cmp-spinner--md { width: 22px; height: 22px; border-width: 3px; }
+.bo-cmp-spinner--lg { width: 40px; height: 40px; border-width: 4px; }
+
+@keyframes bo-cmp-spin { to { transform: rotate(360deg); } }

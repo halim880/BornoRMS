@@ -1,0 +1,103 @@
+@using BornoBit.Restaurant.Application.Accounting.Accounts
+@using BornoBit.Restaurant.Domain.Accounting
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="display:flex; gap:12px;">
+            <BoInput @bind-Value="Content.Code" Label="Code" Required="true" Style="width:160px;" Maxlength="20" />
+            <BoSelect TOption="AccountType"
+                      Items="@_types"
+                      OptionValue="@(t => ((int)t).ToString())"
+                      OptionText="@(t => t.ToString())"
+                      SelectedOption="@Content.AccountType"
+                      SelectedOptionChanged="@(t => Content.AccountType = t)"
+                      Label="Type" Required="true" Style="flex:1;" />
+        </div>
+
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="160" />
+
+        <BoSelect TOption="AccountDto"
+                  Items="@_groups"
+                  OptionValue="@(a => a.Id.ToString())"
+                  OptionText="@(a => a.Code + " · " + a.Name)"
+                  SelectedOption="@_selectedParent"
+                  SelectedOptionChanged="@(a => Content.ParentId = a?.Id)"
+                  Label="Parent (group account)"
+                  Placeholder="(none — top level)"
+                  Style="width:100%;" />
+
+        <BoCheckbox @bind-Value="Content.IsPostable" Label="Postable (can carry journal lines)" />
+
+        <BoInput @bind-Value="Content.Description" Label="Description" Style="width:100%;" Maxlength="500" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public AccountFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private static readonly AccountType[] _types = Enum.GetValues<AccountType>();
+    private List<AccountDto> _groups = new();
+
+    private AccountDto? _selectedParent => _groups.FirstOrDefault(a => a.Id == Content.ParentId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var all = await Mediator.Send(new GetAccountsQuery());
+            // Only non-postable (group) accounts may be parents; never self.
+            _groups = all.Where(a => !a.IsPostable && a.Id != Content.Id).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load accounts: {ex.Message}"; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Code)) { _error = "Code is required."; return; }
+        if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateAccountCommand(
+                    Content.Code.Trim(), Content.Name.Trim(), Content.AccountType,
+                    Content.ParentId, Content.IsPostable,
+                    string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim()));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateAccountCommand(
+                    Content.Id.Value, Content.Name.Trim(), Content.AccountType,
+                    Content.ParentId, Content.IsPostable,
+                    string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim()));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

@@ -4,34 +4,34 @@
 @using BornoBit.Restaurant.Shared.Common
 @using MediatR
 @inject ISender Sender
-@inject IHcToastService ToastService
-@inject IHcDialogService DialogService
+@inject IBoToastService ToastService
+@inject IBoDialogService DialogService
 
 <div class="order-status-cell">
-    <HcBadge Tone="@StatusTone(Order.Status)">@Order.Status</HcBadge>
+    <BoBadge Tone="@StatusTone(Order.Status)">@Order.Status</BoBadge>
 
     @{
         var next = NextStep(Order.Status);
     }
     @if (next is not null)
     {
-        <HcButton Variant="primary" Size="sm" Loading="_busy" OnClick="@(() => AdvanceAsync(next.Value.Target))">
+        <BoButton Variant="primary" Size="sm" Loading="_busy" OnClick="@(() => AdvanceAsync(next.Value.Target))">
             @next.Value.Label
-        </HcButton>
+        </BoButton>
     }
     @if (CanCancel(Order.Status))
     {
-        <HcButton Variant="ghost" Size="sm" Disabled="_busy" OnClick="CancelAsync">Cancel</HcButton>
+        <BoButton Variant="ghost" Size="sm" Disabled="_busy" OnClick="CancelAsync">Cancel</BoButton>
     }
 
     @if (Order.IsPaid)
     {
-        <HcBadge Tone="success">Paid</HcBadge>
-        <a class="hc-link" href="/reports/order/@Order.Id/receipt.pdf" target="_blank">Invoice</a>
+        <BoBadge Tone="success">Paid</BoBadge>
+        <a class="bo-link" href="/reports/order/@Order.Id/receipt.pdf" target="_blank">Invoice</a>
     }
     else if (Order.Status != OrderStatus.Cancelled)
     {
-        <HcButton Variant="accent" Size="sm" Disabled="_busy" OnClick="BillAsync">Bill</HcButton>
+        <BoButton Variant="accent" Size="sm" Disabled="_busy" OnClick="BillAsync">Bill</BoButton>
     }
 </div>
 
@@ -61,7 +61,7 @@
     {
         var result = await DialogService.ShowAsync<BillDialog, Guid>(
             Order.Id,
-            new HcDialogOptions { Title = $"Bill · {Order.OrderNumber}", Width = "520px" });
+            new BoDialogOptions { Title = $"Bill · {Order.OrderNumber}", Width = "520px" });
         if (!result.Cancelled && result.Data is true)
             await OnChanged.InvokeAsync();
     }
@@ -70,7 +70,7 @@
     {
         var result = await DialogService.ShowAsync<CancelOrderDialog, string>(
             Order.OrderNumber,
-            new HcDialogOptions { Title = "Cancel order", Width = "440px" });
+            new BoDialogOptions { Title = "Cancel order", Width = "440px" });
         if (result.Cancelled) return;
 
         _busy = true;

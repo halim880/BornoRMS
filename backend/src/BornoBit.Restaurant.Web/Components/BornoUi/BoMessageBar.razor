@@ -1,0 +1,37 @@
+@namespace BornoBit.Restaurant.Web.Components.BornoUi
+
+<div class="bo-cmp-msgbar bo-cmp-msgbar--@Intent @CssClass" role="@Role">
+    <span class="bo-cmp-msgbar-icon" aria-hidden="true">@RenderIcon()</span>
+    <div class="bo-cmp-msgbar-body">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <strong class="bo-cmp-msgbar-title">@Title</strong>
+        }
+        <div class="bo-cmp-msgbar-content">@ChildContent</div>
+    </div>
+    @if (Dismissible)
+    {
+        <button type="button" class="bo-cmp-msgbar-dismiss" title="Dismiss" @onclick="OnDismiss">×</button>
+    }
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    /// <summary>info | success | warning | error</summary>
+    [Parameter] public string Intent { get; set; } = "info";
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public bool Dismissible { get; set; }
+    [Parameter] public EventCallback OnDismiss { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string CssClass => AdditionalAttributes is { } a && a.TryGetValue("class", out var c) ? c?.ToString() ?? "" : "";
+    private string Role => Intent is "error" or "warning" ? "alert" : "status";
+
+    private string RenderIcon() => Intent switch
+    {
+        "success" => "✓",
+        "warning" => "!",
+        "error" => "×",
+        _ => "i"
+    };
+}

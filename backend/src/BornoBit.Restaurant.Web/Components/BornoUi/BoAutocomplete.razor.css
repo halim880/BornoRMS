@@ -1,0 +1,204 @@
+.bo-cmp-ac {
+    position: relative;
+    display: block;
+}
+
+.bo-cmp-ac-shell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: var(--bo-bg-card);
+    border: 1px solid var(--bo-border);
+    border-radius: var(--bo-radius-sm, 6px);
+    transition: border-color 100ms, box-shadow 100ms;
+    box-sizing: border-box;
+}
+
+.bo-cmp-ac-shell:hover:not(.is-disabled) {
+    border-color: var(--bo-border-strong);
+}
+
+.bo-cmp-ac-shell:focus-within {
+    border-color: var(--bo-primary);
+    box-shadow: 0 0 0 3px var(--bo-primary-tint);
+}
+
+.bo-cmp-field.is-invalid .bo-cmp-ac-shell {
+    border-color: var(--bo-danger);
+}
+
+.bo-cmp-field.is-invalid .bo-cmp-ac-shell:focus-within {
+    box-shadow: 0 0 0 3px var(--bo-danger-soft);
+}
+
+.bo-cmp-ac-shell.is-disabled {
+    background: var(--bo-bg-soft);
+}
+
+.bo-cmp-ac-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    padding: 8px 4px 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--bo-text);
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: text;
+}
+
+.bo-cmp-ac-input::placeholder {
+    color: var(--bo-text-faint);
+}
+
+.bo-cmp-ac-input.is-hidden-text {
+    color: transparent;
+    caret-color: transparent;
+}
+
+.bo-cmp-ac-selected {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: 4px 28px 4px 10px;
+    pointer-events: none;
+    overflow: hidden;
+    font-size: 13px;
+    color: var(--bo-text);
+}
+
+.bo-cmp-ac-selected > * {
+    pointer-events: auto;
+}
+
+.bo-cmp-ac-input:disabled {
+    color: var(--bo-text-faint);
+    cursor: not-allowed;
+}
+
+.bo-cmp-ac-clear {
+    background: transparent;
+    border: 0;
+    color: var(--bo-text-subtle);
+    font-size: 18px;
+    line-height: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin: 0 2px;
+    padding: 0;
+}
+
+.bo-cmp-ac-clear:hover {
+    background: var(--bo-border);
+    color: var(--bo-text);
+}
+
+.bo-cmp-ac-chevron {
+    color: var(--bo-text-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-right: 10px;
+    padding-left: 4px;
+    pointer-events: none;
+    flex-shrink: 0;
+    transition: color 120ms ease, transform 180ms ease;
+}
+
+.bo-cmp-ac-shell:hover:not(.is-disabled) .bo-cmp-ac-chevron {
+    color: var(--bo-text-muted);
+}
+
+.bo-cmp-ac-shell:focus-within .bo-cmp-ac-chevron {
+    color: var(--bo-primary);
+}
+
+.bo-cmp-ac-shell.is-open .bo-cmp-ac-chevron {
+    transform: rotate(180deg);
+}
+
+.bo-cmp-ac-shell.is-disabled .bo-cmp-ac-chevron {
+    color: var(--bo-text-faint);
+}
+
+.bo-cmp-field.is-invalid .bo-cmp-ac-chevron {
+    color: var(--bo-danger);
+}
+
+.bo-cmp-ac-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--bo-bg-card);
+    border: 1px solid var(--bo-border);
+    border-radius: var(--bo-radius-md, 8px);
+    box-shadow: var(--bo-shadow-lg, 0 12px 20px -6px rgba(15, 23, 42, 0.12), 0 4px 8px -3px rgba(15, 23, 42, 0.05));
+    z-index: 50;
+    padding: 4px;
+}
+
+.bo-cmp-ac-list.is-drop-up {
+    top: auto;
+    bottom: calc(100% + 4px);
+}
+
+.bo-cmp-ac-option {
+    padding: 7px 10px;
+    font-size: 13px;
+    color: var(--bo-text);
+    border-radius: var(--bo-radius-xs, 4px);
+    cursor: pointer;
+    user-select: none;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bo-cmp-ac-option.is-custom {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.bo-cmp-ac-option.is-highlighted {
+    background: var(--bo-bg-soft);
+}
+
+.bo-cmp-ac-option.is-selected {
+    background: var(--bo-primary-tint);
+    color: var(--bo-primary-emphasis);
+    font-weight: 600;
+}
+
+.bo-cmp-ac-option.is-selected.is-highlighted {
+    background: var(--bo-primary-soft);
+}
+
+.bo-cmp-ac-empty,
+.bo-cmp-ac-more {
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--bo-text-subtle);
+    text-align: center;
+    user-select: none;
+}
+
+.bo-cmp-ac-more {
+    border-top: 1px solid var(--bo-border-soft);
+    margin-top: 4px;
+    padding-top: 8px;
+}

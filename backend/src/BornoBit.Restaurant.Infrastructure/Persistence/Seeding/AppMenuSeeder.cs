@@ -151,11 +151,37 @@ public class AppMenuSeeder
             new("Orders", Url: "/orders", Icon: "DocumentBulletList"),
             new("App Settings", Url: "/settings/app", Icon: "PaintBrush"),
         }),
+        new("Stock", Icon: "Box", RequiredRole: Roles.Manager, Children: new()
+        {
+            new("Low Stock", Url: "/stock/low", Icon: "Alert", RequiredRole: Roles.Manager),
+            new("Stock Items", Url: "/stock/items", Icon: "BoxMultiple", RequiredRole: Roles.Manager),
+            new("Goods Receipts", Url: "/stock/grn", Icon: "ReceiptMoney", RequiredRole: Roles.Manager),
+            new("Wastage", Url: "/stock/wastage", Icon: "Delete", RequiredRole: Roles.Manager),
+            new("Stock History", Url: "/stock/history", Icon: "History", RequiredRole: Roles.Manager),
+            new("Suppliers", Url: "/stock/suppliers", Icon: "PeopleTeam", RequiredRole: Roles.Admin),
+        }),
+        new("Store", Icon: "Building", RequiredRole: Roles.Manager, Children: new()
+        {
+            new("Store Items", Url: "/store/items", Icon: "BoxMultiple", RequiredRole: Roles.Manager),
+            new("Store Categories", Url: "/store/categories", Icon: "FolderList", RequiredRole: Roles.Manager),
+            new("Store Receipts", Url: "/store/grn", Icon: "ReceiptMoney", RequiredRole: Roles.Manager),
+            new("Store Issues", Url: "/store/issues", Icon: "DocumentBulletList", RequiredRole: Roles.Manager),
+            new("Store Suppliers", Url: "/store/suppliers", Icon: "PeopleTeam", RequiredRole: Roles.Admin),
+        }),
+        new("Accounts", Icon: "Money", RequiredRole: Roles.Admin, Children: new()
+        {
+            new("Chart of Accounts", Url: "/accounts/coa",           Icon: "Organization",  RequiredRole: Roles.Admin),
+            new("Journal Entries",   Url: "/accounts/journals",      Icon: "BookOpenMicroscope", RequiredRole: Roles.Admin),
+            new("Trial Balance",     Url: "/accounts/trial-balance", Icon: "ScaleBalance",  RequiredRole: Roles.Admin),
+            new("Ledger",            Url: "/accounts/ledger",        Icon: "DocumentTable", RequiredRole: Roles.Admin),
+        }),
         new("Administration", Icon: "Settings", RequiredRole: Roles.Admin, Children: new()
         {
             new("Users & Roles", Url: "/admin/users", Icon: "PeopleTeam", RequiredRole: Roles.Admin),
             new("Menu Permissions", Url: "/admin/menu-permissions", Icon: "ShieldKeyhole", RequiredRole: Roles.Admin),
             new("Numbering Scopes", Url: "/admin/numbering-scopes", Icon: "NumberSymbol", RequiredRole: Roles.Admin),
+            new("Product Categories", Url: "/inventory/categories", Icon: "FolderList", RequiredRole: Roles.Admin),
+            new("Products", Url: "/inventory/products", Icon: "Box", RequiredRole: Roles.Admin),
             new("Tenants", Url: "/admin/tenants", Icon: "Building", RequiredRole: Roles.SuperAdmin),
             new("Modules", Url: "/admin/modules", Icon: "AppsList", RequiredRole: Roles.SuperAdmin),
         }),

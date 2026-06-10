@@ -17,8 +17,9 @@ builder.Host.UseSerilog((ctx, services, cfg) =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddScoped<BornoBit.Restaurant.Web.Components.Hc.Dialog.IHcDialogService, BornoBit.Restaurant.Web.Components.Hc.Dialog.HcDialogService>();
-builder.Services.AddScoped<BornoBit.Restaurant.Web.Components.Hc.Toast.IHcToastService, BornoBit.Restaurant.Web.Components.Hc.Toast.HcToastService>();
+builder.Services.AddScoped<BornoBit.Restaurant.Web.Components.BornoUi.Dialog.IBoDialogService, BornoBit.Restaurant.Web.Components.BornoUi.Dialog.BoDialogService>();
+builder.Services.AddScoped<BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService, BornoBit.Restaurant.Web.Components.BornoUi.Toast.BoToastService>();
+builder.Services.AddScoped<BornoBit.Restaurant.Web.Services.IImageUploadService, BornoBit.Restaurant.Web.Services.ImageUploadService>();
 
 builder.Services.AddApplication(typeof(BornoBit.Restaurant.Infrastructure.DependencyInjection).Assembly);
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -39,6 +40,8 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Staff", p => p.RequireRole(Roles.StaffOrderManagers.ToArray()));
     options.AddPolicy("SuperAdmin", p => p.RequireRole(Roles.SuperAdmin));
     options.AddPolicy("Admin", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin));
+    options.AddPolicy("Inventory", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("Store", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
 });
 builder.Services.AddCascadingAuthenticationState();
 
@@ -57,6 +60,11 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<TableSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<CustomerSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<TenantSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<InventorySeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<UnitSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<StockSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<ChartOfAccountsSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AppMenuSeeder>().SeedAsync();
     }
     catch (Exception ex)
@@ -78,7 +86,14 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        if (app.Environment.IsDevelopment())
+            ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+    }
+});
 app.MapAccountEndpoints();
 app.MapReportEndpoints();
 app.MapRazorComponents<App>()
