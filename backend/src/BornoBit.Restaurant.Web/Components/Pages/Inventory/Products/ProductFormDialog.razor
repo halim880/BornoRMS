@@ -36,6 +36,24 @@
         <BoInput @bind-Value="Content.Description" Label="Description" Style="width:100%;" Maxlength="1000" />
 
         <div class="bo-cmp-field">
+            <label class="bo-cmp-field-label">Variants (optional)</label>
+            <div class="bo-cmp-field-hint" style="margin-bottom:6px;">
+                Sizes or portions with their own price — e.g. Quarter / Half / Full, or Regular / Large.
+                When a product has variants, the waiter must pick one and the base price is ignored.
+            </div>
+            @foreach (var row in Content.Variants)
+            {
+                <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+                    <BoInput @bind-Value="row.Name" Placeholder="e.g. Half" Style="flex:1;" Maxlength="100" />
+                    <BoNumeric T="decimal" @bind-Value="row.Price" Style="width:130px;" Min="0" Step="0.01" />
+                    <button type="button" class="bo-btn bo-btn-ghost" title="Remove variant"
+                            @onclick="@(() => Content.Variants.Remove(row))">✕</button>
+                </div>
+            }
+            <button type="button" class="bo-btn bo-btn-ghost" @onclick="AddVariantRow">+ Add variant</button>
+        </div>
+
+        <div class="bo-cmp-field">
             <label class="bo-cmp-field-label">Image</label>
             <div style="display:flex; align-items:center; gap:12px;">
                 @if (!string.IsNullOrEmpty(Content.ImagePath))
@@ -96,12 +114,20 @@
         finally { _uploading = false; }
     }
 
+    private void AddVariantRow() => Content.Variants.Add(new VariantFormRow());
+
     private async Task SaveAsync()
     {
         _error = null;
         if (string.IsNullOrWhiteSpace(Content.Code)) { _error = "Code is required."; return; }
         if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
         if (Content.ProductCategoryId == Guid.Empty) { _error = "Category is required."; return; }
+        if (Content.Variants.Any(v => string.IsNullOrWhiteSpace(v.Name))) { _error = "Every variant needs a name."; return; }
+
+        // DisplayOrder follows the row order in the editor.
+        var variants = Content.Variants
+            .Select((v, i) => new ProductVariantInput(v.Id, v.Name.Trim(), v.Price, i + 1))
+            .ToList();
 
         _busy = true;
         try
@@ -116,7 +142,8 @@
                     Content.Price,
                     string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim(),
                     Content.ImagePath,
-                    Content.DisplayOrder));
+                    Content.DisplayOrder,
+                    variants));
                 Content.SavedId = id;
             }
             else
@@ -130,12 +157,18 @@
                     Content.Price,
                     string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim(),
                     Content.ImagePath,
-                    Content.DisplayOrder));
+                    Content.DisplayOrder,
+                    variants));
                 Content.SavedId = Content.Id;
             }
             Dialog.Close(Content);
         }
-        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (ValidationException vex)
+        {
+            _error = vex.Errors.Any()
+                ? string.Join("; ", vex.Errors.Select(e => e.ErrorMessage))
+                : vex.Message;
+        }
         catch (Exception ex) { _error = ex.Message; }
         finally { _busy = false; }
     }

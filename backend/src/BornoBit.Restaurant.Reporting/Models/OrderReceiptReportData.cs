@@ -19,7 +19,12 @@ public record OrderReceiptReportData(
     decimal? ChangeGiven,
     string? Notes,
     DateTime GeneratedAtUtc,
-    IReadOnlyList<OrderReceiptLine> Lines
+    IReadOnlyList<OrderReceiptLine> Lines,
+    decimal RoundingAdjustment = 0m,
+    decimal VatAmount = 0m,
+    decimal ServiceChargeAmount = 0m,
+    string? CashierName = null,
+    ReceiptBranding? Branding = null
 );
 
 public record OrderReceiptLine(

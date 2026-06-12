@@ -15,7 +15,8 @@ public record UpdateProductCommand(
     decimal Price,
     string? Description,
     string? ImagePath,
-    int DisplayOrder
+    int DisplayOrder,
+    IReadOnlyList<ProductVariantInput>? Variants = null
 ) : IRequest<Unit>;
 
 public class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
@@ -31,6 +32,14 @@ public class UpdateProductCommandValidator : AbstractValidator<UpdateProductComm
         RuleFor(x => x.ImagePath).MaximumLength(500);
         RuleFor(x => x.Price).GreaterThanOrEqualTo(0);
         RuleFor(x => x.DisplayOrder).GreaterThanOrEqualTo(0);
+        RuleForEach(x => x.Variants).ChildRules(v =>
+        {
+            v.RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
+            v.RuleFor(x => x.Price).GreaterThanOrEqualTo(0);
+        });
+        RuleFor(x => x.Variants)
+            .Must(v => v is null || v.Select(x => x.Name.Trim().ToLowerInvariant()).Distinct().Count() == v.Count)
+            .WithMessage("Variant names must be unique.");
     }
 }
 
@@ -43,6 +52,7 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
     public async Task<Unit> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
     {
         var entity = await _db.Products
+            .Include(p => p.Variants)
             .FirstOrDefaultAsync(p => p.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException($"Product {request.Id} not found.");
 
@@ -63,6 +73,16 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
             request.ImagePath,
             request.Description,
             request.DisplayOrder);
+
+        if (request.Variants is not null)
+        {
+            var existingIds = entity.Variants.Select(v => v.Id).ToHashSet();
+            entity.SyncVariants(request.Variants.Select(v => (v.Id, v.Name, v.Price, v.DisplayOrder)).ToList());
+            // The product is tracked, so new variants (pre-set Guid keys) would be discovered as
+            // Modified and saved as UPDATEs — mark them Added explicitly.
+            foreach (var v in entity.Variants.Where(v => !existingIds.Contains(v.Id)))
+                _db.ProductVariants.Add(v);
+        }
 
         await _db.SaveChangesAsync(cancellationToken);
         return Unit.Value;

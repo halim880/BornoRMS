@@ -2,18 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { readCart, clearCart, cartTotal, type CartItem } from "@/lib/cart";
+import { readCart, clearCart, cartTotal, lineKey, type CartItem } from "@/lib/cart";
+import { readTable, clearTable, type TableInfo } from "@/lib/table";
 import { formatMoney } from "@/lib/format";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [table, setTable] = useState<TableInfo | null>(null);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setCart(readCart());
+    const updateTable = () => setTable(readTable());
+    updateTable();
+    window.addEventListener("bb_table_changed", updateTable);
+    return () => window.removeEventListener("bb_table_changed", updateTable);
   }, []);
 
   const currency = cart[0]?.currency || "Tk";
@@ -26,10 +32,10 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "Takeaway",
-          tableId: null,
+          type: table ? "DineIn" : "Takeaway",
+          tableId: table?.id ?? null,
           notes: notes.trim() || null,
-          lines: cart.map((c) => ({ menuItemId: c.menuItemId, quantity: c.quantity })),
+          lines: cart.map((c) => ({ menuItemId: c.menuItemId, variantId: c.variantId, quantity: c.quantity })),
         }),
       });
       const data = await res.json();
@@ -60,8 +66,11 @@ export default function CheckoutPage() {
 
       <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
         {cart.map((c) => (
-          <div key={c.menuItemId} className="flex justify-between text-sm">
-            <span>{c.name} × {c.quantity}</span>
+          <div key={lineKey(c)} className="flex justify-between text-sm">
+            <span>
+              {c.name}
+              {c.variantName ? ` (${c.variantName})` : ""} × {c.quantity}
+            </span>
             <span>{formatMoney(c.price * c.quantity, c.currency)}</span>
           </div>
         ))}
@@ -73,7 +82,22 @@ export default function CheckoutPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-1 text-sm font-medium">Order type</div>
-        <div className="text-sm text-slate-600">Takeaway</div>
+        {table ? (
+          <div className="flex items-center justify-between text-sm text-slate-600">
+            <span>
+              Dine-in — <strong>Table {table.tableNumber}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={clearTable}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
+            >
+              Remove table (switch to takeaway)
+            </button>
+          </div>
+        ) : (
+          <div className="text-sm text-slate-600">Takeaway</div>
+        )}
         <label className="mt-4 block text-sm font-medium">Notes (optional)</label>
         <textarea
           value={notes}

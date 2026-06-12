@@ -24,6 +24,28 @@ builder.Services.AddScoped<BornoBit.Restaurant.Web.Services.IImageUploadService,
 builder.Services.AddApplication(typeof(BornoBit.Restaurant.Infrastructure.DependencyInjection).Assembly);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddReporting();
+builder.Services.Configure<BornoBit.Restaurant.Reporting.Models.ReceiptBranding>(
+    builder.Configuration.GetSection(BornoBit.Restaurant.Reporting.Models.ReceiptBranding.SectionName));
+
+// Local print agent: HTTP push to the agent's API, or SignalR hub the agent dials into.
+builder.Services.AddSignalR();
+builder.Services.Configure<BornoBit.Restaurant.Web.Services.Printing.PrintAgentOptions>(
+    builder.Configuration.GetSection(BornoBit.Restaurant.Web.Services.Printing.PrintAgentOptions.SectionName));
+builder.Services.AddHttpClient("PrintAgent", (sp, client) =>
+{
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BornoBit.Restaurant.Web.Services.Printing.PrintAgentOptions>>().Value;
+    if (Uri.TryCreate(opts.BaseUrl, UriKind.Absolute, out var baseUrl))
+        client.BaseAddress = baseUrl;
+    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, opts.TimeoutSeconds));
+    if (!string.IsNullOrWhiteSpace(opts.ApiKey))
+        client.DefaultRequestHeaders.Add("X-Api-Key", opts.ApiKey);
+});
+builder.Services.AddScoped<BornoBit.Restaurant.Web.Services.Printing.IReceiptPrintService,
+    BornoBit.Restaurant.Web.Services.Printing.ReceiptPrintService>();
+
+builder.Services.Configure<BornoBit.Restaurant.Web.Services.CustomerSiteOptions>(
+    builder.Configuration.GetSection(BornoBit.Restaurant.Web.Services.CustomerSiteOptions.SectionName));
+builder.Services.AddSingleton<BornoBit.Restaurant.Web.Services.TableQrService>();
 
 builder.Services.AddAuthentication("Cookies")
     .AddCookie("Cookies", options =>
@@ -64,7 +86,7 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<UnitSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StockSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
-        await scope.ServiceProvider.GetRequiredService<ChartOfAccountsSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<AccountingSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AppMenuSeeder>().SeedAsync();
     }
     catch (Exception ex)
@@ -96,6 +118,8 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.MapAccountEndpoints();
 app.MapReportEndpoints();
+// Agent connections authenticate via X-Agent-Key inside the hub — no cookie policy here.
+app.MapHub<BornoBit.Restaurant.Web.Hubs.PrintHub>("/hubs/print");
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

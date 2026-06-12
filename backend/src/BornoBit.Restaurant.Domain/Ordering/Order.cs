@@ -25,11 +25,14 @@ public class Order : AuditableEntity
     public decimal? AmountTendered { get; private set; }
     public decimal? ChangeGiven { get; private set; }
 
+    /// <summary>Cash round-off applied at the POS: negative floors the total, positive ceils it.</summary>
+    public decimal RoundingAdjustment { get; private set; }
+
     private readonly List<OrderLine> _lines = new();
     public IReadOnlyCollection<OrderLine> Lines => _lines.AsReadOnly();
 
     public decimal Subtotal => _lines.Sum(l => l.LineTotal);
-    public decimal GrandTotal => Math.Max(0m, Subtotal - DiscountAmount);
+    public decimal GrandTotal => Math.Max(0m, Subtotal - DiscountAmount + RoundingAdjustment);
     public decimal Total => GrandTotal;
 
     private Order() { }
@@ -62,7 +65,7 @@ public class Order : AuditableEntity
         };
     }
 
-    public OrderLine AddLine(Guid menuItemId, string code, string name, decimal unitPrice, string currency, int quantity = 1)
+    public OrderLine AddLine(Guid menuItemId, string code, string name, decimal unitPrice, string currency, int quantity = 1, Guid? variantId = null)
     {
         if (menuItemId == Guid.Empty) throw new ArgumentException("Menu item is required.", nameof(menuItemId));
         if (quantity < 1) throw new ArgumentOutOfRangeException(nameof(quantity));
@@ -72,6 +75,7 @@ public class Order : AuditableEntity
         {
             OrderId = Id,
             MenuItemId = menuItemId,
+            VariantId = variantId,
             Code = code,
             Name = name,
             UnitPriceSnapshot = unitPrice,
@@ -80,6 +84,40 @@ public class Order : AuditableEntity
         };
         _lines.Add(line);
         return line;
+    }
+
+    /// <summary>
+    /// Adds a line, or increases the quantity of an existing line with the same item + variant.
+    /// When increasing, the original <see cref="OrderLine.UnitPriceSnapshot"/> deliberately wins
+    /// even if the catalog price changed after the order was placed.
+    /// </summary>
+    public OrderLine AddOrIncreaseLine(Guid menuItemId, string code, string name, decimal unitPrice, string currency, int quantity = 1, Guid? variantId = null)
+    {
+        if (quantity < 1) throw new ArgumentOutOfRangeException(nameof(quantity));
+
+        var existing = _lines.FirstOrDefault(l => l.MenuItemId == menuItemId && l.VariantId == variantId);
+        if (existing is not null)
+        {
+            existing.Quantity += quantity;
+            return existing;
+        }
+
+        return AddLine(menuItemId, code, name, unitPrice, currency, quantity, variantId);
+    }
+
+    public void SetLineQuantity(Guid lineId, int quantity)
+    {
+        if (quantity < 1) throw new ArgumentOutOfRangeException(nameof(quantity));
+        var line = _lines.FirstOrDefault(l => l.Id == lineId)
+            ?? throw new InvalidOperationException("Order line not found.");
+        line.Quantity = quantity;
+    }
+
+    public void RemoveLine(Guid lineId)
+    {
+        var line = _lines.FirstOrDefault(l => l.Id == lineId)
+            ?? throw new InvalidOperationException("Order line not found.");
+        _lines.Remove(line);
     }
 
     public void Confirm() => TransitionTo(OrderStatus.Confirmed, expected: OrderStatus.Placed);
@@ -99,6 +137,30 @@ public class Order : AuditableEntity
     }
 
     public void UpdateNotes(string? notes) => Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+
+    public void UpdateTypeAndTable(OrderType orderType, Guid? restaurantTableId)
+    {
+        EnsureEditable();
+        if (orderType == OrderType.DineIn && restaurantTableId is null)
+            throw new ArgumentException("Dine-in orders require a table.", nameof(restaurantTableId));
+
+        OrderType = orderType;
+        RestaurantTableId = orderType == OrderType.DineIn ? restaurantTableId : null;
+    }
+
+    public void ReassignCustomer(Guid customerId)
+    {
+        EnsureEditable();
+        if (customerId == Guid.Empty) throw new ArgumentException("Customer is required.", nameof(customerId));
+        CustomerId = customerId;
+    }
+
+    private void EnsureEditable()
+    {
+        if (IsPaid) throw new InvalidOperationException("Cannot modify a paid order.");
+        if (Status is OrderStatus.Cancelled or OrderStatus.Completed)
+            throw new InvalidOperationException($"Cannot modify a {Status} order.");
+    }
 
     public void ApplyDiscount(decimal? percent, decimal? amount, string? reason)
     {
@@ -128,6 +190,15 @@ public class Order : AuditableEntity
 
         DiscountAmount = computed;
         DiscountReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+    }
+
+    public void ApplyRounding(decimal adjustment)
+    {
+        if (IsPaid) throw new InvalidOperationException("Cannot change rounding on a paid order.");
+        if (Status == OrderStatus.Cancelled) throw new InvalidOperationException("Cannot round a cancelled order.");
+        if (Math.Abs(adjustment) >= 1m)
+            throw new ArgumentOutOfRangeException(nameof(adjustment), "Rounding adjustment must be a fraction of one.");
+        RoundingAdjustment = adjustment;
     }
 
     public void RecordPayment(PaymentMethod method, decimal tendered)

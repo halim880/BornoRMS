@@ -1,0 +1,33 @@
+@using BornoBit.Restaurant.Web.Services
+@inject TableQrService QrService
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+        <img src="@_qrDataUri" alt="QR code for table @Content.TableNumber" style="width:240px; height:240px;" />
+        <div style="font-size: var(--bo-font-xs); color: var(--bo-text-muted); text-align:center;">
+            Customers scan this code to open the menu with table <strong>@Content.TableNumber</strong> pre-selected.
+        </div>
+        <code style="font-size: var(--bo-font-xs); user-select:all; word-break:break-all; background:var(--bo-bg-soft); padding:6px 10px; border-radius:6px;">@_url</code>
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="Close">Close</BoButton>
+    <a class="bo-btn bo-btn-primary" href="/inventory/tables/@Content.Id/qr-print" target="_blank">Print</a>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public TableQrModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string _url = string.Empty;
+    private string _qrDataUri = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _url = QrService.BuildTableUrl(Content.Id);
+        _qrDataUri = QrService.BuildQrPngDataUri(_url);
+    }
+
+    private void Close() => Dialog.Cancel();
+}

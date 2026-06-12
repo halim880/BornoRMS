@@ -1,0 +1,104 @@
+@page "/inventory/tables/{TableId:guid}/qr-print"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@layout BornoBit.Restaurant.Web.Components.Layout.PrintLayout
+@using BornoBit.Restaurant.Application.Dining.Queries
+@using BornoBit.Restaurant.Web.Services
+@using MediatR
+@inject ISender Mediator
+@inject TableQrService QrService
+@inject IJSRuntime Js
+@inject IConfiguration Configuration
+
+<PageTitle>Table QR · BornoBit.Restaurant</PageTitle>
+
+@if (_notFound)
+{
+    <div style="padding:40px; text-align:center;">Table not found.</div>
+}
+else if (_table is not null)
+{
+    <div class="qr-print-card">
+        <div class="qr-restaurant">@_restaurantName</div>
+        <div class="qr-table-number">Table @_table.TableNumber</div>
+        <img src="@_qrDataUri" alt="QR code for table @_table.TableNumber" class="qr-image" />
+        <div class="qr-caption">Scan to view the menu &amp; order from your phone</div>
+        <button type="button" class="bo-btn bo-btn-primary qr-print-btn" @onclick="PrintAsync">Print</button>
+    </div>
+}
+
+<style>
+    .qr-print-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        max-width: 480px;
+        margin: 40px auto;
+        padding: 40px;
+        border: 2px solid #0F172A;
+        border-radius: 16px;
+        text-align: center;
+    }
+
+    .qr-restaurant {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .qr-table-number {
+        font-size: 40px;
+        font-weight: 800;
+    }
+
+    .qr-image {
+        width: 320px;
+        height: 320px;
+    }
+
+    .qr-caption {
+        font-size: 16px;
+        color: #334155;
+    }
+
+    @@media print {
+        .qr-print-btn {
+            display: none;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public Guid TableId { get; set; }
+
+    private TableAdminDto? _table;
+    private bool _notFound;
+    private string _qrDataUri = string.Empty;
+    private string _restaurantName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _restaurantName = Configuration["Receipt:Name"] ?? "BornoBit Restaurant";
+
+        var tables = await Mediator.Send(new GetAllTablesQuery());
+        _table = tables.FirstOrDefault(t => t.Id == TableId);
+        if (_table is null)
+        {
+            _notFound = true;
+            return;
+        }
+
+        _qrDataUri = QrService.BuildQrPngDataUri(QrService.BuildTableUrl(_table.Id), pixelsPerModule: 16);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _table is not null)
+        {
+            await Js.InvokeVoidAsync("window.print");
+        }
+    }
+
+    private Task PrintAsync() => Js.InvokeVoidAsync("window.print").AsTask();
+}

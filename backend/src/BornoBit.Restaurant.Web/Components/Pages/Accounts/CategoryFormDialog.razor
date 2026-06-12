@@ -1,0 +1,65 @@
+@using BornoBit.Restaurant.Application.Accounting.Categories
+@using BornoBit.Restaurant.Domain.Accounting
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="120" />
+
+        <BoSelect TOption="TransactionType"
+                  Items="@_types"
+                  OptionValue="@(t => ((int)t).ToString())"
+                  OptionText="@(t => t.ToString())"
+                  SelectedOption="@Content.Type"
+                  SelectedOptionChanged="@(t => Content.Type = t)"
+                  Label="Type" Required="true" Style="width:100%;" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public CategoryFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private static readonly TransactionType[] _types = Enum.GetValues<TransactionType>();
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateCategoryCommand(Content.Name.Trim(), Content.Type));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateCategoryCommand(Content.Id.Value, Content.Name.Trim(), Content.Type));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

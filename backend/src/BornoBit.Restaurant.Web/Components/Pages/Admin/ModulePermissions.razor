@@ -1,0 +1,165 @@
+@page "/admin/module-permissions"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.MenuPermissions
+@using MediatR
+@inject ISender Mediator
+@inject IBoToastService ToastService
+
+<PageTitle>Module permissions · BornoBit.Restaurant</PageTitle>
+
+<div style="display:flex; flex-direction:column; gap:16px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+        <h1>Module permissions</h1>
+        <BoButton Variant="primary"
+                      OnClick="SaveAsync"
+                      Disabled="@(_selectedRoleId is null || _saving || _loadingModules)"
+                      Loading="_saving">
+            Save changes
+        </BoButton>
+    </div>
+
+    <p style="color:var(--neutral-foreground-hint);">
+        Choose a role and check the modules it should see in the module switcher. Checking a module makes it
+        available even when none of its menus are permitted. Unchecking a module does <strong>not</strong> hide it while
+        any of its menus are still permitted on the <a href="/admin/menu-permissions">Menu permissions</a> page.
+        SuperAdmin always sees every module.
+    </p>
+
+    @if (_loadingRoles)
+    {
+        <BoSpinner />
+    }
+    else if (_loadError is not null)
+    {
+        <BoMessageBar Intent="error">@_loadError</BoMessageBar>
+    }
+    else
+    {
+        <div style="max-width:320px;">
+            <BoSelect TOption="RoleDto"
+                      Items="_roles"
+                      OptionText="@(r => r.Name)"
+                      OptionValue="@(r => r.Id.ToString())"
+                      SelectedOption="@_selectedRole"
+                      SelectedOptionChanged="OnRoleChangedAsync"
+                      Label="Role"
+                      Placeholder="Select a role…" />
+        </div>
+
+        @if (_selectedRoleId is null)
+        {
+            <div class="bo-cmp-cardish">
+                <p style="margin:0;color:var(--neutral-foreground-hint);">Select a role to view and edit its module permissions.</p>
+            </div>
+        }
+        else if (_loadingModules)
+        {
+            <BoSpinner />
+        }
+        else if (_modulesError is not null)
+        {
+            <BoMessageBar Intent="error">@_modulesError</BoMessageBar>
+        }
+        else if (_modules.Count == 0)
+        {
+            <div class="bo-cmp-cardish"><p style="margin:0;">No modules found.</p></div>
+        }
+        else
+        {
+            <div class="bo-cmp-cardish">
+                <div class="module-perm-list">
+                    @foreach (var m in _modules)
+                    {
+                        <div class="module-perm-row">
+                            <BoCheckbox @key="m.Id"
+                                            Value="@_checked.Contains(m.Id)"
+                                            ValueChanged="@(v => Toggle(m, v))" />
+                            @if (!string.IsNullOrWhiteSpace(m.Icon))
+                            {
+                                <BoIcon Name="@m.Icon" Size="18" />
+                            }
+                            <span class="module-perm-title">@m.Title</span>
+                            @if (!_checked.Contains(m.Id) && m.PermittedChildCount > 0)
+                            {
+                                <span class="module-perm-hint">still visible — @m.PermittedChildCount permitted menu(s)</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .module-perm-list { display:flex; flex-direction:column; gap:4px; }
+    .module-perm-row { display:flex; align-items:center; gap:8px; padding:4px 0; }
+    .module-perm-title { font-weight:500; }
+    .module-perm-hint { color:var(--neutral-foreground-hint); font-size:12px; margin-left:8px; }
+</style>
+
+@code {
+    private bool _loadingRoles = true;
+    private bool _loadingModules;
+    private bool _saving;
+    private string? _loadError;
+    private string? _modulesError;
+
+    private List<RoleDto> _roles = new();
+    private RoleDto? _selectedRole;
+    private Guid? _selectedRoleId => _selectedRole?.Id;
+
+    private List<ModulePermissionDto> _modules = new();
+    private HashSet<Guid> _checked = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var list = await Mediator.Send(new GetRolesQuery());
+            _roles = list.ToList();
+        }
+        catch (Exception ex) { _loadError = $"Failed to load roles: {ex.Message}"; }
+        finally { _loadingRoles = false; }
+    }
+
+    private async Task OnRoleChangedAsync(RoleDto? role)
+    {
+        _selectedRole = role;
+        _modules = new();
+        _checked = new();
+        if (role is null) return;
+        await LoadModulesAsync(role.Id);
+    }
+
+    private async Task LoadModulesAsync(Guid roleId)
+    {
+        _loadingModules = true; _modulesError = null;
+        try
+        {
+            var modules = await Mediator.Send(new GetModulePermissionsQuery(roleId));
+            _modules = modules.ToList();
+            _checked = _modules.Where(m => m.IsPermitted).Select(m => m.Id).ToHashSet();
+        }
+        catch (Exception ex) { _modulesError = $"Failed to load modules: {ex.Message}"; }
+        finally { _loadingModules = false; }
+    }
+
+    private void Toggle(ModulePermissionDto module, bool isChecked)
+    {
+        if (isChecked) _checked.Add(module.Id); else _checked.Remove(module.Id);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_selectedRoleId is null) return;
+        _saving = true;
+        try
+        {
+            await Mediator.Send(new SaveModulePermissionsCommand(_selectedRoleId.Value, _checked.ToList()));
+            ToastService.ShowSuccess($"Saved module permissions for '{_selectedRole?.Name}'.");
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _saving = false; }
+    }
+}

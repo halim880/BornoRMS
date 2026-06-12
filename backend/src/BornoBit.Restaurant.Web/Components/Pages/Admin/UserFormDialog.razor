@@ -59,7 +59,8 @@
     private string? _generatedPassword;
     private bool _busy;
     private bool IsEdit => Content.Id is not null;
-    private static readonly string[] _selectableRoles = Roles.All.Where(r => r != Roles.SuperAdmin).ToArray();
+    // Fully qualified: the Roles.razor page component shadows Domain.Identity.Roles in this namespace.
+    private static readonly string[] _selectableRoles = Domain.Identity.Roles.All.Where(r => r != Domain.Identity.Roles.SuperAdmin).ToArray();
 
     private void ToggleRole(string role, bool isChecked)
     {

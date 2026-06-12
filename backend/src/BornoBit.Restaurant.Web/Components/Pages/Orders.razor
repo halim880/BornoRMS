@@ -2,67 +2,139 @@
 @attribute [Authorize(Policy = "Staff")]
 @using Microsoft.AspNetCore.Authorization
 @using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Domain.Ordering
 @using BornoBit.Restaurant.Shared.Common
 @using MediatR
 @inject ISender Sender
+@inject IBoDialogService DialogService
 @rendermode InteractiveServer
 
 <PageTitle>Orders · BornoBit</PageTitle>
 
-<PageHeader Title="Incoming Orders" Description="Live customer orders. Download a receipt for any order.">
+<PageHeader Title="Incoming Orders" Description="Live customer orders. Tap a card to manage an order.">
     <Actions>
         <BoButton Variant="ghost" OnClick="Load">Refresh</BoButton>
     </Actions>
 </PageHeader>
 
-@if (_loading)
-{
-    <LoadingState Message="Loading orders…" />
-}
-else if (_result is null || _result.Items.Count == 0)
-{
-    <EmptyState Icon="DocumentBulletList" Title="No orders yet"
-                Description="Orders placed by customers will appear here." />
-}
-else
-{
-    <DataGrid TItem="OrderListItemDto" Items="@_result.Items" PageSize="25"
-              SearchPlaceholder="Search order #, customer, phone…"
-              SearchPredicate="@((o, q) => o.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase)
-                  || (o.CustomerName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-                  || o.CustomerPhone.Contains(q, StringComparison.OrdinalIgnoreCase))">
-        <Columns>
-            <DataGridColumn TItem="OrderListItemDto" Title="Order #" Property="@(o => o.OrderNumber)" Sortable="true">
-                <strong>@context.OrderNumber</strong>
-            </DataGridColumn>
-            <DataGridColumn TItem="OrderListItemDto" Title="Customer">
-                @(context.CustomerName ?? context.CustomerPhone)
-            </DataGridColumn>
-            <DataGridColumn TItem="OrderListItemDto" Title="Type" Property="@(o => o.OrderType)" Sortable="true" />
-            <DataGridColumn TItem="OrderListItemDto" Title="Table">
-                @(context.TableNumber ?? "—")
-            </DataGridColumn>
-            <DataGridColumn TItem="OrderListItemDto" Title="Items" Align="DataGridAlign.Center" Width="80px">
-                @context.ItemCount
-            </DataGridColumn>
-            <DataGridColumn TItem="OrderListItemDto" Title="Total" Align="DataGridAlign.Right" Width="120px">
-                <strong>@context.Currency @context.Total.ToString("0.##")</strong>
-            </DataGridColumn>
-            <DataGridColumn TItem="OrderListItemDto" Title="Status" Align="DataGridAlign.Center" Width="280px">
-                <OrderStatusCell Order="context" OnChanged="Load" />
-            </DataGridColumn>
-            <DataGridColumn TItem="OrderListItemDto" Title="Placed" Property="@(o => (object?)o.OrderedAtUtc)" Format="g" Width="150px" />
-            <DataGridColumn TItem="OrderListItemDto" Title="" Align="DataGridAlign.Right" Width="110px">
-                <a class="bo-link" href="/reports/order/@context.Id/receipt.pdf" target="_blank">Invoice</a>
-            </DataGridColumn>
-        </Columns>
-    </DataGrid>
-    <p style="color:var(--bo-text-muted); font-size:var(--bo-font-sm); margin-top:8px;">@_result.TotalCount total</p>
-}
+<div class="order-filters">
+    <div class="order-filter-group" role="group" aria-label="Filter by order type">
+        @foreach (var f in _filters)
+        {
+            var isActive = f.Type == _activeFilter;
+            <button type="button" class="order-filter-btn @(isActive ? "active" : "")"
+                    @onclick="@(() => _activeFilter = f.Type)">
+                <span>@f.Label</span>
+                <span class="order-filter-count">@CountFor(f.Type)</span>
+            </button>
+        }
+    </div>
+
+    <div class="order-filter-group" role="group" aria-label="Filter by order status">
+        @foreach (var s in _statusFilters)
+        {
+            var isActive = s.Status == _activeStatus;
+            var tone = s.Status is { } st ? StatusTone(st) : "neutral";
+            <button type="button" class="order-filter-btn @(isActive ? "active" : "")" data-tone="@tone"
+                    @onclick="@(() => _activeStatus = s.Status)">
+                <span>@s.Label</span>
+                <span class="order-filter-count">@CountForStatus(s.Status)</span>
+            </button>
+        }
+    </div>
+</div>
+
+<div class="order-panel">
+    @if (_loading)
+    {
+        <LoadingState Message="Loading orders…" />
+    }
+    else if (_result is null || _result.Items.Count == 0)
+    {
+        <EmptyState Icon="DocumentBulletList" Title="No orders yet"
+                    Description="Orders placed by customers will appear here." />
+    }
+    else if (Filtered.Count == 0)
+    {
+        <EmptyState Icon="DocumentBulletList" Title="No matching orders"
+                    Description="Adjust the type or status filters above to see other orders." />
+    }
+    else
+    {
+        <div class="order-chips">
+            @foreach (var o in Filtered)
+            {
+                <button type="button" class="order-chip" @onclick="@(() => OpenAsync(o))">
+                    <div class="order-chip-top">
+                        <span class="order-chip-no">@o.OrderNumber</span>
+                        <BoBadge Tone="@StatusTone(o.Status)">@o.Status</BoBadge>
+                    </div>
+                    <div class="order-chip-tags">
+                        <BoBadge Tone="info">@o.OrderType</BoBadge>
+                        @if (o.IsPaid)
+                        {
+                            <BoBadge Tone="success">Paid</BoBadge>
+                        }
+                        @if (o.TableNumber is not null)
+                        {
+                            <BoBadge Tone="neutral">Table @o.TableNumber</BoBadge>
+                        }
+                    </div>
+                    <div class="order-chip-meta">
+                        <span class="order-chip-cust">@(o.CustomerName ?? o.CustomerPhone)</span>
+                        <span>@o.ItemCount item@(o.ItemCount == 1 ? "" : "s")</span>
+                    </div>
+                    <div class="order-chip-foot">
+                        <span class="order-chip-time">@o.OrderedAtUtc.ToLocalTime().ToString("g")</span>
+                        <span class="order-chip-total">@o.Currency @o.Total.ToString("0.##")</span>
+                    </div>
+                </button>
+            }
+        </div>
+        <p class="order-count">@Filtered.Count shown · @_result.TotalCount total</p>
+    }
+</div>
 
 @code {
     private PagedResult<OrderListItemDto>? _result;
     private bool _loading = true;
+    private OrderType? _activeFilter; // null = All
+    private OrderStatus? _activeStatus; // null = All
+
+    private readonly (string Label, OrderType? Type)[] _filters =
+    {
+        ("All", null),
+        ("Dine-In", OrderType.DineIn),
+        ("Delivery", OrderType.Delivery),
+        ("Collection", OrderType.Collection),
+        ("Takeaway", OrderType.Takeaway),
+    };
+
+    private readonly (string Label, OrderStatus? Status)[] _statusFilters =
+    {
+        ("All", null),
+        ("Placed", OrderStatus.Placed),
+        ("Confirmed", OrderStatus.Confirmed),
+        ("Preparing", OrderStatus.Preparing),
+        ("Ready", OrderStatus.Ready),
+        ("Served", OrderStatus.Served),
+        ("Completed", OrderStatus.Completed),
+        ("Cancelled", OrderStatus.Cancelled),
+    };
+
+    private List<OrderListItemDto> Filtered =>
+        _result is null
+            ? new()
+            : _result.Items
+                .Where(o => _activeFilter is not { } t || o.OrderType == t)
+                .Where(o => _activeStatus is not { } s || o.Status == s)
+                .ToList();
+
+    private int CountFor(OrderType? type) =>
+        _result is null ? 0 : type is { } t ? _result.Items.Count(o => o.OrderType == t) : _result.Items.Count;
+
+    private int CountForStatus(OrderStatus? status) =>
+        _result is null ? 0 : status is { } s ? _result.Items.Count(o => o.Status == s) : _result.Items.Count;
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -73,4 +145,126 @@ else
         _result = await Sender.Send(new GetOrdersQuery(Page: 1, PageSize: 100));
         _loading = false;
     }
+
+    private async Task OpenAsync(OrderListItemDto order)
+    {
+        var result = await DialogService.ShowAsync<OrderDetailDialog, Guid>(
+            order.Id,
+            new BoDialogOptions { Title = $"Order · {order.OrderNumber}", Width = "min(640px, 94vw)" });
+        if (!result.Cancelled && result.Data is true)
+            await Load();
+    }
+
+    private static string StatusTone(OrderStatus status) => status switch
+    {
+        OrderStatus.Placed => "warning",
+        OrderStatus.Confirmed => "info",
+        OrderStatus.Preparing => "primary",
+        OrderStatus.Ready => "success",
+        OrderStatus.Served => "success",
+        OrderStatus.Completed => "neutral",
+        OrderStatus.Cancelled => "danger",
+        _ => "neutral"
+    };
 }
+
+<style>
+    /* White surface sections, matching the POS page cards */
+    .order-filters, .order-panel {
+        background:var(--bo-bg-card,#fff); border:1px solid var(--bo-border-soft,#EEF2F6);
+        border-radius:var(--bo-radius-lg,12px); box-shadow:var(--bo-shadow-xs);
+    }
+    .order-filters {
+        display:flex; gap:20px; flex-wrap:wrap; align-items:center;
+        padding:14px 16px; margin-bottom:16px;
+    }
+    .order-panel { padding:16px; }
+    .order-count { color:var(--bo-text-muted); font-size:var(--bo-font-sm); margin:12px 2px 0; }
+
+    /* Connected segmented button group */
+    .order-filter-group { display:inline-flex; flex-wrap:wrap; }
+    .order-filter-btn {
+        position:relative;
+        display:inline-flex; align-items:center; gap:8px;
+        padding:8px 14px; margin-left:-1px;
+        background:#fff; border:1px solid var(--bo-border,#E2E8F0); border-radius:0;
+        color:var(--bo-text-muted); font-size:13px; font-weight:600; cursor:pointer;
+        transition:background 100ms, border-color 100ms, color 100ms;
+    }
+    .order-filter-group .order-filter-btn:first-child {
+        margin-left:0; border-top-left-radius:999px; border-bottom-left-radius:999px;
+    }
+    .order-filter-group .order-filter-btn:last-child {
+        border-top-right-radius:999px; border-bottom-right-radius:999px;
+    }
+    .order-filter-btn:hover { color:var(--bo-text); z-index:1; }
+    .order-filter-btn.active { z-index:2; font-weight:700; }
+
+    .order-filter-count {
+        min-width:20px; padding:0 6px; height:18px; border-radius:999px;
+        display:inline-flex; align-items:center; justify-content:center;
+        font-size:11px; font-weight:700; background:var(--bo-bg-soft,#F1F5F9); color:var(--bo-text-muted);
+    }
+
+    /* Default active (order-type group + neutral statuses) */
+    .order-filter-btn.active {
+        background:var(--bo-primary-tint); border-color:#FFC480; color:#A85A00;
+    }
+    .order-filter-btn.active .order-filter-count { background:#FFC480; color:#7A4400; }
+
+    /* Color-coded active states for the status group, keyed off data-tone */
+    .order-filter-btn[data-tone="warning"].active {
+        background:var(--bo-warning-soft,#FEF3C7); border-color:var(--bo-warning,#D97706); color:var(--bo-warning-strong,#B45309);
+    }
+    .order-filter-btn[data-tone="warning"].active .order-filter-count { background:var(--bo-warning,#D97706); color:#fff; }
+
+    .order-filter-btn[data-tone="info"].active {
+        background:var(--bo-info-soft,#DBEAFE); border-color:var(--bo-info,#2563EB); color:var(--bo-info-strong,#1D4ED8);
+    }
+    .order-filter-btn[data-tone="info"].active .order-filter-count { background:var(--bo-info,#2563EB); color:#fff; }
+
+    .order-filter-btn[data-tone="primary"].active {
+        background:var(--bo-primary-tint,#ECFEFF); border-color:var(--bo-primary,#0E7490); color:var(--bo-primary-strong,#155E75);
+    }
+    .order-filter-btn[data-tone="primary"].active .order-filter-count { background:var(--bo-primary,#0E7490); color:#fff; }
+
+    .order-filter-btn[data-tone="success"].active {
+        background:var(--bo-success-soft,#DCFCE7); border-color:var(--bo-success,#16A34A); color:var(--bo-success-strong,#15803D);
+    }
+    .order-filter-btn[data-tone="success"].active .order-filter-count { background:var(--bo-success,#16A34A); color:#fff; }
+
+    .order-filter-btn[data-tone="danger"].active {
+        background:var(--bo-danger-soft,#FEE2E2); border-color:var(--bo-danger,#DC2626); color:var(--bo-danger-strong,#B91C1C);
+    }
+    .order-filter-btn[data-tone="danger"].active .order-filter-count { background:var(--bo-danger,#DC2626); color:#fff; }
+
+    .order-filter-btn[data-tone="neutral"].active {
+        background:var(--bo-bg-soft,#F1F5F9); border-color:var(--bo-text-muted,#334155); color:var(--bo-text-muted,#334155);
+    }
+    .order-filter-btn[data-tone="neutral"].active .order-filter-count { background:var(--bo-text-muted,#334155); color:#fff; }
+
+    .order-chips {
+        display:grid; gap:14px;
+        grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+    }
+    .order-chip {
+        display:flex; flex-direction:column; gap:10px;
+        padding:14px 16px; text-align:left; cursor:pointer;
+        background:var(--bo-surface,#fff); border:1px solid var(--bo-border,#E2E8F0);
+        border-radius:14px; box-shadow:0 1px 2px rgba(15,23,42,0.04);
+        transition:border-color 120ms, box-shadow 120ms, transform 120ms;
+    }
+    .order-chip:hover {
+        border-color:#FFC480; box-shadow:0 4px 12px rgba(15,23,42,0.08); transform:translateY(-1px);
+    }
+    .order-chip-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .order-chip-no { font-weight:700; font-size:14px; color:var(--bo-text); }
+    .order-chip-tags { display:flex; gap:6px; flex-wrap:wrap; }
+    .order-chip-meta { display:flex; align-items:center; justify-content:space-between; gap:8px;
+                       font-size:13px; color:var(--bo-text-muted); }
+    .order-chip-cust { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .order-chip-foot { display:flex; align-items:center; justify-content:space-between; gap:8px;
+                       border-top:1px solid var(--bo-border,#eee); padding-top:8px; }
+    .order-chip-time { font-size:12px; color:var(--bo-text-muted); }
+    .order-chip-total { font-weight:700; font-size:15px; color:var(--bo-text); }
+</style>

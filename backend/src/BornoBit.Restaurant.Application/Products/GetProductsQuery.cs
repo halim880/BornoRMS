@@ -24,7 +24,12 @@ public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, IReadOn
             orderby p.DisplayOrder, p.Name
             select new ProductDto(
                 p.Id, p.Code, p.Name, p.BanglaName, p.ProductCategoryId, c.Name,
-                p.Price, p.Currency, p.Description, p.ImagePath, p.DisplayOrder, p.IsActive))
+                p.Price, p.Currency, p.Description, p.ImagePath, p.DisplayOrder, p.IsActive,
+                _db.ProductVariants
+                    .Where(v => v.ProductId == p.Id && v.IsActive)
+                    .OrderBy(v => v.DisplayOrder).ThenBy(v => v.Name)
+                    .Select(v => new ProductVariantDto(v.Id, v.Name, v.Price, v.DisplayOrder))
+                    .ToList()))
             .ToListAsync(cancellationToken);
     }
 }

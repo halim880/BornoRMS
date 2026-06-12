@@ -1,0 +1,179 @@
+@using BornoBit.Restaurant.Application.Ordering.Pos
+@using BornoBit.Restaurant.Domain.Ordering
+@using MediatR
+@inject ISender Sender
+
+<BoDialogBody>
+    <div class="no-form">
+        <div class="no-tabs">
+            @foreach (var type in _types)
+            {
+                <button type="button" @key="type"
+                        class="no-tab @(Content.Type == type ? "no-tab--active" : null)"
+                        @onclick="() => SetType(type)">
+                    @TypeLabel(type)
+                </button>
+            }
+        </div>
+
+        @if (Content.Type == OrderType.DineIn)
+        {
+            <div class="no-section">
+                <span class="no-section-label">Select a Table</span>
+                @if (Content.Tables.Count == 0)
+                {
+                    <BoMessageBar Intent="warning">No tables configured — add them from Inventory → Tables.</BoMessageBar>
+                }
+                else
+                {
+                    var available = Content.Tables.Where(t => !Content.OccupiedTableIds.Contains(t.Id)).ToList();
+                    @if (available.Count == 0)
+                    {
+                        <BoMessageBar Intent="warning">All tables are occupied.</BoMessageBar>
+                    }
+                    else
+                    {
+                        <div class="table-grid">
+                            @foreach (var t in available)
+                            {
+                                <button type="button" @key="t.Id"
+                                        class="table-chip @(Content.TableId == t.Id ? "table-chip--active" : null)"
+                                        @onclick="() => Content.TableId = t.Id">
+                                    <span class="table-chip-no">@t.TableNumber</span>
+                                    <span class="table-chip-cap">@t.Capacity seats</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        }
+
+        <div class="no-section">
+            <span class="no-section-label">Customer Details</span>
+            <BoInput @bind-Value="Content.Name" Label="Name" />
+            <BoInput @bind-Value="Content.Phone" Label="Phone" Placeholder="01XXXXXXXXX" />
+            <BoInput @bind-Value="Content.Address" Label="Address" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Cancel())" Disabled="_busy">Close</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy" Disabled="@(!CanSave)">Save</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public NewOrderModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private static readonly OrderType[] _types =
+        { OrderType.Delivery, OrderType.DineIn, OrderType.Collection, OrderType.Waiting };
+
+    private bool _busy;
+    private string? _error;
+
+    private bool CanSave => !_busy
+        && (Content.Type != OrderType.DineIn
+            || (Content.TableId is { } t && !Content.OccupiedTableIds.Contains(t)));
+
+    private void SetType(OrderType type)
+    {
+        Content.Type = type;
+        if (type != OrderType.DineIn) Content.TableId = null;
+    }
+
+    private static string TypeLabel(OrderType type) => type switch
+    {
+        OrderType.DineIn => "Dine In",
+        OrderType.Delivery => "Delivery",
+        OrderType.Collection => "Collection",
+        OrderType.Waiting => "Waiting",
+        _ => type.ToString()
+    };
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            if (Content.EditOrderId is { } editId)
+            {
+                var result = await Sender.Send(new UpdatePosOrderCommand(
+                    editId, Content.Type, Content.TableId, Content.Phone, Content.Name, Content.Address));
+                Content.CreatedOrderId = result.OrderId;
+                Content.CreatedOrderNumber = result.OrderNumber;
+            }
+            else
+            {
+                var result = await Sender.Send(new CreatePosOrderCommand(
+                    Content.Type, Content.TableId, Content.Phone, Content.Name, Content.Address));
+                Content.CreatedOrderId = result.OrderId;
+                Content.CreatedOrderNumber = result.OrderNumber;
+            }
+
+            Dialog.Close(Content);
+        }
+        catch (FluentValidation.ValidationException vex)
+        {
+            _error = vex.Errors.Any()
+                ? string.Join("; ", vex.Errors.Select(e => e.ErrorMessage))
+                : vex.Message;
+            _busy = false;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _busy = false;
+        }
+    }
+}
+
+<style>
+    .no-form { display: flex; flex-direction: column; gap: 14px; }
+
+    .no-tabs {
+        display: flex; gap: 6px; flex-wrap: wrap;
+        padding: 4px; border-radius: 999px;
+        background: var(--bo-bg-soft); border: 1px solid var(--bo-border-soft);
+    }
+    .no-tab {
+        flex: 1; padding: 8px 12px; border: none; border-radius: 999px; cursor: pointer;
+        background: transparent; color: var(--bo-text-muted);
+        font-size: 13px; font-weight: 600; white-space: nowrap;
+        transition: background .12s, color .12s;
+    }
+    .no-tab--active {
+        background: color-mix(in srgb, var(--bo-primary) 16%, var(--bo-bg-card));
+        color: var(--bo-primary-strong, var(--bo-primary));
+        box-shadow: 0 1px 3px rgb(0 0 0 / .10);
+    }
+
+    .no-section { display: flex; flex-direction: column; gap: 8px; }
+    .no-section-label { font-size: 12px; font-weight: 700; color: var(--bo-text-muted); }
+
+    .table-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 6px;
+        max-height: 170px; overflow-y: auto; padding: 2px;
+    }
+    .table-chip {
+        display: flex; flex-direction: column; align-items: center; gap: 1px;
+        padding: 7px 4px; cursor: pointer;
+        border: 1px solid var(--bo-border); border-radius: 8px;
+        background: var(--bo-bg-card); color: var(--bo-text);
+        transition: border-color .12s, background .12s;
+    }
+    .table-chip:hover { border-color: var(--bo-primary); }
+    .table-chip--active {
+        border-color: var(--bo-primary);
+        background: var(--bo-primary); color: var(--bo-on-primary, #fff);
+    }
+    .table-chip-no { font-weight: 700; font-size: 13px; }
+    .table-chip-cap { font-size: 11px; opacity: .75; }
+</style>

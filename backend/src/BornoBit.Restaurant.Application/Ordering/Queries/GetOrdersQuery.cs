@@ -74,7 +74,7 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedResult
                 x.Order.Lines.Count(),
                 x.Order.Lines.Sum(l => (decimal?)l.UnitPriceSnapshot * l.Quantity) ?? 0m,
                 x.Order.DiscountAmount,
-                (x.Order.Lines.Sum(l => (decimal?)l.UnitPriceSnapshot * l.Quantity) ?? 0m) - x.Order.DiscountAmount,
+                (x.Order.Lines.Sum(l => (decimal?)l.UnitPriceSnapshot * l.Quantity) ?? 0m) - x.Order.DiscountAmount + x.Order.RoundingAdjustment,
                 x.Order.IsPaid))
             .ToListAsync(cancellationToken);
 

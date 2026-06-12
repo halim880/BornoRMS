@@ -17,12 +17,20 @@ public record MenuItemDto(
     Guid Id,
     string Code,
     string Name,
+    string? BanglaName,
     string? Description,
     decimal Price,
     string Currency,
     string? ImageUrl,
-    int DisplayOrder);
+    int DisplayOrder,
+    IReadOnlyList<MenuVariantDto> Variants);
 
+public record MenuVariantDto(Guid Id, string Name, decimal Price, int DisplayOrder);
+
+/// <summary>
+/// Customer-facing menu. Reads the same <c>Products</c>/<c>ProductCategories</c> catalog the POS
+/// and waiter screens use, so availability toggles take effect everywhere at once.
+/// </summary>
 public class GetMenuQueryHandler : IRequestHandler<GetMenuQuery, IReadOnlyList<MenuCategoryDto>>
 {
     private readonly IAppDbContext _db;
@@ -31,7 +39,7 @@ public class GetMenuQueryHandler : IRequestHandler<GetMenuQuery, IReadOnlyList<M
 
     public async Task<IReadOnlyList<MenuCategoryDto>> Handle(GetMenuQuery request, CancellationToken cancellationToken)
     {
-        var categories = await _db.MenuCategories
+        var categories = await _db.ProductCategories
             .Where(c => c.IsActive)
             .OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name)
             .Select(c => new MenuCategoryDto(
@@ -39,11 +47,17 @@ public class GetMenuQueryHandler : IRequestHandler<GetMenuQuery, IReadOnlyList<M
                 c.Name,
                 c.Description,
                 c.DisplayOrder,
-                _db.MenuItems
-                    .Where(i => i.MenuCategoryId == c.Id && i.IsAvailable)
-                    .OrderBy(i => i.DisplayOrder).ThenBy(i => i.Name)
-                    .Select(i => new MenuItemDto(
-                        i.Id, i.Code, i.Name, i.Description, i.Price, i.Currency, i.ImageUrl, i.DisplayOrder))
+                _db.Products
+                    .Where(p => p.ProductCategoryId == c.Id && p.IsActive)
+                    .OrderBy(p => p.DisplayOrder).ThenBy(p => p.Name)
+                    .Select(p => new MenuItemDto(
+                        p.Id, p.Code, p.Name, p.BanglaName, p.Description, p.Price, p.Currency,
+                        p.ImagePath, p.DisplayOrder,
+                        p.Variants
+                            .Where(v => v.IsActive)
+                            .OrderBy(v => v.DisplayOrder).ThenBy(v => v.Name)
+                            .Select(v => new MenuVariantDto(v.Id, v.Name, v.Price, v.DisplayOrder))
+                            .ToList()))
                     .ToList()))
             .ToListAsync(cancellationToken);
 

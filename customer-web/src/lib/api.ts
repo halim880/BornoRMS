@@ -52,15 +52,24 @@ export type PagedResult<T> = {
   totalCount: number;
 };
 
+export type MenuVariant = {
+  id: string;
+  name: string;
+  price: number;
+  displayOrder: number;
+};
+
 export type MenuItem = {
   id: string;
   code: string;
   name: string;
+  banglaName: string | null;
   description: string | null;
   price: number;
   currency: string;
   imageUrl: string | null;
   displayOrder: number;
+  variants: MenuVariant[];
 };
 
 export type MenuCategory = {
@@ -71,7 +80,13 @@ export type MenuCategory = {
   items: MenuItem[];
 };
 
-export type OrderType = "DineIn" | "Takeaway";
+export type TableDto = {
+  id: string;
+  tableNumber: string;
+  capacity: number;
+};
+
+export type OrderType = "DineIn" | "Takeaway" | "Delivery" | "Collection" | "Waiting";
 
 export type OrderStatus =
   | "Placed"
@@ -104,6 +119,7 @@ export type OrderListItem = {
 
 export type OrderLine = {
   menuItemId: string;
+  variantId: string | null;
   code: string;
   name: string;
   unitPrice: number;

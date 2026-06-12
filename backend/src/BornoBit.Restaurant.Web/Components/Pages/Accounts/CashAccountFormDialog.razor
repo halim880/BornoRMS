@@ -1,0 +1,77 @@
+@using BornoBit.Restaurant.Application.Accounting.CashAccounts
+@using BornoBit.Restaurant.Domain.Accounting
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="120" />
+
+        <BoSelect TOption="CashAccountKind"
+                  Items="@_kinds"
+                  OptionValue="@(k => ((int)k).ToString())"
+                  OptionText="@(k => KindLabel(k))"
+                  SelectedOption="@Content.Kind"
+                  SelectedOptionChanged="@(k => Content.Kind = k)"
+                  Label="Kind" Required="true" Style="width:100%;" />
+
+        <BoNumberInput T="decimal" @bind-Value="Content.OpeningBalance" Label="Opening balance" Min="0" Step="0.01" Style="width:200px;" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public CashAccountFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private static readonly CashAccountKind[] _kinds = Enum.GetValues<CashAccountKind>();
+
+    private static string KindLabel(CashAccountKind kind) => kind switch
+    {
+        CashAccountKind.Cash => "Cash",
+        CashAccountKind.MobileWallet => "Mobile wallet",
+        CashAccountKind.Bank => "Bank",
+        _ => kind.ToString()
+    };
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateCashAccountCommand(
+                    Content.Name.Trim(), Content.Kind, Content.OpeningBalance));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateCashAccountCommand(
+                    Content.Id.Value, Content.Name.Trim(), Content.Kind, Content.OpeningBalance));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

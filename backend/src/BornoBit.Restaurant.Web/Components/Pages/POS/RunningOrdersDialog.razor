@@ -1,0 +1,72 @@
+@using BornoBit.Restaurant.Application.Ordering.Pos
+@using BornoBit.Restaurant.Domain.Ordering
+
+<BoDialogBody>
+    @if (Content.Orders.Count == 0)
+    {
+        <EmptyState Icon="Cart" Title="No running orders"
+                    Description="Open orders show up here as soon as they are started." />
+    }
+    else
+    {
+        <div class="ro-list">
+            @foreach (var o in Content.Orders)
+            {
+                <button type="button" @key="o.Id"
+                        class="ro-row @(Content.ActiveOrderId == o.Id ? "ro-row--active" : null)"
+                        @onclick="() => Dialog.Close(o.Id)">
+                    <span class="ro-chip">@Pos.ChipLabel(o)</span>
+                    <span class="ro-main">
+                        <span class="ro-number">@o.OrderNumber</span>
+                        <span class="ro-sub">@TypeLabel(o) · @o.ItemCount item(s) · @o.Status</span>
+                    </span>
+                    <span class="ro-total">@o.Currency @o.Total.ToString("0.##")</span>
+                </button>
+            }
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Cancel())">Close</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public RunningOrdersModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private static string TypeLabel(ActiveOrderDto o) => o.OrderType switch
+    {
+        OrderType.DineIn => $"Dine In · {o.TableNumber}",
+        OrderType.Takeaway => "Takeaway",
+        OrderType.Delivery => "Delivery",
+        OrderType.Collection => "Collection",
+        OrderType.Waiting => "Waiting",
+        _ => o.OrderType.ToString()
+    };
+}
+
+<style>
+    .ro-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; padding: 2px; }
+    .ro-row {
+        display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+        padding: 10px 12px; cursor: pointer; text-align: left;
+        border: 1px solid var(--bo-border-soft); border-radius: var(--bo-radius-md, 8px);
+        background: var(--bo-bg-card); color: var(--bo-text);
+        transition: border-color .12s, background .12s;
+    }
+    .ro-row:hover { border-color: var(--bo-primary); }
+    .ro-row--active {
+        border-color: var(--bo-primary);
+        background: color-mix(in srgb, var(--bo-primary) 8%, var(--bo-bg-card));
+    }
+    .ro-chip {
+        padding: 5px 12px; border-radius: 999px;
+        background: color-mix(in srgb, var(--bo-primary) 12%, var(--bo-bg-card));
+        font-size: 13px; font-weight: 800; white-space: nowrap;
+    }
+    .ro-main { display: flex; flex-direction: column; min-width: 0; }
+    .ro-number { font-weight: 700; font-size: 13px; }
+    .ro-sub { font-size: 12px; color: var(--bo-text-muted); }
+    .ro-total { font-weight: 800; font-size: 13.5px; white-space: nowrap; }
+</style>

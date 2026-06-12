@@ -1,0 +1,120 @@
+@page "/admin/roles"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.RoleManagement
+@using MediatR
+@inject ISender Mediator
+@inject IBoDialogService DialogService
+@inject IBoToastService ToastService
+
+<PageTitle>Roles · BornoBit.Restaurant</PageTitle>
+
+<div style="display:flex; flex-direction:column; gap:16px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:center;">
+        <h1>Roles</h1>
+        <BoButton Variant="primary" OnClick="ShowCreateAsync">New role</BoButton>
+    </div>
+
+    <p style="color:var(--neutral-foreground-hint);">
+        Roles group users and control which modules and menus they can see.
+        System roles are built in and cannot be renamed or deleted.
+    </p>
+
+    @if (_loading) { <BoSpinner /> }
+    else if (_error is not null) { <BoMessageBar Intent="error">@_error</BoMessageBar> }
+    else if (_roles.Count == 0)
+    {
+        <div class="bo-cmp-cardish"><p style="margin:0;">No roles yet. Click <strong>New role</strong>.</p></div>
+    }
+    else
+    {
+        <DataGrid TItem="RoleListItemDto" Items="@_roles" PageSize="25" SearchPlaceholder="Search by name or description…"
+                  SearchPredicate="@((r, q) => r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || (r.Description?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))">
+            <Columns>
+                <DataGridColumn TItem="RoleListItemDto" Title="Name" Property="@(r => r.Name)" Sortable="true">
+                    <strong>@context.Name</strong>
+                </DataGridColumn>
+                <DataGridColumn TItem="RoleListItemDto" Title="Description" Property="@(r => r.Description)" Sortable="true">
+                    @(context.Description ?? "—")
+                </DataGridColumn>
+                <DataGridColumn TItem="RoleListItemDto" Title="Users" Property="@(r => (object?)r.UserCount)" Sortable="true" Align="DataGridAlign.Center" Width="90px">
+                    @context.UserCount
+                </DataGridColumn>
+                <DataGridColumn TItem="RoleListItemDto" Title="Type" Align="DataGridAlign.Center" Width="110px">
+                    @if (context.IsSystem) { <BoBadge Tone="primary">System</BoBadge> } else { <BoBadge>Custom</BoBadge> }
+                </DataGridColumn>
+                <DataGridColumn TItem="RoleListItemDto" Title="" Align="DataGridAlign.Right" Width="180px">
+                    <BoButton Variant="ghost" OnClick="@(() => ShowEditAsync(context))">Edit</BoButton>
+                    @if (!context.IsSystem)
+                    {
+                        <BoButton Variant="ghost" OnClick="@(() => ConfirmDeleteAsync(context))">Delete</BoButton>
+                    }
+                </DataGridColumn>
+            </Columns>
+        </DataGrid>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<RoleListItemDto> _roles = new();
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var list = await Mediator.Send(new GetRoleListQuery());
+            _roles = list.ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load roles: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task ShowCreateAsync()
+    {
+        var model = new RoleFormModel();
+        var result = await DialogService.ShowAsync<RoleFormDialog, RoleFormModel>(model, new BoDialogOptions
+        {
+            Title = "New role", Width = "480px", DismissOnOverlayClick = false,});
+        if (!result.Cancelled && result.Data is RoleFormModel saved)
+        {
+            ToastService.ShowSuccess($"Role '{saved.Name}' created.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ShowEditAsync(RoleListItemDto r)
+    {
+        var model = new RoleFormModel
+        {
+            Id = r.Id, Name = r.Name, Description = r.Description, IsSystem = r.IsSystem
+        };
+        var result = await DialogService.ShowAsync<RoleFormDialog, RoleFormModel>(model, new BoDialogOptions
+        {
+            Title = "Edit role", Width = "480px", DismissOnOverlayClick = false,});
+        if (!result.Cancelled)
+        {
+            ToastService.ShowSuccess($"Role '{r.Name}' updated.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ConfirmDeleteAsync(RoleListItemDto r)
+    {
+        var confirmed = await DialogService.ConfirmAsync(
+            "Delete role",
+            $"Delete role '{r.Name}'? Its module and menu permissions will be removed as well.",
+            confirmLabel: "Delete", cancelLabel: "Cancel");
+        if (!confirmed) return;
+        try
+        {
+            await Mediator.Send(new DeleteRoleCommand(r.Id));
+            ToastService.ShowSuccess($"Role '{r.Name}' deleted.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+    }
+}

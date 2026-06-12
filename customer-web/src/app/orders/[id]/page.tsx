@@ -43,7 +43,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
       <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
         {order.lines.map((l) => (
-          <div key={l.menuItemId} className="flex justify-between text-sm">
+          <div key={`${l.menuItemId}:${l.variantId ?? ""}`} className="flex justify-between text-sm">
             <span>{l.name} × {l.quantity}</span>
             <span>{formatMoney(l.lineTotal, order!.currency)}</span>
           </div>

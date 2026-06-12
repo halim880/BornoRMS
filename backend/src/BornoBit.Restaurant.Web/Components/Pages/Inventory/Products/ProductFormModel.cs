@@ -11,6 +11,14 @@ public class ProductFormModel
     public string? Description { get; set; }
     public string? ImagePath { get; set; }
     public int DisplayOrder { get; set; }
+    public List<VariantFormRow> Variants { get; set; } = new();
 
     public Guid? SavedId { get; set; }
+}
+
+public class VariantFormRow
+{
+    public Guid? Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Price { get; set; }
 }

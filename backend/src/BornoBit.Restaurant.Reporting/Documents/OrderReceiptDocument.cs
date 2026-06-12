@@ -110,6 +110,8 @@ public class OrderReceiptDocument : IDocument
             TotalRow("Subtotal", $"{_data.Currency} {Money(_data.Subtotal)}", bold: false);
             if (_data.DiscountAmount > 0m)
                 TotalRow("Discount", $"- {_data.Currency} {Money(_data.DiscountAmount)}", bold: false);
+            if (_data.RoundingAdjustment != 0m)
+                TotalRow("Rounding", $"{(_data.RoundingAdjustment < 0m ? "-" : "+")} {_data.Currency} {Money(Math.Abs(_data.RoundingAdjustment))}", bold: false);
             TotalRow("Grand Total", $"{_data.Currency} {Money(_data.Total)}", bold: true);
 
             if (_data.IsPaid)

@@ -1,0 +1,61 @@
+@using BornoBit.Restaurant.Application.Dining.Commands
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+        <BoInput @bind-Value="Content.TableNumber" Label="Table number" Required="true" Style="width:100%;" Maxlength="20" Placeholder="e.g. T-01, VIP-2, Rooftop-5" />
+        <BoNumeric T="int" @bind-Value="Content.Capacity" Label="Seating capacity" Style="width:100%;" Min="1" Max="100" Step="1" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public TableFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.TableNumber)) { _error = "Table number is required."; return; }
+        if (Content.Capacity < 1) { _error = "Capacity must be at least 1."; return; }
+
+        _busy = true;
+        try
+        {
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateTableCommand(Content.TableNumber.Trim(), Content.Capacity));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateTableCommand(Content.Id.Value, Content.TableNumber.Trim(), Content.Capacity));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex)
+        {
+            _error = vex.Errors.Any()
+                ? string.Join("; ", vex.Errors.Select(e => e.ErrorMessage))
+                : vex.Message;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

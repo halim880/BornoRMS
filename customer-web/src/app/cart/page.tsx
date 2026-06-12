@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { readCart, setQuantity, cartTotal, type CartItem } from "@/lib/cart";
+import { readCart, setQuantity, cartTotal, lineKey, type CartItem } from "@/lib/cart";
 import { formatMoney } from "@/lib/format";
 
 export default function CartPage() {
@@ -29,23 +29,26 @@ export default function CartPage() {
         <>
           <div className="space-y-2">
             {cart.map((item) => (
-              <div key={item.menuItemId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
+              <div key={lineKey(item)} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
                 <div>
-                  <div className="font-medium">{item.name}</div>
+                  <div className="font-medium">
+                    {item.name}
+                    {item.variantName && <span className="text-slate-500"> ({item.variantName})</span>}
+                  </div>
                   <div className="text-sm text-slate-500">{formatMoney(item.price, item.currency)} each</div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <button
                       className="h-7 w-7 rounded-md border border-slate-300 hover:bg-slate-50"
-                      onClick={() => setQuantity(item.menuItemId, item.quantity - 1)}
+                      onClick={() => setQuantity(lineKey(item), item.quantity - 1)}
                     >
                       −
                     </button>
                     <span className="w-6 text-center">{item.quantity}</span>
                     <button
                       className="h-7 w-7 rounded-md border border-slate-300 hover:bg-slate-50"
-                      onClick={() => setQuantity(item.menuItemId, item.quantity + 1)}
+                      onClick={() => setQuantity(lineKey(item), item.quantity + 1)}
                     >
                       +
                     </button>

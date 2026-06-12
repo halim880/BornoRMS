@@ -1,0 +1,214 @@
+@using BornoBit.Restaurant.Application.Ordering.Commands
+@using BornoBit.Restaurant.Application.Ordering.Pos
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Domain.Ordering
+@using BornoBit.Restaurant.Web.Services.Printing
+@using MediatR
+@inject ISender Sender
+@inject IBoToastService ToastService
+@inject IReceiptPrintService PrintService
+
+<BoDialogBody>
+    @if (_order is null)
+    {
+        <LoadingState Message="Loading bill…" />
+    }
+    else
+    {
+        <div class="pay-form">
+            <div class="pay-head">
+                <span class="pay-total-label">Total :</span>
+                <span class="pay-total-amount">@_grandTotal.ToString("0.##") Tk.</span>
+                <button type="button" class="pay-round pay-round--floor @(CurrentMode == PosRoundingMode.Floor ? "pay-round--active" : null)"
+                        disabled="@_busy" @onclick="() => RoundAsync(PosRoundingMode.Floor)">Floor (-)</button>
+                <button type="button" class="pay-round pay-round--ceil @(CurrentMode == PosRoundingMode.Ceil ? "pay-round--active" : null)"
+                        disabled="@_busy" @onclick="() => RoundAsync(PosRoundingMode.Ceil)">Ceil (+)</button>
+            </div>
+
+            <div class="pay-entry">@_tendered</div>
+            <div class="pay-change">Change : <span>@Change.ToString("0.##") Tk.</span></div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+
+            <div class="pay-pad">
+                <button type="button" class="pay-key pay-key--exact" @onclick="SetExact">Exact</button>
+                <button type="button" class="pay-key" @onclick='() => SetQuick(10)'>10</button>
+                <button type="button" class="pay-key" @onclick='() => SetQuick(20)'>20</button>
+                <button type="button" class="pay-key pay-key--clear" @onclick="Clear">Clear</button>
+
+                <button type="button" class="pay-key" @onclick='() => Append("1")'>1</button>
+                <button type="button" class="pay-key" @onclick='() => Append("2")'>2</button>
+                <button type="button" class="pay-key" @onclick='() => Append("3")'>3</button>
+                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(50)">50+</button>
+
+                <button type="button" class="pay-key" @onclick='() => Append("4")'>4</button>
+                <button type="button" class="pay-key" @onclick='() => Append("5")'>5</button>
+                <button type="button" class="pay-key" @onclick='() => Append("6")'>6</button>
+                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(100)">100+</button>
+
+                <button type="button" class="pay-key" @onclick='() => Append("7")'>7</button>
+                <button type="button" class="pay-key" @onclick='() => Append("8")'>8</button>
+                <button type="button" class="pay-key" @onclick='() => Append("9")'>9</button>
+                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(500)">500+</button>
+
+                <button type="button" class="pay-key" @onclick='() => Append(".")'>.</button>
+                <button type="button" class="pay-key" @onclick='() => Append("0")'>0</button>
+                <button type="button" class="pay-key" @onclick='() => Append("00")'>00</button>
+                <button type="button" class="pay-key pay-key--back" @onclick="Backspace">⌫</button>
+            </div>
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="danger" OnClick="@(() => Dialog.Close(false))" Disabled="_busy">Close</BoButton>
+    <BoButton Variant="accent" OnClick="SaveAsync" Loading="_busy" Disabled="@(!CanSave)">Save Payment</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public Guid Content { get; set; }
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private OrderDetailDto? _order;
+    private decimal _grandTotal;
+    private decimal _rounding;
+    private string _tendered = "0";
+
+    private bool _busy;
+    private string? _error;
+
+    private decimal Tendered => decimal.TryParse(_tendered,
+        System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0m;
+
+    private decimal Change => Math.Max(0m, Tendered - _grandTotal);
+    private bool CanSave => !_busy && _order is { IsPaid: false } && Tendered >= _grandTotal;
+
+    private PosRoundingMode CurrentMode =>
+        _rounding < 0m ? PosRoundingMode.Floor : _rounding > 0m ? PosRoundingMode.Ceil : PosRoundingMode.None;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _order = await Sender.Send(new GetOrderQuery(Content));
+        _grandTotal = _order.GrandTotal;
+        _rounding = _order.RoundingAdjustment;
+    }
+
+    private async Task RoundAsync(PosRoundingMode mode)
+    {
+        // Clicking the active mode again restores the exact total.
+        var target = CurrentMode == mode ? PosRoundingMode.None : mode;
+
+        _error = null;
+        _busy = true;
+        try
+        {
+            var summary = await Sender.Send(new ApplyPosRoundingCommand(Content, target));
+            _grandTotal = summary.GrandTotal;
+            _rounding = summary.Rounding;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    // ----- numpad -----
+
+    private void Append(string s)
+    {
+        if (_tendered.Length >= 10) return;
+        if (s == "." && _tendered.Contains('.')) return;
+
+        if (_tendered == "0" && s != ".")
+            _tendered = s == "00" ? "0" : s;
+        else
+            _tendered += s;
+    }
+
+    private void Backspace() =>
+        _tendered = _tendered.Length <= 1 ? "0" : _tendered[..^1];
+
+    private void Clear() => _tendered = "0";
+
+    private void SetExact() => _tendered = _grandTotal.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void SetQuick(decimal value) => _tendered = value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private void AddQuick(decimal value) =>
+        _tendered = (Tendered + value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var summary = await Sender.Send(new RecordPaymentCommand(Content, PaymentMethod.Cash, Tendered));
+            ToastService.ShowSuccess($"Payment saved · change {summary.Change:0.##} Tk.");
+            _ = AutoPrintAsync(); // fire-and-forget: payment never waits on (or fails with) the printer
+            Dialog.Close(true);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _busy = false;
+        }
+    }
+
+    private async Task AutoPrintAsync()
+    {
+        var result = await PrintService.PrintReceiptAsync(Content, isReprint: false);
+        if (result.Success) ToastService.ShowSuccess(result.Message);
+        else ToastService.ShowWarning(result.Message);
+    }
+}
+
+<style>
+    .pay-form { display: flex; flex-direction: column; gap: 10px; }
+
+    .pay-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pay-total-label { font-size: 18px; font-weight: 800; }
+    .pay-total-amount { font-size: 18px; font-weight: 800; color: var(--bo-danger); margin-right: auto; }
+
+    .pay-round {
+        padding: 4px 12px; border-radius: 999px; cursor: pointer;
+        background: var(--bo-bg-card); font-size: 12px; font-weight: 700;
+        transition: background .12s, color .12s;
+    }
+    .pay-round--floor { border: 1px solid var(--bo-success); color: var(--bo-success); }
+    .pay-round--ceil  { border: 1px solid var(--bo-warning); color: var(--bo-warning); }
+    .pay-round--floor.pay-round--active { background: var(--bo-success); color: #fff; }
+    .pay-round--ceil.pay-round--active  { background: var(--bo-warning); color: #fff; }
+    .pay-round:disabled { opacity: .6; cursor: default; }
+
+    .pay-entry {
+        padding: 10px; text-align: center;
+        border: 1px solid var(--bo-border); border-radius: var(--bo-radius-md, 8px);
+        background: var(--bo-bg-soft);
+        font-size: 18px; font-weight: 700; color: var(--bo-danger);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .pay-change { text-align: center; font-size: 14px; font-weight: 700; }
+    .pay-change span { color: var(--bo-danger); }
+
+    .pay-pad {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+        margin-top: 4px;
+    }
+
+    .pay-key {
+        padding: 13px 4px; border: none; border-radius: var(--bo-radius-md, 8px); cursor: pointer;
+        background: var(--bo-slate-800, #1E293B); color: #fff;
+        font-size: 15px; font-weight: 700;
+        transition: filter .1s, transform .06s;
+    }
+    .pay-key:hover { filter: brightness(1.15); }
+    .pay-key:active { transform: scale(.96); }
+
+    .pay-key--exact { background: var(--bo-success-strong, #15803D); }
+    .pay-key--clear { background: var(--bo-warning); }
+    .pay-key--add { background: var(--bo-slate-700, #334155); }
+    .pay-key--back { background: var(--bo-danger); }
+</style>

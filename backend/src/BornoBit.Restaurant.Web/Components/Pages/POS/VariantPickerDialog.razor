@@ -1,0 +1,40 @@
+@using BornoBit.Restaurant.Application.Products
+
+<BoDialogBody>
+    <div class="vp-list">
+        @foreach (var v in Content.Variants)
+        {
+            <button type="button" @key="v.Id" class="vp-row" @onclick="() => Dialog.Close(v)">
+                <span class="vp-name">@v.Name</span>
+                <span class="vp-price">@Content.Currency @v.Price.ToString("0.##")</span>
+            </button>
+        }
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Cancel())">Close</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public ProductDto Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+}
+
+<style>
+    .vp-list { display: flex; flex-direction: column; gap: 8px; padding: 2px; }
+    .vp-row {
+        display: flex; justify-content: space-between; align-items: center; gap: 12px;
+        padding: 13px 16px; cursor: pointer;
+        border: 1px solid var(--bo-border); border-radius: var(--bo-radius-md, 8px);
+        background: var(--bo-bg-card); color: var(--bo-text);
+        transition: border-color .12s, background .12s, transform .06s;
+    }
+    .vp-row:hover {
+        border-color: var(--bo-primary);
+        background: color-mix(in srgb, var(--bo-primary) 6%, var(--bo-bg-card));
+    }
+    .vp-row:active { transform: scale(.98); }
+    .vp-name { font-weight: 700; font-size: 14px; }
+    .vp-price { font-weight: 800; font-size: 14px; color: var(--bo-primary); }
+</style>

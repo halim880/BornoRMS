@@ -2,13 +2,21 @@
 
 export type CartItem = {
   menuItemId: string;
+  variantId: string | null;
   name: string;
+  variantName: string | null;
   price: number;
   currency: string;
   quantity: number;
 };
 
-const KEY = "bb_cart";
+// v2: lines carry Product ids (+ optional variant) instead of legacy MenuItem ids,
+// so carts saved under the old key are intentionally abandoned.
+const KEY = "bb_cart_v2";
+
+export function lineKey(item: Pick<CartItem, "menuItemId" | "variantId">): string {
+  return `${item.menuItemId}:${item.variantId ?? ""}`;
+}
 
 export function readCart(): CartItem[] {
   if (typeof window === "undefined") return [];
@@ -26,7 +34,7 @@ export function writeCart(items: CartItem[]) {
 
 export function addToCart(item: Omit<CartItem, "quantity">, quantity = 1) {
   const cart = readCart();
-  const existing = cart.find((c) => c.menuItemId === item.menuItemId);
+  const existing = cart.find((c) => lineKey(c) === lineKey(item));
   if (existing) {
     existing.quantity += quantity;
   } else {
@@ -35,12 +43,12 @@ export function addToCart(item: Omit<CartItem, "quantity">, quantity = 1) {
   writeCart(cart);
 }
 
-export function setQuantity(menuItemId: string, quantity: number) {
+export function setQuantity(key: string, quantity: number) {
   let cart = readCart();
   if (quantity <= 0) {
-    cart = cart.filter((c) => c.menuItemId !== menuItemId);
+    cart = cart.filter((c) => lineKey(c) !== key);
   } else {
-    const existing = cart.find((c) => c.menuItemId === menuItemId);
+    const existing = cart.find((c) => lineKey(c) === key);
     if (existing) existing.quantity = quantity;
   }
   writeCart(cart);

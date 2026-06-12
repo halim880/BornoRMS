@@ -1,0 +1,216 @@
+@using BornoBit.Restaurant.Application.Ordering.Commands
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Domain.Ordering
+@using BornoBit.Restaurant.Shared.Common
+@using BornoBit.Restaurant.Web.Services.Printing
+@using MediatR
+@inject ISender Sender
+@inject IBoToastService ToastService
+@inject IBoDialogService DialogService
+@inject IReceiptPrintService PrintService
+
+<BoDialogBody>
+    @if (_order is null)
+    {
+        <LoadingState Message="Loading order…" />
+    }
+    else
+    {
+        <div class="od">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+
+            <div class="od-chips">
+                <BoBadge Tone="info">@_order.OrderType</BoBadge>
+                <BoBadge Tone="@StatusTone(_order.Status)">@_order.Status</BoBadge>
+                @if (_order.IsPaid)
+                {
+                    <BoBadge Tone="success">Paid</BoBadge>
+                }
+            </div>
+
+            <div class="od-meta">
+                <div><span class="od-label">Customer</span><span>@(_order.CustomerName ?? _order.CustomerPhone)</span></div>
+                <div><span class="od-label">Phone</span><span>@_order.CustomerPhone</span></div>
+                <div><span class="od-label">Table</span><span>@(_order.TableNumber ?? "—")</span></div>
+                <div><span class="od-label">Placed</span><span>@_order.OrderedAtUtc.ToLocalTime().ToString("g")</span></div>
+                @if (!string.IsNullOrWhiteSpace(_order.CustomerAddress))
+                {
+                    <div class="od-wide"><span class="od-label">Address</span><span>@_order.CustomerAddress</span></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_order.Notes))
+                {
+                    <div class="od-wide"><span class="od-label">Notes</span><span>@_order.Notes</span></div>
+                }
+            </div>
+
+            <div class="od-lines">
+                @foreach (var l in _order.Lines)
+                {
+                    <div class="od-line">
+                        <span>@l.Quantity × @l.Name</span>
+                        <span>@_order.Currency @l.LineTotal.ToString("0.##")</span>
+                    </div>
+                }
+            </div>
+
+            <div class="od-totals">
+                <div class="od-row"><span>Subtotal</span><span>@_order.Currency @_order.Subtotal.ToString("0.##")</span></div>
+                @if (_order.DiscountAmount > 0m)
+                {
+                    <div class="od-row"><span>Discount@(string.IsNullOrWhiteSpace(_order.DiscountReason) ? "" : $" ({_order.DiscountReason})")</span><span>− @_order.Currency @_order.DiscountAmount.ToString("0.##")</span></div>
+                }
+                <div class="od-row od-grand"><span>Grand total</span><span>@_order.Currency @_order.GrandTotal.ToString("0.##")</span></div>
+            </div>
+
+            <div class="od-actions">
+                @{
+                    var next = NextStep(_order.Status);
+                }
+                @if (next is not null)
+                {
+                    <BoButton Variant="primary" Size="sm" Loading="_busy"
+                              OnClick="@(() => AdvanceAsync(next.Value.Target))">@next.Value.Label</BoButton>
+                }
+                @if (!_order.IsPaid && _order.Status != OrderStatus.Cancelled)
+                {
+                    <BoButton Variant="accent" Size="sm" Disabled="_busy" OnClick="BillAsync">Bill / Payment</BoButton>
+                }
+                @if (CanCancel(_order.Status))
+                {
+                    <BoButton Variant="ghost" Size="sm" Disabled="_busy" OnClick="CancelAsync">Cancel order</BoButton>
+                }
+                <span class="od-spacer"></span>
+                <a class="bo-link" href="/reports/order/@_order.Id/kot.pdf" target="_blank">KOT</a>
+                <a class="bo-link" href="/reports/order/@_order.Id/receipt.pdf" target="_blank">Invoice</a>
+                <BoButton Variant="outline" Size="sm" Loading="_printing" OnClick="PrintAsync">Print</BoButton>
+            </div>
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close(_changed))">Close</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public Guid Content { get; set; }
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private OrderDetailDto? _order;
+    private bool _busy;
+    private bool _printing;
+    private bool _changed;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _error = null;
+        _order = await Sender.Send(new GetOrderQuery(Content));
+    }
+
+    private async Task AdvanceAsync(OrderStatus target)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Sender.Send(new ChangeOrderStatusCommand(Content, target));
+            ToastService.ShowSuccess($"Order {_order!.OrderNumber} → {target}.");
+            _changed = true;
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task BillAsync()
+    {
+        var result = await DialogService.ShowAsync<BillDialog, Guid>(
+            Content,
+            new BoDialogOptions { Title = $"Bill · {_order!.OrderNumber}", Width = "520px" });
+        if (!result.Cancelled && result.Data is true)
+        {
+            _changed = true;
+            await ReloadAsync();
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        var result = await DialogService.ShowAsync<CancelOrderDialog, string>(
+            _order!.OrderNumber,
+            new BoDialogOptions { Title = "Cancel order", Width = "440px" });
+        if (result.Cancelled) return;
+
+        _busy = true; _error = null;
+        try
+        {
+            var reason = result.Data as string;
+            await Sender.Send(new ChangeOrderStatusCommand(Content, OrderStatus.Cancelled, reason));
+            ToastService.ShowSuccess($"Order {_order.OrderNumber} cancelled.");
+            _changed = true;
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task PrintAsync()
+    {
+        _printing = true;
+        try
+        {
+            var result = await PrintService.PrintReceiptAsync(Content, isReprint: true);
+            if (result.Success) ToastService.ShowSuccess(result.Message);
+            else ToastService.ShowWarning(result.Message);
+        }
+        finally { _printing = false; }
+    }
+
+    private static (OrderStatus Target, string Label)? NextStep(OrderStatus status) => status switch
+    {
+        OrderStatus.Placed => (OrderStatus.Confirmed, "Confirm"),
+        OrderStatus.Confirmed => (OrderStatus.Preparing, "Start preparing"),
+        OrderStatus.Preparing => (OrderStatus.Ready, "Mark ready"),
+        OrderStatus.Ready => (OrderStatus.Served, "Mark served"),
+        OrderStatus.Served => (OrderStatus.Completed, "Complete"),
+        _ => null
+    };
+
+    private static bool CanCancel(OrderStatus status) =>
+        status is not (OrderStatus.Served or OrderStatus.Completed or OrderStatus.Cancelled);
+
+    private static string StatusTone(OrderStatus status) => status switch
+    {
+        OrderStatus.Placed => "warning",
+        OrderStatus.Confirmed => "info",
+        OrderStatus.Preparing => "primary",
+        OrderStatus.Ready => "success",
+        OrderStatus.Served => "success",
+        OrderStatus.Completed => "neutral",
+        OrderStatus.Cancelled => "danger",
+        _ => "neutral"
+    };
+}
+
+<style>
+    .od { display:flex; flex-direction:column; gap:14px; }
+    .od-chips { display:flex; gap:6px; flex-wrap:wrap; }
+    .od-meta { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; }
+    .od-meta > div { display:flex; flex-direction:column; gap:2px; font-size:13px; }
+    .od-meta .od-wide { grid-column:1 / -1; }
+    .od-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--bo-text-muted); }
+    .od-lines { display:flex; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto;
+                border-top:1px solid var(--bo-border,#ddd); padding-top:10px; }
+    .od-line { display:flex; justify-content:space-between; font-size:13px; }
+    .od-totals { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--bo-border,#ddd); padding-top:8px; }
+    .od-row { display:flex; justify-content:space-between; font-size:13px; }
+    .od-grand { font-weight:700; font-size:16px; border-top:1px solid var(--bo-border,#ddd); padding-top:6px; margin-top:2px; }
+    .od-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+                  border-top:1px solid var(--bo-border,#ddd); padding-top:12px; }
+    .od-spacer { flex:1 1 auto; }
+</style>

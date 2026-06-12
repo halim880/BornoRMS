@@ -27,6 +27,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.PaymentMethod).HasConversion<int>();
         builder.Property(o => o.AmountTendered).HasPrecision(18, 2);
         builder.Property(o => o.ChangeGiven).HasPrecision(18, 2);
+        builder.Property(o => o.RoundingAdjustment).HasPrecision(18, 2);
 
         builder.Ignore(o => o.Total);
         builder.Ignore(o => o.Subtotal);

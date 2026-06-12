@@ -29,6 +29,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerOtp> CustomerOtps => Set<CustomerOtp>();
     public DbSet<RestaurantTable> RestaurantTables => Set<RestaurantTable>();
@@ -58,9 +59,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<StoreIssueLine> StoreIssueLines => Set<StoreIssueLine>();
     public DbSet<StoreStockMovement> StoreStockMovements => Set<StoreStockMovement>();
 
-    public DbSet<Account> Accounts => Set<Account>();
-    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
-    public DbSet<JournalLine> JournalLines => Set<JournalLine>();
+    public DbSet<CashAccount> CashAccounts => Set<CashAccount>();
+    public DbSet<FinanceCategory> FinanceCategories => Set<FinanceCategory>();
+    public DbSet<FinanceTransaction> FinanceTransactions => Set<FinanceTransaction>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

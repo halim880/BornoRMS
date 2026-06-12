@@ -2,9 +2,11 @@
 @using BornoBit.Restaurant.Application.Ordering.Queries
 @using BornoBit.Restaurant.Domain.Ordering
 @using BornoBit.Restaurant.Shared.Common
+@using BornoBit.Restaurant.Web.Services.Printing
 @using MediatR
 @inject ISender Sender
 @inject IBoToastService ToastService
+@inject IReceiptPrintService PrintService
 
 <BoDialogBody>
     @if (_order is null)
@@ -40,7 +42,10 @@
                 <BoMessageBar Intent="success">
                     Paid via @_order.PaymentMethod · tendered @_order.Currency @_order.AmountTendered?.ToString("0.##") · change @_order.Currency @_order.ChangeGiven?.ToString("0.##")
                 </BoMessageBar>
-                <a class="bo-link" href="/reports/order/@_order.Id/receipt.pdf" target="_blank">Download receipt</a>
+                <div style="display:flex; align-items:center; gap:14px;">
+                    <a class="bo-link" href="/reports/order/@_order.Id/receipt.pdf" target="_blank">Download receipt</a>
+                    <BoButton Variant="outline" Size="sm" Loading="_printing" OnClick="PrintReceiptAsync">Print receipt</BoButton>
+                </div>
             }
             else
             {
@@ -148,9 +153,31 @@
         {
             var summary = await Sender.Send(new RecordPaymentCommand(Content, _method, ParseDecimal(_tendered)));
             ToastService.ShowSuccess($"Payment taken · change {summary.Change:0.##}");
+            _ = AutoPrintAsync(); // fire-and-forget: payment never waits on (or fails with) the printer
             Dialog.Close(true);
         }
         catch (Exception ex) { _error = ex.Message; _busy = false; }
+    }
+
+    private bool _printing;
+
+    private async Task AutoPrintAsync()
+    {
+        var result = await PrintService.PrintReceiptAsync(Content, isReprint: false);
+        if (result.Success) ToastService.ShowSuccess(result.Message);
+        else ToastService.ShowWarning(result.Message);
+    }
+
+    private async Task PrintReceiptAsync()
+    {
+        _printing = true;
+        try
+        {
+            var result = await PrintService.PrintReceiptAsync(Content, isReprint: true);
+            if (result.Success) ToastService.ShowSuccess(result.Message);
+            else ToastService.ShowWarning(result.Message);
+        }
+        finally { _printing = false; }
     }
 
     private static decimal ParseDecimal(string? s) =>

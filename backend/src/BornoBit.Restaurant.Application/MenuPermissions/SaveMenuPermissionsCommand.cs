@@ -30,8 +30,16 @@ public class SaveMenuPermissionsCommandHandler : IRequestHandler<SaveMenuPermiss
     {
         var desired = request.PermittedMenuIds.Distinct().ToHashSet();
 
+        // Root-menu (module) rows are owned by SaveModulePermissionsCommand / the Module
+        // Permissions page — this command only manages child-menu rows.
         var validMenuIds = (await _db.AppMenus
-            .Where(m => desired.Contains(m.Id))
+            .Where(m => desired.Contains(m.Id) && m.ParentId != null)
+            .Select(m => m.Id)
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+
+        var rootIds = (await _db.AppMenus
+            .Where(m => m.ParentId == null)
             .Select(m => m.Id)
             .ToListAsync(cancellationToken))
             .ToHashSet();
@@ -42,7 +50,7 @@ public class SaveMenuPermissionsCommandHandler : IRequestHandler<SaveMenuPermiss
 
         var existingIds = existing.Select(p => p.MenuId).ToHashSet();
 
-        foreach (var row in existing.Where(p => !validMenuIds.Contains(p.MenuId)))
+        foreach (var row in existing.Where(p => !rootIds.Contains(p.MenuId) && !validMenuIds.Contains(p.MenuId)))
             _db.AppMenuRolePermissions.Remove(row);
 
         foreach (var menuId in validMenuIds.Where(id => !existingIds.Contains(id)))

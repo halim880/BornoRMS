@@ -17,6 +17,12 @@ public class InventorySeeder
 
     public async Task SeedAsync()
     {
+        await SeedCatalogAsync();
+        await SeedVariantsAsync();
+    }
+
+    private async Task SeedCatalogAsync()
+    {
         if (await _db.ProductCategories.AnyAsync()) return;
 
         var biryani = ProductCategory.Create("Biryani & Rice", displayOrder: 1, description: "বিরিয়ানি ও ভাত — rice-based mains");
@@ -79,5 +85,60 @@ public class InventorySeeder
 
         _logger.LogInformation("InventorySeeder: seeded {Categories} categories and {Products} products.",
             categories.Length, products.Length);
+    }
+
+    /// <summary>
+    /// Attaches size/portion variants to a few known products. Idempotent (skips when any
+    /// variants exist) and safe on databases seeded before variants existed.
+    /// </summary>
+    private async Task SeedVariantsAsync()
+    {
+        if (await _db.ProductVariants.AnyAsync()) return;
+
+        var byCode = await _db.Products
+            .Include(p => p.Variants)
+            .Where(p => p.Code == "KAB-004" || p.Code == "BEV-001" || p.Code == "BEV-002" || p.Code == "BEV-003")
+            .ToDictionaryAsync(p => p.Code);
+
+        if (byCode.Count == 0) return;
+
+        var created = new List<ProductVariant>();
+
+        if (byCode.TryGetValue("KAB-004", out var grill))
+        {
+            // Older seed named this "Chicken Grill (Half)" — the portion now lives on the variant.
+            if (grill.Name.Contains("(Half)"))
+                grill.UpdateDetails(grill.ProductCategoryId, grill.Code, "Chicken Grill", grill.Price,
+                    grill.BanglaName, grill.ImagePath, grill.Description, grill.DisplayOrder);
+
+            created.Add(grill.AddVariant("Quarter", 120m, 1));
+            created.Add(grill.AddVariant("Half", 220m, 2));
+            created.Add(grill.AddVariant("Full", 420m, 3));
+        }
+
+        if (byCode.TryGetValue("BEV-001", out var borhani))
+        {
+            created.Add(borhani.AddVariant("Glass", 60m, 1));
+            created.Add(borhani.AddVariant("Jug", 220m, 2));
+        }
+
+        if (byCode.TryGetValue("BEV-002", out var lassi))
+        {
+            created.Add(lassi.AddVariant("Regular", 90m, 1));
+            created.Add(lassi.AddVariant("Large", 130m, 2));
+        }
+
+        if (byCode.TryGetValue("BEV-003", out var lemonMint))
+        {
+            created.Add(lemonMint.AddVariant("Regular", 80m, 1));
+            created.Add(lemonMint.AddVariant("Large", 120m, 2));
+        }
+
+        // New children hanging off a tracked parent are discovered with their pre-set Guid key and
+        // would be saved as UPDATEs (0 rows → concurrency exception) — mark them Added explicitly.
+        _db.ProductVariants.AddRange(created);
+
+        var added = await _db.SaveChangesAsync();
+        _logger.LogInformation("InventorySeeder: seeded product variants ({Rows} rows).", added);
     }
 }

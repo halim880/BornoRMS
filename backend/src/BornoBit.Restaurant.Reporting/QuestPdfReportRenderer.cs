@@ -18,6 +18,18 @@ public class QuestPdfReportRenderer : IReportRenderer
         return Task.FromResult(doc.GeneratePdf());
     }
 
+    public Task<byte[]> RenderPosReceiptAsync(OrderReceiptReportData data, CancellationToken cancellationToken = default)
+    {
+        var doc = new PosReceiptDocument(data);
+        return Task.FromResult(doc.GeneratePdf());
+    }
+
+    public Task<byte[]> RenderKitchenTicketAsync(KitchenTicketReportData data, CancellationToken cancellationToken = default)
+    {
+        var doc = new KitchenTicketDocument(data);
+        return Task.FromResult(doc.GeneratePdf());
+    }
+
     public Task<byte[]> RenderStockValuationAsync(StockValuationReportData data, CancellationToken cancellationToken = default)
     {
         var doc = new StockValuationDocument(data);

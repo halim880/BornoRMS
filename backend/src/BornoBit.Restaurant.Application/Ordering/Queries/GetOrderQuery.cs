@@ -10,6 +10,7 @@ public record GetOrderQuery(Guid OrderId) : IRequest<OrderDetailDto>;
 
 public record OrderLineDto(
     Guid MenuItemId,
+    Guid? VariantId,
     string Code,
     string Name,
     decimal UnitPrice,
@@ -22,6 +23,7 @@ public record OrderDetailDto(
     Guid CustomerId,
     string CustomerPhone,
     string? CustomerName,
+    string? CustomerAddress,
     string? TableNumber,
     OrderType OrderType,
     OrderStatus Status,
@@ -31,12 +33,14 @@ public record OrderDetailDto(
     decimal Subtotal,
     decimal DiscountAmount,
     string? DiscountReason,
+    decimal RoundingAdjustment,
     decimal GrandTotal,
     decimal Total,
     bool IsPaid,
     PaymentMethod? PaymentMethod,
     decimal? AmountTendered,
     decimal? ChangeGiven,
+    DateTime? PaidAtUtc,
     IReadOnlyList<OrderLineDto> Lines);
 
 public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDto>
@@ -60,11 +64,11 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
 
         var lines = await _db.OrderLines
             .Where(l => l.OrderId == request.OrderId)
-            .Select(l => new OrderLineDto(l.MenuItemId, l.Code, l.Name, l.UnitPriceSnapshot, l.Quantity, l.UnitPriceSnapshot * l.Quantity))
+            .Select(l => new OrderLineDto(l.MenuItemId, l.VariantId, l.Code, l.Name, l.UnitPriceSnapshot, l.Quantity, l.UnitPriceSnapshot * l.Quantity))
             .ToListAsync(cancellationToken);
 
         var subtotal = lines.Sum(l => l.LineTotal);
-        var grandTotal = Math.Max(0m, subtotal - row.Order.DiscountAmount);
+        var grandTotal = Math.Max(0m, subtotal - row.Order.DiscountAmount + row.Order.RoundingAdjustment);
 
         return new OrderDetailDto(
             row.Order.Id,
@@ -72,6 +76,7 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
             row.Order.CustomerId,
             row.Customer.Phone,
             row.Customer.FullName,
+            row.Customer.Address,
             row.Table != null ? row.Table.TableNumber : null,
             row.Order.OrderType,
             row.Order.Status,
@@ -81,12 +86,14 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
             subtotal,
             row.Order.DiscountAmount,
             row.Order.DiscountReason,
+            row.Order.RoundingAdjustment,
             grandTotal,
             grandTotal,
             row.Order.IsPaid,
             row.Order.PaymentMethod,
             row.Order.AmountTendered,
             row.Order.ChangeGiven,
+            row.Order.PaidAtUtc,
             lines);
     }
 }

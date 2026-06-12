@@ -14,7 +14,8 @@ public record BillSummaryDto(
     bool IsPaid,
     PaymentMethod? Method,
     decimal? Tendered,
-    decimal? Change);
+    decimal? Change,
+    decimal Rounding = 0m);
 
 // ----- Apply discount -----
 
@@ -56,7 +57,7 @@ public class ApplyDiscountCommandHandler : IRequestHandler<ApplyDiscountCommand,
     }
 
     internal static BillSummaryDto ToSummary(Order o) => new(
-        o.Subtotal, o.DiscountAmount, o.GrandTotal, o.IsPaid, o.PaymentMethod, o.AmountTendered, o.ChangeGiven);
+        o.Subtotal, o.DiscountAmount, o.GrandTotal, o.IsPaid, o.PaymentMethod, o.AmountTendered, o.ChangeGiven, o.RoundingAdjustment);
 }
 
 // ----- Record payment -----

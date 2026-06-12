@@ -1,0 +1,177 @@
+@page "/pos"
+@attribute [Authorize(Policy = "Staff")]
+@using Microsoft.AspNetCore.Authorization
+@using BornoBit.Restaurant.Application.Ordering.Pos
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Application.ProductCategories
+@using BornoBit.Restaurant.Application.Products
+@using BornoBit.Restaurant.Domain.Ordering
+@rendermode InteractiveServer
+
+<PageTitle>POS · BornoBit</PageTitle>
+
+@if (_loading)
+{
+    <LoadingState Message="Loading POS…" />
+}
+else
+{
+    <!-- ============ ACTIVE ORDERS QUEUE ============ -->
+    <div class="pos-orders-bar">
+        <span class="pos-orders-label">Orders :</span>
+        <div class="pos-chips" @ref="_chipsEl">
+            @if (_activeOrders.Count == 0)
+            {
+                <span class="pos-chips-empty">No open orders — start one with the + button.</span>
+            }
+            @foreach (var o in _activeOrders)
+            {
+                <button type="button" @key="o.Id"
+                        class="pos-chip @(_activeOrderId == o.Id ? "pos-chip--active" : null)"
+                        title="@o.OrderNumber · @o.Status · @o.Currency @o.Total.ToString("0.##")"
+                        @onclick="() => SelectOrderAsync(o.Id)">
+                    @ChipLabel(o)
+                </button>
+            }
+        </div>
+        @if (_chipsOverflowing)
+        {
+            <button type="button" class="pos-fly" title="Show all running orders" @onclick="OpenRunningOrdersAsync">
+                <BoIcon Name="Send" Size="18" />
+            </button>
+        }
+        <button type="button" class="pos-add" title="New order" @onclick="OpenNewOrderDialogAsync">
+            <BoIcon Name="Plus" Size="20" />
+        </button>
+    </div>
+
+    <!-- ============ WORKSPACE ============ -->
+    <div class="pos-workspace">
+        <!-- Category rail -->
+        <div class="pos-cats">
+            <div class="pos-cats-title">Category</div>
+            <button type="button" class="pos-cat @(_selectedCategoryId is null ? "pos-cat--active" : null)"
+                    @onclick="() => _selectedCategoryId = null">All</button>
+            @foreach (var cat in VisibleCategories)
+            {
+                <button type="button" @key="cat.Id"
+                        class="pos-cat @(_selectedCategoryId == cat.Id ? "pos-cat--active" : null)"
+                        @onclick="() => _selectedCategoryId = cat.Id">
+                    @cat.Name
+                </button>
+            }
+        </div>
+
+        <!-- Product grid -->
+        <div class="pos-products">
+            @if (!FilteredProducts.Any())
+            {
+                <EmptyState Icon="Search" Title="No items"
+                            Description="No products in this category — add some from Inventory → Products." />
+            }
+            else
+            {
+                <div class="pos-prod-grid">
+                    @foreach (var item in FilteredProducts)
+                    {
+                        <div @key="item.Id" class="pos-prod-card pos-prod-card--tappable"
+                             title="@(item.HasVariants ? $"Pick a size for {item.Name}" : $"Tap to add {item.Name}")"
+                             @onclick="() => OnProductClickAsync(item)">
+                            <span class="pos-prod-name">@item.Name</span>
+                            <div class="pos-prod-meta">
+                                <span class="pos-prod-cat">@item.CategoryName</span>
+                                <span class="pos-prod-price">
+                                    @(item.HasVariants ? $"from Tk. {item.MinPrice:0.##}" : $"Tk. {item.Price:0.##}")
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Order console -->
+        <div class="pos-console">
+            <div class="pos-console-head">
+                @if (_activeDetail is null)
+                {
+                    <span class="pos-console-hint">Select or create an order</span>
+                }
+                else
+                {
+                    <div class="pos-console-id">
+                        <span class="pos-console-no-row">
+                            <span class="pos-console-no">@_activeDetail.OrderNumber</span>
+                            <button type="button" class="pos-edit-btn" title="Edit order type, table and customer"
+                                    @onclick="OpenEditOrderDialogAsync">
+                                <BoIcon Name="DocumentEdit" Size="16" />
+                            </button>
+                        </span>
+                        <span class="pos-console-cust">@CustomerLabel(_activeDetail)</span>
+                    </div>
+                    <span class="pos-console-type">
+                        @TypeLabel(_activeDetail.OrderType)@(_activeDetail.TableNumber is { } tn ? $" · {tn}" : null)
+                    </span>
+                }
+            </div>
+
+            <div class="pos-console-lines">
+                @if (_activeDetail is null || _activeDetail.Lines.Count == 0)
+                {
+                    <div class="pos-console-empty">
+                        <BoIcon Name="Cart" Size="28" />
+                        <span>@(_activeDetail is null
+                            ? "Pick an order chip above, or press + to start one."
+                            : "Tap menu items to add them to this order.")</span>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var line in _activeDetail.Lines)
+                    {
+                        <div class="pos-line" @key="@($"{line.MenuItemId}:{line.VariantId}")">
+                            <div class="pos-line-info">
+                                <span class="pos-line-name">@line.Name</span>
+                                <span class="pos-line-rate">Rate : @line.UnitPrice.ToString("0.##") Tk.</span>
+                            </div>
+                            <div class="pos-line-qty">
+                                <button type="button" class="pos-qty-btn" disabled="@_busy"
+                                        @onclick="() => ChangeQtyAsync(line, -1)">−</button>
+                                <span class="pos-qty-val">@line.Quantity</span>
+                                <button type="button" class="pos-qty-btn" disabled="@_busy"
+                                        @onclick="() => ChangeQtyAsync(line, +1)">+</button>
+                            </div>
+                            <span class="pos-line-total">@line.LineTotal.ToString("0.##")</span>
+                            <button type="button" class="pos-line-remove" title="Remove" disabled="@_busy"
+                                    @onclick="() => RemoveLineAsync(line)">✕</button>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="pos-console-totals">
+                <div class="pos-total-row"><span>SubTotal</span><strong>@((_activeDetail?.Subtotal ?? 0m).ToString("0.##")) Tk.</strong></div>
+                <div class="pos-total-row"><span>Discount</span><strong>@((_activeDetail?.DiscountAmount ?? 0m).ToString("0.##"))</strong></div>
+                @if (_activeDetail is { RoundingAdjustment: not 0m })
+                {
+                    <div class="pos-total-row"><span>Rounding</span><strong>@_activeDetail.RoundingAdjustment.ToString("+0.##;−0.##")</strong></div>
+                }
+                <div class="pos-total-row pos-total-row--grand"><span>Grand Total</span><strong>@((_activeDetail?.GrandTotal ?? 0m).ToString("0.##")) Tk.</strong></div>
+            </div>
+
+            <div class="pos-console-actions">
+                <BoButton Variant="danger" Disabled="@(_activeDetail is null || _busy)" OnClick="CancelActiveOrderAsync">Cancel</BoButton>
+                @if (_activeDetail is not null)
+                {
+                    <a class="pos-print-btn" href="/reports/order/@_activeDetail.Id/pos-receipt.pdf" target="_blank">Print</a>
+                }
+                else
+                {
+                    <span class="pos-print-btn pos-print-btn--disabled">Print</span>
+                }
+                <BoButton Variant="primary" Disabled="@(_activeDetail is null || _activeDetail.Lines.Count == 0 || _busy)"
+                          OnClick="OpenPaymentDialogAsync">Checkout</BoButton>
+            </div>
+        </div>
+    </div>
+}

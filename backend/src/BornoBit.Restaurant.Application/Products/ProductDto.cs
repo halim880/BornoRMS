@@ -1,5 +1,11 @@
 namespace BornoBit.Restaurant.Application.Products;
 
+public record ProductVariantDto(
+    Guid Id,
+    string Name,
+    decimal Price,
+    int DisplayOrder);
+
 public record ProductDto(
     Guid Id,
     string Code,
@@ -12,4 +18,11 @@ public record ProductDto(
     string? Description,
     string? ImagePath,
     int DisplayOrder,
-    bool IsActive);
+    bool IsActive,
+    IReadOnlyList<ProductVariantDto> Variants)
+{
+    public bool HasVariants => Variants.Count > 0;
+
+    /// <summary>Lowest sellable price — the cheapest variant, or the base price when no variants.</summary>
+    public decimal MinPrice => HasVariants ? Variants.Min(v => v.Price) : Price;
+}

@@ -27,5 +27,28 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .WithMany()
             .HasForeignKey(p => p.ProductCategoryId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(p => p.Variants)
+            .WithOne()
+            .HasForeignKey(v => v.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata.FindNavigation(nameof(Product.Variants))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+    }
+}
+
+public class ProductVariantConfiguration : IEntityTypeConfiguration<ProductVariant>
+{
+    public void Configure(EntityTypeBuilder<ProductVariant> builder)
+    {
+        builder.ToTable("ProductVariants");
+        builder.HasKey(v => v.Id);
+
+        builder.Property(v => v.ProductId).IsRequired();
+        builder.Property(v => v.Name).IsRequired().HasMaxLength(100);
+        builder.Property(v => v.Price).HasPrecision(18, 2);
+
+        builder.HasIndex(v => new { v.ProductId, v.DisplayOrder });
     }
 }

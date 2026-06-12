@@ -20,7 +20,7 @@
 
     <p style="color:var(--neutral-foreground-hint);">
         Choose a role and check the menus it should be able to see. Users see a menu when at least one of their roles permits it.
-        SuperAdmin always sees every menu.
+        SuperAdmin always sees every menu. Module visibility is managed on the <a href="/admin/module-permissions">Module permissions</a> page.
     </p>
 
     @if (_loadingRoles)
@@ -84,6 +84,8 @@
     .menu-perm-tree { display:flex; flex-direction:column; gap:4px; }
     .menu-perm-row { display:flex; align-items:center; gap:8px; padding:4px 0; }
     .menu-perm-title { font-weight:500; }
+    .menu-perm-group { margin-top:8px; }
+    .menu-perm-group .menu-perm-title { font-weight:700; text-transform:uppercase; font-size:12px; letter-spacing:.04em; color:var(--neutral-foreground-hint); }
     .menu-perm-url { color:var(--neutral-foreground-hint); font-size:12px; margin-left:8px; }
 </style>
 
@@ -128,7 +130,8 @@
         {
             var nodes = await Mediator.Send(new GetMenuPermissionsTreeQuery(roleId));
             _nodes = nodes.ToList();
-            _checked = CollectPermitted(_nodes, new HashSet<Guid>());
+            // Roots (modules) are managed on the Module Permissions page — never track them here.
+            _checked = CollectPermitted(_nodes.SelectMany(n => n.Children).ToList(), new HashSet<Guid>());
         }
         catch (Exception ex) { _treeError = $"Failed to load menu tree: {ex.Message}"; }
         finally { _loadingTree = false; }
@@ -151,7 +154,7 @@
 
     private void SelectAll()
     {
-        _checked = CollectAll(_nodes, new HashSet<Guid>());
+        _checked = CollectAll(_nodes.SelectMany(n => n.Children).ToList(), new HashSet<Guid>());
     }
 
     private void ClearAll() => _checked.Clear();
@@ -181,16 +184,26 @@
 
     private RenderFragment RenderNode(MenuPermissionNodeDto node, int depth) => __builder =>
     {
-        <div class="menu-perm-row" style="padding-left:@(depth * 20)px;">
-            <BoCheckbox @key="node.Id"
-                            Value="@_checked.Contains(node.Id)"
-                            ValueChanged="@(v => Toggle(node, v))" />
-            <span class="menu-perm-title">@node.Title</span>
-            @if (!string.IsNullOrWhiteSpace(node.Url))
-            {
-                <span class="menu-perm-url">@node.Url</span>
-            }
-        </div>
+        @if (depth == 0)
+        {
+            @* Roots are modules — group headers only; their visibility is set on Module permissions. *@
+            <div class="menu-perm-row menu-perm-group">
+                <span class="menu-perm-title">@node.Title</span>
+            </div>
+        }
+        else
+        {
+            <div class="menu-perm-row" style="padding-left:@(depth * 20)px;">
+                <BoCheckbox @key="node.Id"
+                                Value="@_checked.Contains(node.Id)"
+                                ValueChanged="@(v => Toggle(node, v))" />
+                <span class="menu-perm-title">@node.Title</span>
+                @if (!string.IsNullOrWhiteSpace(node.Url))
+                {
+                    <span class="menu-perm-url">@node.Url</span>
+                }
+            </div>
+        }
         @foreach (var child in node.Children)
         {
             @RenderNode(child, depth + 1)

@@ -1,0 +1,63 @@
+@using BornoBit.Restaurant.Application.RoleManagement
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:14px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Placeholder="e.g. Host" Disabled="@(IsEdit && Content.IsSystem)" />
+        @if (IsEdit && Content.IsSystem)
+        {
+            <small style="color:var(--neutral-foreground-hint);margin-top:-8px;">System role names cannot be changed.</small>
+        }
+        <BoInput @bind-Value="Content.Description" Label="Description" Style="width:100%;" Placeholder="What this role is for" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(IsEdit ? "Save changes" : "Create role")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public RoleFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private bool IsEdit => Content.Id is not null;
+
+    private async Task SaveAsync()
+    {
+        _error = null; _busy = true;
+        try
+        {
+            var name = (Content.Name ?? string.Empty).Trim();
+            var description = string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim();
+
+            if (IsEdit)
+            {
+                await Mediator.Send(new UpdateRoleCommand(Content.Id!.Value, name, description));
+            }
+            else
+            {
+                Content.Id = await Mediator.Send(new CreateRoleCommand(name, description));
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private Task CancelAsync()
+    {
+        Dialog.Cancel();
+        return Task.CompletedTask;
+    }
+}

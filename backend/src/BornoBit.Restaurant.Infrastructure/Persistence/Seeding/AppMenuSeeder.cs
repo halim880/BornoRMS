@@ -53,6 +53,39 @@ public class AppMenuSeeder
 
         await _db.SaveChangesAsync(cancellationToken);
         await BackfillDefaultPermissionsAsync(seeded, cancellationToken);
+        await PruneRemovedAccountsMenusAsync(defaults, cancellationToken);
+    }
+
+    // The Accounts group was reshaped (GL pages → basic income/expense pages). The upsert above
+    // only adds/updates by title, so the old rows (/accounts/coa, /accounts/journals, …) would
+    // linger in the sidebar and 404. Deactivate + soft-delete any /accounts/* menu whose URL is
+    // no longer in the defaults.
+    private async Task PruneRemovedAccountsMenusAsync(List<MenuSpec> defaults, CancellationToken cancellationToken)
+    {
+        var validUrls = defaults
+            .SelectMany(root => root.Children.Prepend(root))
+            .Select(spec => spec.Url)
+            .Where(url => !string.IsNullOrEmpty(url))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var stale = await _db.AppMenus
+            .IgnoreQueryFilters()
+            .Where(m => m.Url != null && m.Url.StartsWith("/accounts/") && !m.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        var pruned = 0;
+        foreach (var menu in stale.Where(m => !validUrls.Contains(m.Url!)))
+        {
+            menu.IsActive = false;
+            menu.IsDeleted = true;
+            pruned++;
+        }
+
+        if (pruned > 0)
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("AppMenuSeeder: pruned {Count} removed Accounts menu(s).", pruned);
+        }
     }
 
     private AppMenu Upsert(MenuSpec spec, Guid? parentId, int displayOrder, Dictionary<string, List<AppMenu>> byTitle)
@@ -148,8 +181,16 @@ public class AppMenuSeeder
         new("Operations", Icon: "ClipboardTextLtr", Children: new()
         {
             new("Take Order", Url: "/waiter/orders", Icon: "DocumentAdd"),
+            new("POS", Url: "/pos", Icon: "ReceiptMoney"),
             new("Orders", Url: "/orders", Icon: "DocumentBulletList"),
+            new("Menu", Url: "/operations/menu", Icon: "Receipt"),
             new("App Settings", Url: "/settings/app", Icon: "PaintBrush"),
+        }),
+        new("Inventory", Icon: "BoxMultiple", RequiredRole: Roles.Admin, Children: new()
+        {
+            new("Products", Url: "/inventory/products", Icon: "Box", RequiredRole: Roles.Admin),
+            new("Product Categories", Url: "/inventory/categories", Icon: "FolderList", RequiredRole: Roles.Admin),
+            new("Tables", Url: "/inventory/tables", Icon: "Table", RequiredRole: Roles.Admin),
         }),
         new("Stock", Icon: "Box", RequiredRole: Roles.Manager, Children: new()
         {
@@ -170,18 +211,19 @@ public class AppMenuSeeder
         }),
         new("Accounts", Icon: "Money", RequiredRole: Roles.Admin, Children: new()
         {
-            new("Chart of Accounts", Url: "/accounts/coa",           Icon: "Organization",  RequiredRole: Roles.Admin),
-            new("Journal Entries",   Url: "/accounts/journals",      Icon: "BookOpenMicroscope", RequiredRole: Roles.Admin),
-            new("Trial Balance",     Url: "/accounts/trial-balance", Icon: "ScaleBalance",  RequiredRole: Roles.Admin),
-            new("Ledger",            Url: "/accounts/ledger",        Icon: "DocumentTable", RequiredRole: Roles.Admin),
+            new("Transactions",  Url: "/accounts/transactions",  Icon: "ReceiptMoney", RequiredRole: Roles.Admin),
+            new("Cash Accounts", Url: "/accounts/cash-accounts",  Icon: "Wallet",       RequiredRole: Roles.Admin),
+            new("Categories",    Url: "/accounts/categories",     Icon: "FolderList",   RequiredRole: Roles.Admin),
         }),
         new("Administration", Icon: "Settings", RequiredRole: Roles.Admin, Children: new()
         {
             new("Users & Roles", Url: "/admin/users", Icon: "PeopleTeam", RequiredRole: Roles.Admin),
+            // Note: BackfillDefaultPermissionsAsync re-adds the default Admin grant for these
+            // entries on every boot, even if an admin removed it on the mapping pages.
+            new("Roles", Url: "/admin/roles", Icon: "Person", RequiredRole: Roles.Admin),
             new("Menu Permissions", Url: "/admin/menu-permissions", Icon: "ShieldKeyhole", RequiredRole: Roles.Admin),
+            new("Module Permissions", Url: "/admin/module-permissions", Icon: "AppsList", RequiredRole: Roles.Admin),
             new("Numbering Scopes", Url: "/admin/numbering-scopes", Icon: "NumberSymbol", RequiredRole: Roles.Admin),
-            new("Product Categories", Url: "/inventory/categories", Icon: "FolderList", RequiredRole: Roles.Admin),
-            new("Products", Url: "/inventory/products", Icon: "Box", RequiredRole: Roles.Admin),
             new("Tenants", Url: "/admin/tenants", Icon: "Building", RequiredRole: Roles.SuperAdmin),
             new("Modules", Url: "/admin/modules", Icon: "AppsList", RequiredRole: Roles.SuperAdmin),
         }),

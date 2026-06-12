@@ -9,6 +9,7 @@ public class Customer : AuditableEntity
 
     public string Phone { get; private set; } = default!;
     public string? FullName { get; private set; }
+    public string? Address { get; private set; }
     public bool IsActive { get; private set; } = true;
 
     private Customer() { }
@@ -26,6 +27,8 @@ public class Customer : AuditableEntity
     }
 
     public void UpdateName(string? fullName) => FullName = Trim(fullName);
+
+    public void UpdateAddress(string? address) => Address = Trim(address);
 
     public void Activate() => IsActive = true;
     public void Deactivate() => IsActive = false;

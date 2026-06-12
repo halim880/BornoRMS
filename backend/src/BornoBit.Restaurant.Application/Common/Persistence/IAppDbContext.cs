@@ -18,6 +18,7 @@ public interface IAppDbContext
     DbSet<MenuItem> MenuItems { get; }
     DbSet<ProductCategory> ProductCategories { get; }
     DbSet<Product> Products { get; }
+    DbSet<ProductVariant> ProductVariants { get; }
     DbSet<Customer> Customers { get; }
     DbSet<CustomerOtp> CustomerOtps { get; }
     DbSet<RestaurantTable> RestaurantTables { get; }
@@ -48,9 +49,9 @@ public interface IAppDbContext
     DbSet<StoreIssueLine> StoreIssueLines { get; }
     DbSet<StoreStockMovement> StoreStockMovements { get; }
 
-    DbSet<Account> Accounts { get; }
-    DbSet<JournalEntry> JournalEntries { get; }
-    DbSet<JournalLine> JournalLines { get; }
+    DbSet<CashAccount> CashAccounts { get; }
+    DbSet<FinanceCategory> FinanceCategories { get; }
+    DbSet<FinanceTransaction> FinanceTransactions { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

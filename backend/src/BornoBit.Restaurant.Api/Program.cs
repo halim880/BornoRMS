@@ -22,6 +22,8 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddReporting();
 
 builder.Services.Configure<OtpOptions>(builder.Configuration.GetSection(OtpOptions.SectionName));
+builder.Services.Configure<BornoBit.Restaurant.Reporting.Models.ReceiptBranding>(
+    builder.Configuration.GetSection(BornoBit.Restaurant.Reporting.Models.ReceiptBranding.SectionName));
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var signingKey = jwtSection["SigningKey"]
@@ -94,7 +96,7 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<UnitSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StockSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
-        await scope.ServiceProvider.GetRequiredService<ChartOfAccountsSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<AccountingSeeder>().SeedAsync();
     }
     catch (Exception ex)
     {
@@ -116,6 +118,7 @@ app.UseAuthorization();
 
 app.MapHealthEndpoints();
 app.MapMenuEndpoints();
+app.MapTableEndpoints();
 app.MapCustomerAuthEndpoints();
 app.MapStaffAuthEndpoints();
 app.MapOrderEndpoints();

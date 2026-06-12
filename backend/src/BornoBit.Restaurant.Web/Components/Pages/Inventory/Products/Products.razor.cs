@@ -58,7 +58,10 @@ public partial class Products : ComponentBase
             Price = p.Price,
             Description = p.Description,
             ImagePath = p.ImagePath,
-            DisplayOrder = p.DisplayOrder
+            DisplayOrder = p.DisplayOrder,
+            Variants = p.Variants
+                .Select(v => new VariantFormRow { Id = v.Id, Name = v.Name, Price = v.Price })
+                .ToList()
         };
         var result = await DialogService.ShowAsync<ProductFormDialog, ProductFormModel>(model, new BoDialogOptions
         {

@@ -6,6 +6,8 @@ public class OrderLine : BaseEntity
 {
     public Guid OrderId { get; set; }
     public Guid MenuItemId { get; set; }
+    /// <summary>Product variant chosen for this line (waiter flow), if any.</summary>
+    public Guid? VariantId { get; set; }
     public string Code { get; set; } = default!;
     public string Name { get; set; } = default!;
     public decimal UnitPriceSnapshot { get; set; }

@@ -1,0 +1,127 @@
+@using BornoBit.Restaurant.Application.Accounting.CashAccounts
+@using BornoBit.Restaurant.Application.Accounting.Categories
+@using BornoBit.Restaurant.Application.Accounting.Transactions
+@using BornoBit.Restaurant.Domain.Accounting
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="display:flex; gap:12px;">
+            <BoSelect TOption="TransactionType"
+                      Items="@_types"
+                      OptionValue="@(t => ((int)t).ToString())"
+                      OptionText="@(t => t.ToString())"
+                      SelectedOption="@Content.Type"
+                      SelectedOptionChanged="OnTypeChanged"
+                      Label="Type" Required="true" Style="width:160px;" />
+            <BoDatePicker DateTimeValue="Content.OccurredOn" DateTimeValueChanged="OnDateChanged" Label="Date" Required="true" />
+        </div>
+
+        <BoSelect TOption="CategoryDto"
+                  Items="@FilteredCategories"
+                  OptionValue="@(c => c.Id.ToString())"
+                  OptionText="@(c => c.Name)"
+                  SelectedOption="@_selectedCategory"
+                  SelectedOptionChanged="@(c => Content.CategoryId = c?.Id)"
+                  Label="Category" Required="true" Placeholder="(select a category)" Style="width:100%;" />
+
+        <BoSelect TOption="CashAccountDto"
+                  Items="@_accounts"
+                  OptionValue="@(a => a.Id.ToString())"
+                  OptionText="@(a => a.Name)"
+                  SelectedOption="@_selectedAccount"
+                  SelectedOptionChanged="@(a => Content.CashAccountId = a?.Id)"
+                  Label="Cash account" Required="true" Placeholder="(select an account)" Style="width:100%;" />
+
+        <BoNumberInput T="decimal" @bind-Value="Content.Amount" Label="Amount" Min="0" Step="0.01" Style="width:200px;" />
+
+        <BoInput @bind-Value="Content.Reference" Label="Reference" Style="width:100%;" Maxlength="80" />
+        <BoTextArea @bind-Value="Content.Notes" Label="Notes" Style="width:100%;" Maxlength="1000" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public TransactionFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private static readonly TransactionType[] _types = Enum.GetValues<TransactionType>();
+    private List<CategoryDto> _categories = new();
+    private List<CashAccountDto> _accounts = new();
+
+    private IEnumerable<CategoryDto> FilteredCategories => _categories.Where(c => c.Type == Content.Type);
+    private CategoryDto? _selectedCategory => _categories.FirstOrDefault(c => c.Id == Content.CategoryId);
+    private CashAccountDto? _selectedAccount => _accounts.FirstOrDefault(a => a.Id == Content.CashAccountId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _categories = (await Mediator.Send(new GetCategoriesQuery(ActiveOnly: true))).ToList();
+            _accounts = (await Mediator.Send(new GetCashAccountsQuery(ActiveOnly: true))).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load form data: {ex.Message}"; }
+    }
+
+    private void OnTypeChanged(TransactionType type)
+    {
+        Content.Type = type;
+        // Drop a category that no longer matches the chosen type.
+        if (_selectedCategory is { } c && c.Type != type)
+            Content.CategoryId = null;
+    }
+
+    private void OnDateChanged(DateTime? d)
+    {
+        if (d.HasValue) Content.OccurredOn = d.Value.Date;
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (Content.CategoryId is null) { _error = "Category is required."; return; }
+        if (Content.CashAccountId is null) { _error = "Cash account is required."; return; }
+        if (Content.Amount <= 0m) { _error = "Amount must be greater than zero."; return; }
+
+        _busy = true;
+        try
+        {
+            var reference = string.IsNullOrWhiteSpace(Content.Reference) ? null : Content.Reference.Trim();
+            var notes = string.IsNullOrWhiteSpace(Content.Notes) ? null : Content.Notes.Trim();
+
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateTransactionCommand(
+                    Content.OccurredOn, Content.Type, Content.CashAccountId.Value, Content.CategoryId.Value,
+                    Content.Amount, reference, notes));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateTransactionCommand(
+                    Content.Id.Value, Content.OccurredOn, Content.Type, Content.CashAccountId.Value, Content.CategoryId.Value,
+                    Content.Amount, reference, notes));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}
