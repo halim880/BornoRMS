@@ -37,19 +37,19 @@ public class AppMenuSeeder
 
         var seeded = new List<(AppMenu Entity, MenuSpec Spec)>();
 
-        for (var i = 0; i < defaults.Count; i++)
+        // Walk the spec tree to any depth. AppMenu.Id is client-generated (Guid.NewGuid()), so a parent's
+        // Id is available to its children before SaveChanges — no intermediate saves needed.
+        void SeedLevel(List<MenuSpec> specs, Guid? parentId)
         {
-            var rootSpec = defaults[i];
-            var root = Upsert(rootSpec, parentId: null, displayOrder: i, byTitle);
-            seeded.Add((root, rootSpec));
-
-            for (var j = 0; j < rootSpec.Children.Count; j++)
+            for (var i = 0; i < specs.Count; i++)
             {
-                var childSpec = rootSpec.Children[j];
-                var child = Upsert(childSpec, parentId: root.Id, displayOrder: j, byTitle);
-                seeded.Add((child, childSpec));
+                var entity = Upsert(specs[i], parentId, displayOrder: i, byTitle);
+                seeded.Add((entity, specs[i]));
+                SeedLevel(specs[i].Children, entity.Id);
             }
         }
+
+        SeedLevel(defaults, null);
 
         await _db.SaveChangesAsync(cancellationToken);
         await BackfillDefaultPermissionsAsync(seeded, cancellationToken);
@@ -62,8 +62,10 @@ public class AppMenuSeeder
     // no longer in the defaults.
     private async Task PruneRemovedAccountsMenusAsync(List<MenuSpec> defaults, CancellationToken cancellationToken)
     {
-        var validUrls = defaults
-            .SelectMany(root => root.Children.Prepend(root))
+        IEnumerable<MenuSpec> Flatten(IEnumerable<MenuSpec> specs) =>
+            specs.SelectMany(s => Flatten(s.Children).Prepend(s));
+
+        var validUrls = Flatten(defaults)
             .Select(spec => spec.Url)
             .Where(url => !string.IsNullOrEmpty(url))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -214,6 +216,11 @@ public class AppMenuSeeder
             new("Transactions",  Url: "/accounts/transactions",  Icon: "ReceiptMoney", RequiredRole: Roles.Admin),
             new("Cash Accounts", Url: "/accounts/cash-accounts",  Icon: "Wallet",       RequiredRole: Roles.Admin),
             new("Categories",    Url: "/accounts/categories",     Icon: "FolderList",   RequiredRole: Roles.Admin),
+            new("Reporting", Icon: "ChartMultiple", RequiredRole: Roles.Admin, Children: new()
+            {
+                new("Cash Book",      Url: "/accounts/reports/cash-book", Icon: "BookOpenMicroscope", RequiredRole: Roles.Admin),
+                new("Account Ledger", Url: "/accounts/reports/ledger",    Icon: "DocumentTable",      RequiredRole: Roles.Admin),
+            }),
         }),
         new("Administration", Icon: "Settings", RequiredRole: Roles.Admin, Children: new()
         {

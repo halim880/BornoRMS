@@ -1,0 +1,104 @@
+@page "/accounts/reports/cash-book"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.CashAccounts
+@using BornoBit.Restaurant.Application.Accounting.Reports
+@using BornoBit.Restaurant.Domain.Accounting
+
+<PageTitle>Cash Book · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Cash Book"
+                Description="Money in and out over a period, with opening and closing balance. Pick a cash account or view all combined.">
+    </PageHeader>
+
+    <div class="bo-card" style="padding:12px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <BoDatePicker DateTimeValue="_from" DateTimeValueChanged="OnFromChanged" Label="From" />
+        <BoDatePicker DateTimeValue="_to" DateTimeValueChanged="OnToChanged" Label="To" />
+        <BoSelect TOption="CashAccountDto"
+                  Items="@_accounts"
+                  OptionValue="@(a => a.Id.ToString())"
+                  OptionText="@(a => a.Name)"
+                  SelectedOption="@_selectedAccount"
+                  SelectedOptionChanged="OnAccountChanged"
+                  Label="Cash account" Placeholder="(all accounts)" Style="width:200px;" />
+    </div>
+
+    @if (_rangeError is not null)
+    {
+        <BoMessageBar Intent="warning">@_rangeError</BoMessageBar>
+    }
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Opening</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700;">@_report.OpeningBalance.ToString("#,##0.00")</div>
+        </div>
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Receipts (in)</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700; color:var(--bo-success, #16a34a);">@_report.TotalReceipts.ToString("#,##0.00")</div>
+        </div>
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Payments (out)</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700; color:var(--bo-danger, #dc2626);">@_report.TotalPayments.ToString("#,##0.00")</div>
+        </div>
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Closing</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700;">@_report.ClosingBalance.ToString("#,##0.00")</div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading cash book…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_report.Rows.Count == 0)
+    {
+        <EmptyState Description="No transactions in this period." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Date</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Number</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Category</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Account</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">In</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Out</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-top:1px solid var(--bo-border-soft); background:var(--bo-bg-soft);">
+                        <td style="padding:10px 14px; color:var(--bo-text-muted);" colspan="6"><em>Opening balance</em></td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:600;">@_report.OpeningBalance.ToString("#,##0.00")</td>
+                    </tr>
+                    @foreach (var r in _report.Rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px; color:var(--bo-text-muted); white-space:nowrap;">@r.OccurredOn.ToString("yyyy-MM-dd")</td>
+                            <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@r.Number</span></td>
+                            <td style="padding:10px 14px;">@r.CategoryName</td>
+                            <td style="padding:10px 14px; color:var(--bo-text-muted);">@r.CashAccountName</td>
+                            <td style="padding:10px 14px; text-align:right; color:var(--bo-success, #16a34a);">@(r.In > 0m ? r.In.ToString("#,##0.00") : "—")</td>
+                            <td style="padding:10px 14px; text-align:right; color:var(--bo-danger, #dc2626);">@(r.Out > 0m ? r.Out.ToString("#,##0.00") : "—")</td>
+                            <td style="padding:10px 14px; text-align:right; font-weight:600;">@r.RunningBalance.ToString("#,##0.00")</td>
+                        </tr>
+                    }
+                    <tr style="border-top:2px solid var(--bo-border); background:var(--bo-bg-soft);">
+                        <td style="padding:10px 14px; font-weight:700;" colspan="4">Closing balance</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700; color:var(--bo-success, #16a34a);">@_report.TotalReceipts.ToString("#,##0.00")</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700; color:var(--bo-danger, #dc2626);">@_report.TotalPayments.ToString("#,##0.00")</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700;">@_report.ClosingBalance.ToString("#,##0.00")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
