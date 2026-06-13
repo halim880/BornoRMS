@@ -113,12 +113,20 @@
 }
 
 .pos-prod-card {
-    display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
-    padding: 16px 12px 10px; min-height: 96px;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 0 0 10px; min-height: 96px; overflow: hidden;
     border: 1px solid var(--bo-border); border-radius: var(--bo-radius-md, 8px);
     background: var(--bo-bg-card); color: var(--bo-text);
     transition: transform .08s, border-color .12s, box-shadow .12s;
 }
+
+/* image / placeholder banner — bleeds to card edges, fixed height keeps cards uniform */
+.pos-prod-thumb {
+    display: flex; align-items: center; justify-content: center;
+    height: 128px; background: var(--bo-bg-subtle, var(--bo-border-soft));
+    color: var(--bo-text-subtle); overflow: hidden;
+}
+.pos-prod-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .pos-prod-card--tappable { cursor: pointer; }
 
@@ -129,14 +137,15 @@
 
 .pos-prod-card--tappable:active { transform: scale(.97); }
 
-.pos-prod-name { font-weight: 700; font-size: 14px; text-align: center; line-height: 1.3; }
+.pos-prod-name { font-weight: 700; font-size: 14px; text-align: center; line-height: 1.3; padding: 0 12px; }
 
 .pos-prod-meta {
     display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
-    border-top: 1px solid var(--bo-border-soft); padding-top: 6px;
+    margin: auto 12px 0; padding-top: 6px;
+    border-top: 1px solid var(--bo-border-soft);
 }
 
-.pos-prod-cat { font-size: 11.5px; color: var(--bo-text-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pos-prod-cat { font-size: 14px; font-weight: 700; color: var(--bo-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pos-prod-price { font-size: 12.5px; font-weight: 700; color: var(--bo-danger); white-space: nowrap; }
 
 /* ---------- order console ---------- */
@@ -235,7 +244,7 @@
 .pos-total-row--grand { font-size: 15px; font-weight: 800; }
 
 .pos-console-actions {
-    display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 8px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1.3fr; gap: 8px;
     padding: 10px 14px 14px;
     flex: 0 0 auto;
 }
@@ -251,3 +260,14 @@
 
 .pos-print-btn:hover { border-color: var(--bo-primary); color: var(--bo-primary); }
 .pos-print-btn--disabled { opacity: .5; pointer-events: none; }
+
+.pos-kot-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 8px 12px; border-radius: var(--bo-radius-md, 8px);
+    border: 1px solid var(--bo-warning); background: var(--bo-bg-soft);
+    color: var(--bo-warning); font-size: 13.5px; font-weight: 700;
+    text-decoration: none; cursor: pointer;
+    transition: background .12s, color .12s;
+}
+.pos-kot-btn:hover { background: var(--bo-warning); color: #fff; }
+.pos-kot-btn--disabled { opacity: .5; pointer-events: none; }

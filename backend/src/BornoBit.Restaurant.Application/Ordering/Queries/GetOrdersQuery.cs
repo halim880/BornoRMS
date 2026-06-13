@@ -10,7 +10,9 @@ public record GetOrdersQuery(
     OrderStatus? Status = null,
     Guid? CustomerId = null,
     int Page = 1,
-    int PageSize = 50
+    int PageSize = 50,
+    bool? IsPaid = null,
+    bool ExcludeCancelled = false
 ) : IRequest<PagedResult<OrderListItemDto>>;
 
 public record OrderListItemDto(
@@ -28,7 +30,9 @@ public record OrderListItemDto(
     decimal Subtotal,
     decimal DiscountAmount,
     decimal Total,
-    bool IsPaid);
+    bool IsPaid,
+    DateTime? PaidAtUtc = null,
+    PaymentMethod? PaymentMethod = null);
 
 public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedResult<OrderListItemDto>>
 {
@@ -54,6 +58,12 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedResult
         if (request.CustomerId is { } cid)
             query = query.Where(x => x.Order.CustomerId == cid);
 
+        if (request.IsPaid is { } paid)
+            query = query.Where(x => x.Order.IsPaid == paid);
+
+        if (request.ExcludeCancelled)
+            query = query.Where(x => x.Order.Status != OrderStatus.Cancelled);
+
         var total = await query.LongCountAsync(cancellationToken);
 
         var items = await query
@@ -75,7 +85,9 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedResult
                 x.Order.Lines.Sum(l => (decimal?)l.UnitPriceSnapshot * l.Quantity) ?? 0m,
                 x.Order.DiscountAmount,
                 (x.Order.Lines.Sum(l => (decimal?)l.UnitPriceSnapshot * l.Quantity) ?? 0m) - x.Order.DiscountAmount + x.Order.RoundingAdjustment,
-                x.Order.IsPaid))
+                x.Order.IsPaid,
+                x.Order.PaidAtUtc,
+                x.Order.PaymentMethod))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<OrderListItemDto>(items, page, pageSize, total);

@@ -25,40 +25,85 @@
                         disabled="@_busy" @onclick="() => RoundAsync(PosRoundingMode.Ceil)">Ceil (+)</button>
             </div>
 
-            <div class="pay-entry">@_tendered</div>
-            <div class="pay-change">Change : <span>@Change.ToString("0.##") Tk.</span></div>
+            <!-- ===== Discount (touch-friendly) ===== -->
+            <div class="pay-disc">
+                <div class="pay-disc-row">
+                    <span class="pay-disc-label">Discount</span>
+                    <div class="pay-disc-kinds">
+                        <button type="button" class="pay-chip @(_discountKind == "Percent" ? "pay-chip--active" : null)"
+                                disabled="@_busy" @onclick='() => _discountKind = "Percent"'>%</button>
+                        <button type="button" class="pay-chip @(_discountKind == "Fixed" ? "pay-chip--active" : null)"
+                                disabled="@_busy" @onclick='() => _discountKind = "Fixed"'>Tk</button>
+                    </div>
+                    @if (_discount > 0m)
+                    {
+                        <span class="pay-disc-applied">− @_discount.ToString("0.##") Tk.</span>
+                    }
+                </div>
+                <div class="pay-disc-quick">
+                    @foreach (var v in (_discountKind == "Percent" ? _percentChips : _fixedChips))
+                    {
+                        <button type="button" class="pay-chip" disabled="@_busy"
+                                @onclick="() => ApplyDiscountAsync(v)">@(_discountKind == "Percent" ? $"{v}%" : v.ToString("0.##"))</button>
+                    }
+                    <button type="button" class="pay-chip pay-chip--clear" disabled="@(_busy || _discount <= 0m)"
+                            @onclick="ClearDiscountAsync">Clear</button>
+                </div>
+            </div>
+
+            <!-- ===== Payment method ===== -->
+            <div class="pay-method">
+                @foreach (var m in _methods)
+                {
+                    <button type="button" class="pay-chip pay-chip--method @(_method == m ? "pay-chip--active" : null)"
+                            disabled="@_busy" @onclick="() => SelectMethod(m)">@m.ToString()</button>
+                }
+            </div>
 
             @if (!string.IsNullOrEmpty(_error))
             {
                 <BoMessageBar Intent="error">@_error</BoMessageBar>
             }
 
-            <div class="pay-pad">
-                <button type="button" class="pay-key pay-key--exact" @onclick="SetExact">Exact</button>
-                <button type="button" class="pay-key" @onclick='() => SetQuick(10)'>10</button>
-                <button type="button" class="pay-key" @onclick='() => SetQuick(20)'>20</button>
-                <button type="button" class="pay-key pay-key--clear" @onclick="Clear">Clear</button>
+            @if (_method == PaymentMethod.Cash)
+            {
+                <div class="pay-entry">@_tendered</div>
+                <div class="pay-change">Change : <span>@Change.ToString("0.##") Tk.</span></div>
 
-                <button type="button" class="pay-key" @onclick='() => Append("1")'>1</button>
-                <button type="button" class="pay-key" @onclick='() => Append("2")'>2</button>
-                <button type="button" class="pay-key" @onclick='() => Append("3")'>3</button>
-                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(50)">50+</button>
+                <div class="pay-pad">
+                    <button type="button" class="pay-key pay-key--exact" @onclick="SetExact">Exact</button>
+                    <button type="button" class="pay-key" @onclick='() => SetQuick(10)'>10</button>
+                    <button type="button" class="pay-key" @onclick='() => SetQuick(20)'>20</button>
+                    <button type="button" class="pay-key pay-key--clear" @onclick="Clear">Clear</button>
 
-                <button type="button" class="pay-key" @onclick='() => Append("4")'>4</button>
-                <button type="button" class="pay-key" @onclick='() => Append("5")'>5</button>
-                <button type="button" class="pay-key" @onclick='() => Append("6")'>6</button>
-                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(100)">100+</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("1")'>1</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("2")'>2</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("3")'>3</button>
+                    <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(50)">50+</button>
 
-                <button type="button" class="pay-key" @onclick='() => Append("7")'>7</button>
-                <button type="button" class="pay-key" @onclick='() => Append("8")'>8</button>
-                <button type="button" class="pay-key" @onclick='() => Append("9")'>9</button>
-                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(500)">500+</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("4")'>4</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("5")'>5</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("6")'>6</button>
+                    <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(100)">100+</button>
 
-                <button type="button" class="pay-key" @onclick='() => Append(".")'>.</button>
-                <button type="button" class="pay-key" @onclick='() => Append("0")'>0</button>
-                <button type="button" class="pay-key" @onclick='() => Append("00")'>00</button>
-                <button type="button" class="pay-key pay-key--back" @onclick="Backspace">⌫</button>
-            </div>
+                    <button type="button" class="pay-key" @onclick='() => Append("7")'>7</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("8")'>8</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("9")'>9</button>
+                    <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(500)">500+</button>
+
+                    <button type="button" class="pay-key" @onclick='() => Append(".")'>.</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("0")'>0</button>
+                    <button type="button" class="pay-key" @onclick='() => Append("00")'>00</button>
+                    <button type="button" class="pay-key pay-key--back" @onclick="Backspace">⌫</button>
+                </div>
+            }
+            else
+            {
+                <div class="pay-noncash">
+                    <BoIcon Name="@(_method == PaymentMethod.Card ? "Wallet" : "MoneyHand")" Size="22" />
+                    <span>@_method paid in full · @_grandTotal.ToString("0.##") Tk.</span>
+                </div>
+            }
         </div>
     }
 </BoDialogBody>
@@ -75,7 +120,15 @@
     private OrderDetailDto? _order;
     private decimal _grandTotal;
     private decimal _rounding;
+    private decimal _discount;
     private string _tendered = "0";
+
+    private static readonly PaymentMethod[] _methods = { PaymentMethod.Cash, PaymentMethod.Card, PaymentMethod.Mobile };
+    private static readonly decimal[] _percentChips = { 5m, 10m, 15m, 20m };
+    private static readonly decimal[] _fixedChips = { 10m, 20m, 50m, 100m };
+
+    private PaymentMethod _method = PaymentMethod.Cash;
+    private string _discountKind = "Percent";
 
     private bool _busy;
     private string? _error;
@@ -94,6 +147,44 @@
         _order = await Sender.Send(new GetOrderQuery(Content));
         _grandTotal = _order.GrandTotal;
         _rounding = _order.RoundingAdjustment;
+        _discount = _order.DiscountAmount;
+    }
+
+    // ----- payment method -----
+
+    private void SelectMethod(PaymentMethod m)
+    {
+        _method = m;
+        // Card/Mobile settle in full — no change due, so prefill the exact grand total.
+        if (m != PaymentMethod.Cash) SetExact();
+    }
+
+    // ----- discount -----
+
+    private Task ApplyDiscountAsync(decimal value)
+    {
+        decimal? percent = _discountKind == "Percent" ? value : null;
+        decimal? amount = _discountKind == "Fixed" ? value : null;
+        return SendDiscountAsync(percent, amount);
+    }
+
+    private Task ClearDiscountAsync() => SendDiscountAsync(null, 0m);
+
+    private async Task SendDiscountAsync(decimal? percent, decimal? amount)
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var summary = await Sender.Send(new ApplyDiscountCommand(Content, percent, amount, null));
+            _discount = summary.DiscountAmount;
+            _grandTotal = summary.GrandTotal;
+            _rounding = summary.Rounding;
+            // Keep tendered consistent with the new total for full-settle methods.
+            if (_method != PaymentMethod.Cash) SetExact();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
     }
 
     private async Task RoundAsync(PosRoundingMode mode)
@@ -144,7 +235,7 @@
         _busy = true;
         try
         {
-            var summary = await Sender.Send(new RecordPaymentCommand(Content, PaymentMethod.Cash, Tendered));
+            var summary = await Sender.Send(new RecordPaymentCommand(Content, _method, Tendered));
             ToastService.ShowSuccess($"Payment saved · change {summary.Change:0.##} Tk.");
             _ = AutoPrintAsync(); // fire-and-forget: payment never waits on (or fails with) the printer
             Dialog.Close(true);
@@ -176,6 +267,36 @@
         background: var(--bo-bg-card); font-size: 12px; font-weight: 700;
         transition: background .12s, color .12s;
     }
+    /* ----- shared touch chips (discount + method) ----- */
+    .pay-chip {
+        padding: 8px 14px; border-radius: 999px; cursor: pointer;
+        border: 1px solid var(--bo-border); background: var(--bo-bg-card);
+        color: var(--bo-text); font-size: 13px; font-weight: 700;
+        min-width: 44px; transition: background .12s, color .12s, border-color .12s;
+    }
+    .pay-chip:hover { border-color: var(--bo-primary); }
+    .pay-chip--active { background: var(--bo-primary); color: #fff; border-color: var(--bo-primary); }
+    .pay-chip--clear { border-color: var(--bo-danger); color: var(--bo-danger); }
+    .pay-chip--clear:hover { background: var(--bo-danger); color: #fff; }
+    .pay-chip:disabled { opacity: .5; cursor: default; }
+
+    .pay-disc { display: flex; flex-direction: column; gap: 8px; }
+    .pay-disc-row { display: flex; align-items: center; gap: 8px; }
+    .pay-disc-label { font-size: 13px; font-weight: 800; }
+    .pay-disc-kinds { display: flex; gap: 6px; }
+    .pay-disc-applied { margin-left: auto; font-size: 13px; font-weight: 800; color: var(--bo-danger); }
+    .pay-disc-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .pay-method { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .pay-chip--method { padding: 12px 4px; font-size: 14px; }
+
+    .pay-noncash {
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        padding: 22px; border: 1px dashed var(--bo-border); border-radius: var(--bo-radius-md, 8px);
+        background: var(--bo-bg-soft); color: var(--bo-text);
+        font-size: 14px; font-weight: 700; text-align: center;
+    }
+
     .pay-round--floor { border: 1px solid var(--bo-success); color: var(--bo-success); }
     .pay-round--ceil  { border: 1px solid var(--bo-warning); color: var(--bo-warning); }
     .pay-round--floor.pay-round--active { background: var(--bo-success); color: #fff; }

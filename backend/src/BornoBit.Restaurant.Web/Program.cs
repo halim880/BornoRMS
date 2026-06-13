@@ -64,6 +64,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Admin", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin));
     options.AddPolicy("Inventory", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
     options.AddPolicy("Store", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("Reports", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
 });
 builder.Services.AddCascadingAuthenticationState();
 

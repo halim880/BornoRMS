@@ -383,6 +383,64 @@ h4 {
 .bo-page-header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* Card — layered surface with a subtle gradient and inner highlight for depth. */
+/* Flat pure-white section surface, matching the POS page panels
+   (.pos-orders-bar / .pos-cats / .pos-products / .pos-console). Reuse this for
+   report/list page sections instead of .bo-card's off-white gradient. */
+.bo-panel {
+    background: var(--bo-bg-card);
+    border: 1px solid var(--bo-border-soft);
+    border-radius: var(--bo-radius-lg, 12px);
+    box-shadow: var(--bo-shadow-xs);
+}
+
+/* KPI / summary stat card: icon chip + label + value. Used on report pages. */
+.report-stat {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    flex: 1;
+    min-width: 180px;
+}
+.report-stat-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: var(--bo-radius-md, 10px);
+    flex: 0 0 auto;
+}
+.report-stat-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.report-stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    color: var(--bo-text-muted);
+}
+.report-stat-value {
+    font-size: var(--bo-font-xl, 22px);
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+/* Print: show only the report content, drop app chrome / filters / action buttons. */
+@media print {
+    .app-header { display: none !important; }
+    .app-body > :not(.content-pane) { display: none !important; }
+    .app-shell, .app-body, .content-pane, .content { display: block !important; }
+    .content { padding: 0 !important; background: #fff !important; }
+    body { background: #fff !important; }
+    .no-print, .bo-page-header-actions { display: none !important; }
+    .bo-panel { box-shadow: none !important; border-color: #cbd5e1 !important; }
+}
+
 .bo-card {
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, var(--bo-slate-50) 100%);

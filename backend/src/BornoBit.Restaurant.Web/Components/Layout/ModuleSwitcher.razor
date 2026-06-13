@@ -1,14 +1,15 @@
 @using BornoBit.Restaurant.Application.Modules
 @using BornoBit.Restaurant.Domain.Identity
 @using BornoBit.Restaurant.Infrastructure.Identity
+@using BornoBit.Restaurant.Infrastructure.Persistence
 @using MediatR
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
 @inject ISender Mediator
 @inject AuthenticationStateProvider AuthState
 @inject NavigationManager Nav
-@inject RoleManager<ApplicationRole> RoleManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @implements IDisposable
 
 @if (_loading)
@@ -77,10 +78,16 @@ else
             var roleIds = new List<Guid>();
             if (!isSuperAdmin)
             {
-                foreach (var name in state.User.FindAll(ClaimTypes.Role).Select(c => c.Value))
+                var roleNames = state.User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+                if (roleNames.Count > 0)
                 {
-                    var r = await RoleManager.FindByNameAsync(name);
-                    if (r is not null) roleIds.Add(r.Id);
+                    // Use a short-lived context (not the shared scoped Identity one) to avoid
+                    // "second operation on this DbContext" when other circuit components query concurrently.
+                    await using var db = await DbFactory.CreateDbContextAsync();
+                    roleIds = await db.Roles
+                        .Where(r => r.Name != null && roleNames.Contains(r.Name))
+                        .Select(r => r.Id)
+                        .ToListAsync();
                 }
             }
             _modules = (await Mediator.Send(new GetUserModulesQuery(roleIds, isSuperAdmin))).ToList();

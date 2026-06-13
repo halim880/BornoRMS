@@ -25,6 +25,9 @@ public class Order : AuditableEntity
     public decimal? AmountTendered { get; private set; }
     public decimal? ChangeGiven { get; private set; }
 
+    /// <summary>Set when this invoice's takings have been imported into the accounts (cash counter import). Null = not yet accounted.</summary>
+    public DateTime? AccountedAtUtc { get; private set; }
+
     /// <summary>Cash round-off applied at the POS: negative floors the total, positive ceils it.</summary>
     public decimal RoundingAdjustment { get; private set; }
 
@@ -215,6 +218,15 @@ public class Order : AuditableEntity
         ChangeGiven = tendered - due;
         IsPaid = true;
         PaidAtUtc = DateTime.UtcNow;
+        Status = OrderStatus.Completed;
+    }
+
+    /// <summary>Marks this paid invoice as imported into the accounts. Idempotency is the caller's job (filter on <see cref="AccountedAtUtc"/>).</summary>
+    public void MarkAccounted()
+    {
+        if (!IsPaid) throw new InvalidOperationException("Cannot account an unpaid order.");
+        if (AccountedAtUtc is not null) throw new InvalidOperationException("Order is already accounted.");
+        AccountedAtUtc = DateTime.UtcNow;
     }
 
     private void TransitionTo(OrderStatus next, OrderStatus expected)

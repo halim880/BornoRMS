@@ -77,9 +77,18 @@ else
                         <div @key="item.Id" class="pos-prod-card pos-prod-card--tappable"
                              title="@(item.HasVariants ? $"Pick a size for {item.Name}" : $"Tap to add {item.Name}")"
                              @onclick="() => OnProductClickAsync(item)">
-                            <span class="pos-prod-name">@item.Name</span>
+                            <div class="pos-prod-thumb">
+                                @if (!string.IsNullOrWhiteSpace(item.ImagePath))
+                                {
+                                    <img src="@item.ImagePath" alt="@item.Name" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <BoIcon Name="Cart" Size="22" />
+                                }
+                            </div>
                             <div class="pos-prod-meta">
-                                <span class="pos-prod-cat">@item.CategoryName</span>
+                                <span class="pos-prod-cat">@item.Name</span>
                                 <span class="pos-prod-price">
                                     @(item.HasVariants ? $"from Tk. {item.MinPrice:0.##}" : $"Tk. {item.Price:0.##}")
                                 </span>
@@ -168,6 +177,14 @@ else
                 else
                 {
                     <span class="pos-print-btn pos-print-btn--disabled">Print</span>
+                }
+                @if (_activeDetail is not null && _activeDetail.Lines.Count > 0)
+                {
+                    <a class="pos-kot-btn" href="/reports/order/@_activeDetail.Id/kot.pdf" target="_blank">KOT</a>
+                }
+                else
+                {
+                    <span class="pos-kot-btn pos-kot-btn--disabled">KOT</span>
                 }
                 <BoButton Variant="primary" Disabled="@(_activeDetail is null || _activeDetail.Lines.Count == 0 || _busy)"
                           OnClick="OpenPaymentDialogAsync">Checkout</BoButton>

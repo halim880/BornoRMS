@@ -1,0 +1,171 @@
+@using BornoBit.Restaurant.Application.Accounting.CashAccounts
+@using BornoBit.Restaurant.Application.Accounting.Transactions
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Domain.Accounting
+@using BornoBit.Restaurant.Domain.Ordering
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+        <div style="font-size:var(--bo-font-sm); color:var(--bo-text-muted);">
+            Shows only invoices for this date that have not yet been imported. Imported invoices never reappear.
+        </div>
+
+        <div style="display:flex; gap:12px; align-items:flex-end;">
+            <BoDatePicker DateTimeValue="_date" DateTimeValueChanged="OnDateChanged" Label="Collection date" Required="true" />
+            <BoButton Variant="outline" OnClick="FetchAsync" Loading="_loading">Fetch</BoButton>
+        </div>
+
+        @if (_loading)
+        {
+            <LoadingState Message="Loading cash summary…" />
+        }
+        else if (_rows.Count == 0)
+        {
+            <EmptyState Description="No collections found for this date." />
+        }
+        else
+        {
+            <div class="bo-card" style="padding:0; overflow:hidden;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Method</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Orders</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">→ Account</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _rows)
+                        {
+                            <tr style="border-top:1px solid var(--bo-border-soft);">
+                                <td style="padding:8px 12px;">@r.Method</td>
+                                <td style="padding:8px 12px; color:var(--bo-text-muted);">@r.Count</td>
+                                <td style="padding:8px 12px;">
+                                    @if (r.Account is not null)
+                                    {
+                                        @r.Account.Name
+                                    }
+                                    else
+                                    {
+                                        <span style="color:var(--bo-danger, #dc2626);">no matching account — will be skipped</span>
+                                    }
+                                </td>
+                                <td style="padding:8px 12px; text-align:right; font-weight:600;">@_currency @r.Amount.ToString("#,##0.00")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr style="border-top:2px solid var(--bo-border-soft); background:var(--bo-bg-soft);">
+                            <td style="padding:8px 12px; font-weight:700;" colspan="3">Total to import</td>
+                            <td style="padding:8px 12px; text-align:right; font-weight:700;">@_currency @ImportableTotal.ToString("#,##0.00")</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="ImportAsync" Loading="_busy" Disabled="@(!_rows.Any(r => r.Account is not null))">Import to accounts</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public CashImportModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private record Row(PaymentMethod Method, int Count, decimal Amount, CashAccountDto? Account);
+
+    private DateTime _date = DateTime.UtcNow.Date;
+    private string? _error;
+    private bool _loading = true;
+    private bool _busy;
+    private string _currency = "Tk";
+
+    private List<CashAccountDto> _accounts = new();
+    private List<Row> _rows = new();
+
+    private decimal ImportableTotal => _rows.Where(r => r.Account is not null).Sum(r => r.Amount);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = (await Mediator.Send(new GetCashAccountsQuery(ActiveOnly: true))).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load accounts: {ex.Message}"; }
+
+        await FetchAsync();
+    }
+
+    private void OnDateChanged(DateTime? d)
+    {
+        if (d.HasValue) _date = d.Value.Date;
+    }
+
+    private async Task FetchAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var summary = await Mediator.Send(new GetPendingCashImportQuery(DateOnly.FromDateTime(_date)));
+            _currency = summary.Currency;
+            _rows = summary.ByMethod
+                .Where(l => l.Amount > 0m)
+                .Select(l => new Row(l.Method, l.Count, l.Amount, ResolveAccount(l.Method)))
+                .ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load pending takings: {ex.Message}"; _rows = new(); }
+        finally { _loading = false; }
+    }
+
+    private CashAccountDto? ResolveAccount(PaymentMethod method)
+    {
+        var kind = MapKind(method);
+        return _accounts.FirstOrDefault(a => a.Kind == kind);
+    }
+
+    private static CashAccountKind MapKind(PaymentMethod method) => method switch
+    {
+        PaymentMethod.Cash => CashAccountKind.Cash,
+        PaymentMethod.Mobile => CashAccountKind.MobileWallet,
+        PaymentMethod.Card => CashAccountKind.Bank,
+        _ => CashAccountKind.Cash
+    };
+
+    private async Task ImportAsync()
+    {
+        _error = null;
+        if (!_rows.Any(r => r.Account is not null)) { _error = "Nothing to import — no matching cash accounts."; return; }
+
+        _busy = true;
+        try
+        {
+            var result = await Mediator.Send(new ImportCashCounterCommand(DateOnly.FromDateTime(_date)));
+            if (result.Count == 0)
+            {
+                _error = result.SkippedMethods.Count > 0
+                    ? $"Nothing imported — no cash account for: {string.Join(", ", result.SkippedMethods)}."
+                    : "Nothing to import.";
+                await FetchAsync();
+                return;
+            }
+            Content.ImportedCount = result.Count;
+            Content.ImportedTotal = result.Total;
+            Content.SkippedMethods = result.SkippedMethods.ToList();
+            Dialog.Close(Content);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

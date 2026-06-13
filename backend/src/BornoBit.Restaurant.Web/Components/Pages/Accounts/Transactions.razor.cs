@@ -106,6 +106,23 @@ public partial class Transactions : ComponentBase
         }
     }
 
+    private async Task ShowImportAsync()
+    {
+        var result = await DialogService.ShowAsync<ImportCashCounterDialog, CashImportModel>(new CashImportModel(), new BoDialogOptions
+        {
+            Title = "Import from Cash Counter",
+            Width = "640px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is CashImportModel done && done.ImportedCount > 0)
+        {
+            ToastService.ShowSuccess($"Imported {done.ImportedCount} invoice{(done.ImportedCount == 1 ? "" : "s")} ({done.ImportedTotal:#,##0.00}).");
+            if (done.SkippedMethods.Count > 0)
+                ToastService.ShowWarning($"No cash account for: {string.Join(", ", done.SkippedMethods)} — skipped.");
+            await RefreshAfterChangeAsync();
+        }
+    }
+
     private async Task ShowEditAsync(TransactionListItemDto t)
     {
         var model = new TransactionFormModel

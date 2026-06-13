@@ -1,0 +1,85 @@
+@page "/operations/reports/collection"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Reports")]
+@using BornoBit.Restaurant.Application.Ordering.Queries
+
+<PageTitle>Collection Report · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Collection Report"
+                Description="Money collected over a date range, grouped by payment method.">
+        <Actions>
+            <BoButton Variant="ghost" OnClick="PrintAsync">
+                <span style="display:inline-flex; align-items:center; gap:6px;"><BoIcon Name="Print" Size="16" /> Print</span>
+            </BoButton>
+        </Actions>
+    </PageHeader>
+
+    <div class="bo-panel no-print" style="padding:12px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <BoDatePicker DateTimeValue="_from" DateTimeValueChanged="OnFromChanged" Label="From" />
+        <BoDatePicker DateTimeValue="_to" DateTimeValueChanged="OnToChanged" Label="To" />
+    </div>
+
+    @if (_rangeError is not null)
+    {
+        <BoMessageBar Intent="warning">@_rangeError</BoMessageBar>
+    }
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:var(--bo-primary-tint); color:var(--bo-primary);"><BoIcon Name="ReceiptMoney" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Payments</span>
+                <span class="report-stat-value">@_report.TotalCount</span>
+            </span>
+        </div>
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:color-mix(in srgb, var(--bo-success) 14%, #fff); color:var(--bo-success);"><BoIcon Name="Wallet" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Collected</span>
+                <span class="report-stat-value" style="color:var(--bo-success, #16a34a);">@_report.TotalCollected.ToString("#,##0.00")</span>
+            </span>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading collections…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_report.ByMethod.Count == 0)
+    {
+        <EmptyState Description="No payments collected in this period." />
+    }
+    else
+    {
+        <div class="bo-panel" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Payment method</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Payments</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _report.ByMethod)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px;">@r.Method</td>
+                            <td style="padding:10px 14px; text-align:right;">@r.Count</td>
+                            <td style="padding:10px 14px; text-align:right; font-weight:600;">@r.Amount.ToString("#,##0.00")</td>
+                        </tr>
+                    }
+                    <tr style="border-top:2px solid var(--bo-border); background:var(--bo-bg-soft);">
+                        <td style="padding:10px 14px; font-weight:700;">Total</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700;">@_report.TotalCount</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700; color:var(--bo-success, #16a34a);">@_report.TotalCollected.ToString("#,##0.00")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

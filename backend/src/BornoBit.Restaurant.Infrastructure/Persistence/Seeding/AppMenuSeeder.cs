@@ -184,7 +184,14 @@ public class AppMenuSeeder
         {
             new("Take Order", Url: "/waiter/orders", Icon: "DocumentAdd"),
             new("POS", Url: "/pos", Icon: "ReceiptMoney"),
+            new("Cash Counter", Url: "/operations/cash-counter", Icon: "CalculatorMultiple"),
             new("Orders", Url: "/orders", Icon: "DocumentBulletList"),
+            new("Reports", Icon: "ChartMultiple", RequiredRole: Roles.Manager, Children: new()
+            {
+                new("Sales Report",       Url: "/operations/reports/sales",      Icon: "ChartMultiple",      RequiredRole: Roles.Manager),
+                new("Collection Report",  Url: "/operations/reports/collection", Icon: "ReceiptMoney",       RequiredRole: Roles.Manager),
+                new("Most Selling Items", Url: "/operations/reports/top-items",  Icon: "ArrowTrendingLines", RequiredRole: Roles.Manager),
+            }),
             new("Menu", Url: "/operations/menu", Icon: "Receipt"),
             new("App Settings", Url: "/settings/app", Icon: "PaintBrush"),
         }),

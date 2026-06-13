@@ -1,0 +1,105 @@
+@page "/operations/reports/sales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Reports")]
+@using BornoBit.Restaurant.Application.Ordering.Queries
+
+<PageTitle>Sales Report · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Sales Report"
+                Description="Paid sales over a date range, broken down per day.">
+        <Actions>
+            <BoButton Variant="ghost" OnClick="PrintAsync">
+                <span style="display:inline-flex; align-items:center; gap:6px;"><BoIcon Name="Print" Size="16" /> Print</span>
+            </BoButton>
+        </Actions>
+    </PageHeader>
+
+    <div class="bo-panel no-print" style="padding:12px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <BoDatePicker DateTimeValue="_from" DateTimeValueChanged="OnFromChanged" Label="From" />
+        <BoDatePicker DateTimeValue="_to" DateTimeValueChanged="OnToChanged" Label="To" />
+    </div>
+
+    @if (_rangeError is not null)
+    {
+        <BoMessageBar Intent="warning">@_rangeError</BoMessageBar>
+    }
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:var(--bo-primary-tint); color:var(--bo-primary);"><BoIcon Name="DocumentBulletList" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Orders</span>
+                <span class="report-stat-value">@_report.TotalOrders</span>
+            </span>
+        </div>
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:color-mix(in srgb, var(--bo-info) 14%, #fff); color:var(--bo-info);"><BoIcon Name="Money" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Subtotal</span>
+                <span class="report-stat-value">@_report.TotalSubtotal.ToString("#,##0.00")</span>
+            </span>
+        </div>
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:color-mix(in srgb, var(--bo-danger) 14%, #fff); color:var(--bo-danger);"><BoIcon Name="Tag" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Discount</span>
+                <span class="report-stat-value" style="color:var(--bo-danger, #dc2626);">@_report.TotalDiscount.ToString("#,##0.00")</span>
+            </span>
+        </div>
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:color-mix(in srgb, var(--bo-success) 14%, #fff); color:var(--bo-success);"><BoIcon Name="Wallet" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Total</span>
+                <span class="report-stat-value" style="color:var(--bo-success, #16a34a);">@_report.GrandTotal.ToString("#,##0.00")</span>
+            </span>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading sales…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_report.Rows.Count == 0)
+    {
+        <EmptyState Description="No paid sales in this period." />
+    }
+    else
+    {
+        <div class="bo-panel" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Date</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Orders</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Subtotal</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Discount</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _report.Rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px; color:var(--bo-text-muted); white-space:nowrap;">@r.Date.ToString("yyyy-MM-dd")</td>
+                            <td style="padding:10px 14px; text-align:right;">@r.OrderCount</td>
+                            <td style="padding:10px 14px; text-align:right;">@r.Subtotal.ToString("#,##0.00")</td>
+                            <td style="padding:10px 14px; text-align:right; color:var(--bo-danger, #dc2626);">@(r.Discount > 0m ? r.Discount.ToString("#,##0.00") : "—")</td>
+                            <td style="padding:10px 14px; text-align:right; font-weight:600;">@r.Total.ToString("#,##0.00")</td>
+                        </tr>
+                    }
+                    <tr style="border-top:2px solid var(--bo-border); background:var(--bo-bg-soft);">
+                        <td style="padding:10px 14px; font-weight:700;">Total</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700;">@_report.TotalOrders</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700;">@_report.TotalSubtotal.ToString("#,##0.00")</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700; color:var(--bo-danger, #dc2626);">@_report.TotalDiscount.ToString("#,##0.00")</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700; color:var(--bo-success, #16a34a);">@_report.GrandTotal.ToString("#,##0.00")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

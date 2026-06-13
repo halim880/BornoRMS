@@ -1,0 +1,69 @@
+@page "/operations/reports/top-items"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Reports")]
+@using BornoBit.Restaurant.Application.Ordering.Queries
+
+<PageTitle>Most Selling Items · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Most Selling Items"
+                Description="Top menu items by quantity sold over a date range, from paid orders.">
+        <Actions>
+            <BoButton Variant="ghost" OnClick="PrintAsync">
+                <span style="display:inline-flex; align-items:center; gap:6px;"><BoIcon Name="Print" Size="16" /> Print</span>
+            </BoButton>
+        </Actions>
+    </PageHeader>
+
+    <div class="bo-panel no-print" style="padding:12px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <BoDatePicker DateTimeValue="_from" DateTimeValueChanged="OnFromChanged" Label="From" />
+        <BoDatePicker DateTimeValue="_to" DateTimeValueChanged="OnToChanged" Label="To" />
+        <BoNumberInput T="int" Value="_top" ValueChanged="OnTopChanged" Label="Top N" Min="1" Max="200" Step="1" Style="width:120px;" />
+    </div>
+
+    @if (_rangeError is not null)
+    {
+        <BoMessageBar Intent="warning">@_rangeError</BoMessageBar>
+    }
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading items…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_rows.Count == 0)
+    {
+        <EmptyState Description="No items sold in this period." />
+    }
+    else
+    {
+        <div class="bo-panel" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">#</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Code</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Item</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Qty sold</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ var rank = 1; }
+                    @foreach (var r in _rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px; text-align:right; color:var(--bo-text-muted);">@(rank++)</td>
+                            <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@r.Code</span></td>
+                            <td style="padding:10px 14px;">@r.Name</td>
+                            <td style="padding:10px 14px; text-align:right; font-weight:600;">@r.QuantitySold</td>
+                            <td style="padding:10px 14px; text-align:right;">@r.Revenue.ToString("#,##0.00")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

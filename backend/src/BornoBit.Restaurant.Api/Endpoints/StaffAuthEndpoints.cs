@@ -18,7 +18,8 @@ public static class StaffAuthEndpoints
             IStaffTokenService tokens,
             CancellationToken ct) =>
         {
-            var user = await users.FindByEmailAsync(body.Email);
+            var login = body.EmailOrUsername.Trim();
+            var user = await users.FindByNameAsync(login) ?? await users.FindByEmailAsync(login);
             if (user is null || user.IsDeleted)
                 return Results.Json(new { message = "Invalid credentials." }, statusCode: StatusCodes.Status401Unauthorized);
 
@@ -39,5 +40,5 @@ public static class StaffAuthEndpoints
         return app;
     }
 
-    public record StaffLoginRequest(string Email, string Password);
+    public record StaffLoginRequest(string EmailOrUsername, string Password);
 }
