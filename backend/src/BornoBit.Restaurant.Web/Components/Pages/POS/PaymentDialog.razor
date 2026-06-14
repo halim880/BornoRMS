@@ -289,7 +289,7 @@
             _rounding = summary.Rounding;
             SetRemaining();
         }
-        catch (ConflictException) { await ReloadConflictAsync(); }
+        catch (ConflictException ex) { await ReloadConflictAsync(ex.Message); }
         catch (Exception ex) { _error = ex.Message; }
         finally { _busy = false; }
     }
@@ -306,18 +306,18 @@
             _rounding = summary.Rounding;
             SetRemaining();
         }
-        catch (ConflictException) { await ReloadConflictAsync(); }
+        catch (ConflictException ex) { await ReloadConflictAsync(ex.Message); }
         catch (Exception ex) { _error = ex.Message; }
         finally { _busy = false; }
     }
 
-    /// <summary>Shared recovery when a peer terminal changed the order: reload onto the fresh balance.</summary>
-    private async Task ReloadConflictAsync()
+    /// <summary>Recovery for a rejected save: reload the fresh balance and surface the real reason.</summary>
+    private async Task ReloadConflictAsync(string reason)
     {
         _tenders.Clear();
         await ReloadAsync();
         SetRemaining();
-        _error = "This order changed on another terminal — balance reloaded. Review and take payment again.";
+        _error = reason;
     }
 
     // ----- numpad -----
@@ -369,11 +369,11 @@
             await ReloadAsync();
             SetRemaining();
         }
-        catch (ConflictException)
+        catch (ConflictException ex)
         {
-            // A peer terminal changed this order in our save window — recover onto the fresh balance
-            // (drop staged tenders so the retry can't double-charge).
-            await ReloadConflictAsync();
+            // Concurrency or a domain rejection — recover onto the fresh balance and surface the real reason
+            // (drop staged tenders so a retry can't double-charge).
+            await ReloadConflictAsync(ex.Message);
         }
         catch (Exception ex)
         {
