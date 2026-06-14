@@ -13,6 +13,7 @@ public class RestaurantTableConfiguration : IEntityTypeConfiguration<RestaurantT
 
         builder.Property(t => t.TableNumber).IsRequired().HasMaxLength(20);
         builder.Property(t => t.Capacity).IsRequired();
+        builder.Property(t => t.HeldByName).HasMaxLength(128);
 
         builder.HasIndex(t => t.TableNumber).IsUnique();
     }

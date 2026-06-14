@@ -1,6 +1,8 @@
+@using BornoBit.Restaurant.Application.Dining.Commands
 @using BornoBit.Restaurant.Application.Ordering.Pos
 @using BornoBit.Restaurant.Domain.Ordering
 @using MediatR
+@implements IAsyncDisposable
 @inject ISender Sender
 
 <BoDialogBody>
@@ -36,9 +38,9 @@
                         <div class="table-grid">
                             @foreach (var t in available)
                             {
-                                <button type="button" @key="t.Id"
+                                <button type="button" @key="t.Id" disabled="@_busy"
                                         class="table-chip @(Content.TableId == t.Id ? "table-chip--active" : null)"
-                                        @onclick="() => Content.TableId = t.Id">
+                                        @onclick="() => SelectTableAsync(t.Id)">
                                     <span class="table-chip-no">@t.TableNumber</span>
                                     <span class="table-chip-cap">@t.Capacity seats</span>
                                 </button>
@@ -64,7 +66,7 @@
 </BoDialogBody>
 
 <BoDialogFooter>
-    <BoButton Variant="ghost" OnClick="@(() => Dialog.Cancel())" Disabled="_busy">Close</BoButton>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Close</BoButton>
     <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy" Disabled="@(!CanSave)">Save</BoButton>
 </BoDialogFooter>
 
@@ -77,16 +79,58 @@
 
     private bool _busy;
     private string? _error;
+    private Guid? _heldTableId;   // table this terminal currently holds an edit-lock on
 
     private bool CanSave => !_busy
         && (Content.Type != OrderType.DineIn
             || (Content.TableId is { } t && !Content.OccupiedTableIds.Contains(t)));
 
-    private void SetType(OrderType type)
+    private async Task SetType(OrderType type)
     {
         Content.Type = type;
-        if (type != OrderType.DineIn) Content.TableId = null;
+        if (type != OrderType.DineIn)
+        {
+            Content.TableId = null;
+            await ReleaseHoldAsync();
+        }
     }
+
+    /// <summary>Take a short-lived hold on the picked table so no other terminal can grab it mid-edit.</summary>
+    private async Task SelectTableAsync(Guid tableId)
+    {
+        if (_busy || Content.TableId == tableId) return;
+        _error = null;
+        _busy = true;
+        try
+        {
+            await Sender.Send(new AcquireTableHoldCommand(tableId));
+            if (_heldTableId is { } prev && prev != tableId)
+                await Sender.Send(new ReleaseTableHoldCommand(prev));
+            _heldTableId = tableId;
+            Content.TableId = tableId;
+        }
+        catch (Exception ex)
+        {
+            // Held by another terminal (ConflictException) or transient — surface and keep selection unchanged.
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ReleaseHoldAsync()
+    {
+        if (_heldTableId is not { } id) return;
+        _heldTableId = null;
+        try { await Sender.Send(new ReleaseTableHoldCommand(id)); } catch { /* best-effort */ }
+    }
+
+    private async Task CancelAsync()
+    {
+        await ReleaseHoldAsync();
+        Dialog.Cancel();
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseHoldAsync();
 
     private static string TypeLabel(OrderType type) => type switch
     {
@@ -118,6 +162,8 @@
                 Content.CreatedOrderNumber = result.OrderNumber;
             }
 
+            // Order now owns the table (occupancy), so the transient edit-hold can be dropped.
+            await ReleaseHoldAsync();
             Dialog.Close(Content);
         }
         catch (FluentValidation.ValidationException vex)
