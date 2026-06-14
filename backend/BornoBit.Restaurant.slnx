@@ -8,4 +8,7 @@
     <Project Path="src/BornoBit.Restaurant.Shared/BornoBit.Restaurant.Shared.csproj" />
     <Project Path="src/BornoBit.Restaurant.Web/BornoBit.Restaurant.Web.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BornoBit.Restaurant.Tests.Unit/BornoBit.Restaurant.Tests.Unit.csproj" />
+  </Folder>
 </Solution>
