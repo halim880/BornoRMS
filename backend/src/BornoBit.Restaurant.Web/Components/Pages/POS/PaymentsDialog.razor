@@ -1,0 +1,180 @@
+@using System.Globalization
+@using BornoBit.Restaurant.Application.Ordering.Commands
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Domain.Identity
+@using BornoBit.Restaurant.Domain.Ordering
+@using MediatR
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ISender Sender
+@inject IBoToastService ToastService
+@inject AuthenticationStateProvider AuthState
+
+<BoDialogBody>
+    @if (_order is null)
+    {
+        <LoadingState Message="Loading payments…" />
+    }
+    else
+    {
+        <div class="pm-wrap">
+            <div class="pm-sum">
+                <span>@_order.OrderNumber</span>
+                <span class="pm-badge pm-badge--@StatusTone(_order.PaymentStatus)">@_order.PaymentStatus</span>
+                <span class="pm-bal">Paid @_order.AmountPaid.ToString("0.##") / @_order.GrandTotal.ToString("0.##") Tk.</span>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error)) { <BoMessageBar Intent="error">@_error</BoMessageBar> }
+
+            @if (_charges.Count == 0)
+            {
+                <BoMessageBar Intent="info">No captured payments yet.</BoMessageBar>
+            }
+            else
+            {
+                <div class="pm-list">
+                    @foreach (var p in _charges)
+                    {
+                        <div class="pm-row" @key="p.PaymentId">
+                            <div class="pm-row-main">
+                                <span class="pm-method">@MethodLabel(p)</span>
+                                <span class="pm-amt">@p.Amount.ToString("0.##") Tk.</span>
+                                <span class="pm-status pm-status--@EntryTone(p.Status)">@p.Status</span>
+                            </div>
+                            @if (p.Status == PaymentEntryStatus.Captured)
+                            {
+                                <div class="pm-row-act">
+                                    <BoButton Variant="ghost" Size="sm" Disabled="_busy" OnClick="() => VoidAsync(p)">Void</BoButton>
+                                    <BoButton Variant="ghost" Size="sm" Disabled="_busy" OnClick="() => RefundAsync(p)">Refund</BoButton>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <BoInput @bind-Value="_reason" Label="Reason" Placeholder="Required for void / refund" />
+
+            @if (!_isManager)
+            {
+                <div class="pm-mgr">
+                    <span class="pm-mgr-label">Manager authorization</span>
+                    <BoInput @bind-Value="_mgrUser" Label="Manager username / email" />
+                    <BoInput @bind-Value="_mgrPass" Label="Manager password" Type="password" />
+                </div>
+            }
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close(_changed))" Disabled="_busy">Close</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public Guid Content { get; set; }
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private OrderDetailDto? _order;
+    private IReadOnlyList<PaymentLineDto> _charges = Array.Empty<PaymentLineDto>();
+    private bool _busy;
+    private bool _changed;
+    private bool _isManager;
+    private string? _error;
+    private string? _reason;
+    private string? _mgrUser;
+    private string? _mgrPass;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        _isManager = auth.User.IsInRole(Roles.SuperAdmin) || auth.User.IsInRole(Roles.Admin) || auth.User.IsInRole(Roles.Manager);
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _order = await Sender.Send(new GetOrderQuery(Content));
+        _charges = _order.Payments.Where(p => p.Kind == PaymentKind.Charge).ToList();
+    }
+
+    private async Task VoidAsync(PaymentLineDto p)
+    {
+        if (!Guard()) return;
+        _busy = true; _error = null;
+        try
+        {
+            await Sender.Send(new VoidPaymentCommand(Content, p.PaymentId, _reason!, _mgrUser, _mgrPass));
+            await AfterChange("Payment voided.");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task RefundAsync(PaymentLineDto p)
+    {
+        if (!Guard()) return;
+        _busy = true; _error = null;
+        try
+        {
+            await Sender.Send(new RefundPaymentCommand(Content, p.PaymentId, p.Amount, _reason!, _mgrUser, _mgrPass));
+            await AfterChange("Payment refunded.");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private bool Guard()
+    {
+        if (string.IsNullOrWhiteSpace(_reason)) { _error = "Enter a reason first."; return false; }
+        if (!_isManager && (string.IsNullOrWhiteSpace(_mgrUser) || string.IsNullOrWhiteSpace(_mgrPass)))
+        { _error = "Manager authorization is required."; return false; }
+        return true;
+    }
+
+    private async Task AfterChange(string msg)
+    {
+        _changed = true;
+        _mgrPass = null;
+        ToastService.ShowSuccess(msg);
+        await ReloadAsync();
+    }
+
+    private static string MethodLabel(PaymentLineDto p) =>
+        p.Method == PaymentMethod.Mobile && p.Provider is { } pr ? $"{p.Method} · {pr}" : p.Method.ToString();
+
+    private static string StatusTone(PaymentStatus s) => s switch
+    {
+        PaymentStatus.Paid => "success",
+        PaymentStatus.PartiallyPaid => "warning",
+        PaymentStatus.Refunded => "danger",
+        PaymentStatus.Cancelled => "danger",
+        _ => "neutral"
+    };
+
+    private static string EntryTone(PaymentEntryStatus s) => s switch
+    {
+        PaymentEntryStatus.Captured => "success",
+        PaymentEntryStatus.Voided => "neutral",
+        PaymentEntryStatus.Refunded => "danger",
+        _ => "neutral"
+    };
+}
+
+<style>
+    .pm-wrap { display: flex; flex-direction: column; gap: 12px; }
+    .pm-sum { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+    .pm-bal { margin-left: auto; font-size: 13px; color: var(--bo-text-muted); }
+    .pm-badge, .pm-status { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; color: #fff; }
+    .pm-badge--success, .pm-status--success { background: var(--bo-success); }
+    .pm-badge--warning { background: var(--bo-warning); }
+    .pm-badge--danger, .pm-status--danger { background: var(--bo-danger); }
+    .pm-badge--neutral, .pm-status--neutral { background: var(--bo-text-subtle, #94a3b8); }
+    .pm-list { display: flex; flex-direction: column; gap: 6px; }
+    .pm-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--bo-border); border-radius: 8px; }
+    .pm-row-main { display: flex; align-items: center; gap: 8px; }
+    .pm-method { font-weight: 700; }
+    .pm-amt { margin-left: auto; font-weight: 700; }
+    .pm-row-act { display: flex; gap: 6px; justify-content: flex-end; }
+    .pm-mgr { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px dashed var(--bo-warning); border-radius: 8px; }
+    .pm-mgr-label { font-size: 12px; font-weight: 800; color: var(--bo-warning); }
+</style>

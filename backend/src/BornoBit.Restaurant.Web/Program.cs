@@ -54,6 +54,10 @@ builder.Services.AddHostedService<BornoBit.Restaurant.Web.Services.Stock.StockSy
 builder.Services.AddSingleton<BornoBit.Restaurant.Application.Ordering.Payments.IPaymentGateway,
     BornoBit.Restaurant.Web.Services.Payments.MockPaymentGateway>();
 
+// Instant manager-override authorization (large discounts / voids / refunds at the till).
+builder.Services.AddScoped<BornoBit.Restaurant.Application.Common.Security.IManagerApprovalService,
+    BornoBit.Restaurant.Infrastructure.Identity.ManagerApprovalService>();
+
 builder.Services.Configure<BornoBit.Restaurant.Web.Services.CustomerSiteOptions>(
     builder.Configuration.GetSection(BornoBit.Restaurant.Web.Services.CustomerSiteOptions.SectionName));
 builder.Services.AddSingleton<BornoBit.Restaurant.Web.Services.TableQrService>();

@@ -455,6 +455,27 @@ public partial class Pos : ComponentBase, IAsyncDisposable
         await NotifyPeersAsync(DashboardScopes.All);
     }
 
+    /// <summary>View an order's payment ledger and void/refund tenders (manager-gated, instant override).</summary>
+    private async Task OpenPaymentsDialogAsync()
+    {
+        if (_activeOrderId is not { } orderId) return;
+
+        var result = await DialogService.ShowAsync<PaymentsDialog, Guid>(orderId, new BoDialogOptions
+        {
+            Title = "Payments",
+            Width = "440px"
+        });
+
+        if (result.Data is true)
+        {
+            await LoadActiveOrdersAsync();
+            if (_activeOrderId is { } id && _activeOrders.Any(o => o.Id == id))
+                await RefreshActiveDetailAsync(id);
+            else { _activeOrderId = null; _activeDetail = null; }
+            await NotifyPeersAsync(DashboardScopes.Payments);
+        }
+    }
+
     private async Task CancelActiveOrderAsync()
     {
         if (_activeDetail is null) return;

@@ -187,6 +187,10 @@ else
 
             <div class="pos-console-actions">
                 <BoButton Variant="danger" Disabled="@(_activeDetail is null || _busy)" OnClick="CancelActiveOrderAsync">Cancel</BoButton>
+                @if (_activeDetail is { } d && d.Payments.Count > 0)
+                {
+                    <BoButton Variant="ghost" Disabled="_busy" OnClick="OpenPaymentsDialogAsync">Payments</BoButton>
+                }
                 @if (_activeDetail is not null)
                 {
                     <a class="pos-print-btn" href="/reports/order/@_activeDetail.Id/pos-receipt.pdf" target="_blank">Print</a>
