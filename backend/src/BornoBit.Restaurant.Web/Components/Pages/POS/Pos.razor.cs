@@ -9,8 +9,11 @@ using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Web.Components.BornoUi.Dialog;
 using BornoBit.Restaurant.Web.Components.BornoUi.Toast;
 using BornoBit.Restaurant.Web.Components.Shared;
+using BornoBit.Restaurant.Web.Hubs;
+using BornoBit.Restaurant.Web.Services.Dashboard;
 using MediatR;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.JSInterop;
 
 namespace BornoBit.Restaurant.Web.Components.Pages.POS;
@@ -21,6 +24,8 @@ public partial class Pos : ComponentBase, IAsyncDisposable
     [Inject] private IBoDialogService DialogService { get; set; } = default!;
     [Inject] private IBoToastService ToastService { get; set; } = default!;
     [Inject] private IJSRuntime Js { get; set; } = default!;
+    [Inject] private IDashboardNotifier Notifier { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
 
     private IReadOnlyList<ProductDto> _products = Array.Empty<ProductDto>();
     private IReadOnlyList<ProductCategoryDto> _categories = Array.Empty<ProductCategoryDto>();
@@ -38,6 +43,10 @@ public partial class Pos : ComponentBase, IAsyncDisposable
     private bool _chipsObserverWired;
     private bool _chipsOverflowing;
     private DotNetObjectReference<Pos>? _selfRef;
+
+    // Real-time: reuse the shared DashboardHub tick channel (no POS-specific hub needed).
+    private HubConnection? _hub;
+    private bool _connected;
 
     // Categories already sorted by DisplayOrder; only show ones with active products.
     private IEnumerable<ProductCategoryDto> VisibleCategories =>
@@ -59,6 +68,9 @@ public partial class Pos : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+            await ConnectRealtimeAsync();
+
         // The chips strip only exists once loading finished, so wire the observer on the
         // first render that actually has it, not strictly on firstRender.
         if (!_chipsObserverWired && !_loading)
@@ -68,6 +80,52 @@ public partial class Pos : ComponentBase, IAsyncDisposable
             await Js.InvokeVoidAsync("posChips.observe", _chipsEl, _selfRef);
         }
     }
+
+    /// <summary>
+    /// Subscribes to the DashboardHub "changed" tick so order chips / occupancy stay in sync across
+    /// terminals within the poll window (≤2s when handlers push a direct notify). Best-effort: the POS
+    /// keeps working via manual reload if the hub never connects.
+    /// </summary>
+    private async Task ConnectRealtimeAsync()
+    {
+        try
+        {
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.ToAbsoluteUri("/hubs/dashboard"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hub.Reconnecting += _ => InvokeAsync(() => { _connected = false; StateHasChanged(); });
+            _hub.Reconnected += _ => InvokeAsync(() => { _connected = true; StateHasChanged(); });
+            _hub.Closed += _ => InvokeAsync(() => { _connected = false; StateHasChanged(); });
+
+            _hub.On<string>(DashboardHub.ChangedEvent, _ => InvokeAsync(OnRealtimeTickAsync));
+
+            await _hub.StartAsync();
+            _connected = true;
+            StateHasChanged();
+        }
+        catch
+        {
+            // Real-time is best-effort; the terminal still works via manual reload.
+        }
+    }
+
+    /// <summary>
+    /// A peer terminal changed something. Re-pull the active queue and the open detail, but never while
+    /// this terminal is mid-save — the in-flight write is the newer truth and will re-sync on completion.
+    /// </summary>
+    private async Task OnRealtimeTickAsync()
+    {
+        if (_busy) return;
+        await LoadActiveOrdersAsync();
+        if (_activeOrderId is { } id && _activeOrders.Any(o => o.Id == id))
+            await RefreshActiveDetailAsync(id);
+        StateHasChanged();
+    }
+
+    /// <summary>Fan a tick out so other terminals refresh after this one mutates an order.</summary>
+    private Task NotifyPeersAsync(string scope = DashboardScopes.Orders) => Notifier.NotifyAsync(scope);
 
     [JSInvokable]
     public Task OnChipsOverflowChanged(bool overflowing)
@@ -87,6 +145,11 @@ public partial class Pos : ComponentBase, IAsyncDisposable
         catch (JSDisconnectedException) { }
         catch (InvalidOperationException) { }
         _selfRef?.Dispose();
+
+        if (_hub is not null)
+        {
+            try { await _hub.DisposeAsync(); } catch { /* ignore */ }
+        }
     }
 
     // ----- chips -----
@@ -240,6 +303,7 @@ public partial class Pos : ComponentBase, IAsyncDisposable
         {
             await Sender.Send(new SetPosOrderLinesCommand(orderId, desired));
             await RefreshActiveDetailAsync(orderId);
+            await NotifyPeersAsync();
         }
         catch (Exception ex)
         {
@@ -288,6 +352,7 @@ public partial class Pos : ComponentBase, IAsyncDisposable
             ToastService.ShowSuccess($"Order {saved.CreatedOrderNumber} started.");
             await LoadActiveOrdersAsync();
             await SelectOrderAsync(createdId);
+            await NotifyPeersAsync(DashboardScopes.All);
         }
     }
 
@@ -320,6 +385,7 @@ public partial class Pos : ComponentBase, IAsyncDisposable
             await LoadActiveOrdersAsync();
             if (_activeOrderId is { } id)
                 await RefreshActiveDetailAsync(id);
+            await NotifyPeersAsync(DashboardScopes.All);
         }
     }
 
@@ -358,6 +424,7 @@ public partial class Pos : ComponentBase, IAsyncDisposable
         {
             await RefreshActiveDetailAsync(stillActive);
         }
+        await NotifyPeersAsync(DashboardScopes.All);
     }
 
     private async Task CancelActiveOrderAsync()
@@ -378,6 +445,7 @@ public partial class Pos : ComponentBase, IAsyncDisposable
             _activeOrderId = null;
             _activeDetail = null;
             await LoadActiveOrdersAsync();
+            await NotifyPeersAsync(DashboardScopes.All);
         }
         catch (Exception ex)
         {

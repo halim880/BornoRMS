@@ -19,6 +19,11 @@ else
     <!-- ============ ACTIVE ORDERS QUEUE ============ -->
     <div class="pos-orders-bar">
         <span class="pos-orders-label">Orders :</span>
+        <span title="@(_connected ? "Live — syncing across terminals" : "Offline — manual refresh only")"
+              style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--bo-text-soft);margin-right:auto;">
+            <span style="width:8px;height:8px;border-radius:50%;background:@(_connected ? "var(--bo-success)" : "var(--bo-danger)")"></span>
+            @(_connected ? "Live" : "Offline")
+        </span>
         <div class="pos-chips" @ref="_chipsEl">
             @if (_activeOrders.Count == 0)
             {
