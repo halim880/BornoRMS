@@ -82,10 +82,19 @@ else
                 <div class="pos-prod-grid">
                     @foreach (var item in FilteredProducts)
                     {
-                        <div @key="item.Id" class="pos-prod-card pos-prod-card--tappable"
-                             title="@(item.HasVariants ? $"Pick a size for {item.Name}" : $"Tap to add {item.Name}")"
+                        var outOfStock = IsOutOfStock(item);
+                        <div @key="item.Id" class="pos-prod-card @(outOfStock ? "pos-prod-card--out" : "pos-prod-card--tappable")"
+                             title="@(outOfStock ? $"{item.Name} is out of stock" : item.HasVariants ? $"Pick a size for {item.Name}" : $"Tap to add {item.Name}")"
                              @onclick="() => OnProductClickAsync(item)">
                             <div class="pos-prod-thumb">
+                                @if (outOfStock)
+                                {
+                                    <span class="pos-stock-badge pos-stock-badge--out">Out</span>
+                                }
+                                else if (IsLowStock(item))
+                                {
+                                    <span class="pos-stock-badge pos-stock-badge--low">Low @(AvailableOf(item)?.ToString("0.#"))</span>
+                                }
                                 @if (!string.IsNullOrWhiteSpace(item.ImagePath))
                                 {
                                     <img src="@item.ImagePath" alt="@item.Name" loading="lazy" />

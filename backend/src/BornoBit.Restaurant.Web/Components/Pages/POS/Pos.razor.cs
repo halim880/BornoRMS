@@ -31,6 +31,7 @@ public partial class Pos : ComponentBase, IAsyncDisposable
     private IReadOnlyList<ProductDto> _products = Array.Empty<ProductDto>();
     private IReadOnlyList<ProductCategoryDto> _categories = Array.Empty<ProductCategoryDto>();
     private IReadOnlyList<TableDto> _tables = Array.Empty<TableDto>();
+    private Dictionary<Guid, ProductAvailabilityDto> _availability = new();
     private List<ActiveOrderDto> _activeOrders = new();
 
     private Guid? _activeOrderId;
@@ -63,9 +64,18 @@ public partial class Pos : ComponentBase, IAsyncDisposable
             .ToList();
         _categories = await Sender.Send(new GetProductCategoriesQuery());
         _tables = await Sender.Send(new GetTablesQuery());
+        await LoadAvailabilityAsync();
         await LoadActiveOrdersAsync();
         _loading = false;
     }
+
+    private async Task LoadAvailabilityAsync() =>
+        _availability = (await Sender.Send(new GetProductAvailabilityQuery())).ToDictionary(a => a.ProductId);
+
+    // ----- stock availability helpers (DirectStock products only; others are unconstrained) -----
+    private bool IsOutOfStock(ProductDto p) => _availability.TryGetValue(p.Id, out var a) && a.IsOutOfStock;
+    private bool IsLowStock(ProductDto p) => _availability.TryGetValue(p.Id, out var a) && a.IsLowStock && !a.IsOutOfStock;
+    private decimal? AvailableOf(ProductDto p) => _availability.TryGetValue(p.Id, out var a) ? a.AvailableStock : null;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -119,6 +129,7 @@ public partial class Pos : ComponentBase, IAsyncDisposable
     private async Task OnRealtimeTickAsync()
     {
         if (_busy) return;
+        await LoadAvailabilityAsync();
         await LoadActiveOrdersAsync();
         if (_activeOrderId is { } id && _activeOrders.Any(o => o.Id == id))
             await RefreshActiveDetailAsync(id);
@@ -231,6 +242,12 @@ public partial class Pos : ComponentBase, IAsyncDisposable
 
     private async Task OnProductClickAsync(ProductDto item)
     {
+        if (IsOutOfStock(item))
+        {
+            ToastService.ShowWarning($"{item.Name} is out of stock.");
+            return;
+        }
+
         if (_activeDetail is null)
         {
             ToastService.ShowInfo("Select an order chip first, or press + to start a new order.");
