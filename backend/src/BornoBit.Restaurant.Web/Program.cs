@@ -43,6 +43,17 @@ builder.Services.AddHttpClient("PrintAgent", (sp, client) =>
 builder.Services.AddScoped<BornoBit.Restaurant.Web.Services.Printing.IReceiptPrintService,
     BornoBit.Restaurant.Web.Services.Printing.ReceiptPrintService>();
 
+// Operations dashboard real-time: an in-process notifier for Web-side actions, plus a poller that
+// bridges API-process changes (customer QR orders/requests) onto the dashboard's SignalR hub.
+builder.Services.AddSingleton<BornoBit.Restaurant.Web.Services.Dashboard.IDashboardNotifier,
+    BornoBit.Restaurant.Web.Services.Dashboard.DashboardNotifier>();
+builder.Services.AddHostedService<BornoBit.Restaurant.Web.Services.Dashboard.DashboardPollingService>();
+builder.Services.AddHostedService<BornoBit.Restaurant.Web.Services.Stock.StockSyncRetryService>();
+
+// Payment provider adapter — demo/mock implementation. Swap for a real gateway in production (see README).
+builder.Services.AddSingleton<BornoBit.Restaurant.Application.Ordering.Payments.IPaymentGateway,
+    BornoBit.Restaurant.Web.Services.Payments.MockPaymentGateway>();
+
 builder.Services.Configure<BornoBit.Restaurant.Web.Services.CustomerSiteOptions>(
     builder.Configuration.GetSection(BornoBit.Restaurant.Web.Services.CustomerSiteOptions.SectionName));
 builder.Services.AddSingleton<BornoBit.Restaurant.Web.Services.TableQrService>();
@@ -65,6 +76,14 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Inventory", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
     options.AddPolicy("Store", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
     options.AddPolicy("Reports", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("Kitchen", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Chef));
+
+    // Waiter operations console: floor access for service staff; sensitive billing actions restricted.
+    options.AddPolicy("WaiterFloor", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Waiter));
+    options.AddPolicy("CanDiscount", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("CanVoid", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("CanSettle", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Cashier));
+    options.AddPolicy("CanCloseSession", p => p.RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Cashier));
 });
 builder.Services.AddCascadingAuthenticationState();
 
@@ -81,13 +100,16 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<SuperAdminSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<MenuSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<TableSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<KitchenStationSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<CustomerSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<TenantSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<InventorySeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<UnitSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StockSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<RecipeSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AccountingSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<BillingSettingsSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AppMenuSeeder>().SeedAsync();
     }
     catch (Exception ex)
@@ -121,6 +143,8 @@ app.MapAccountEndpoints();
 app.MapReportEndpoints();
 // Agent connections authenticate via X-Agent-Key inside the hub — no cookie policy here.
 app.MapHub<BornoBit.Restaurant.Web.Hubs.PrintHub>("/hubs/print");
+// Dashboard tick channel — emits only content-free "changed" signals; data is fetched per-circuit.
+app.MapHub<BornoBit.Restaurant.Web.Hubs.DashboardHub>("/hubs/dashboard");
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
