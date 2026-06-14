@@ -25,6 +25,22 @@
                         disabled="@_busy" @onclick="() => RoundAsync(PosRoundingMode.Ceil)">Ceil (+)</button>
             </div>
 
+            <!-- ===== Balance summary (partial / split aware) ===== -->
+            <div class="pay-summary">
+                @if (_alreadyPaid > 0m)
+                {
+                    <div class="pay-sum-row"><span>Already paid</span><strong>@_alreadyPaid.ToString("0.##") Tk.</strong></div>
+                }
+                @if (StagedSum > 0m)
+                {
+                    <div class="pay-sum-row"><span>This screen</span><strong>@StagedSum.ToString("0.##") Tk.</strong></div>
+                }
+                <div class="pay-sum-row pay-sum-row--bal @(Remaining <= 0m ? "pay-sum-row--clear" : null)">
+                    <span>@(Remaining <= 0m ? "Settled" : "Remaining")</span>
+                    <strong>@Remaining.ToString("0.##") Tk.</strong>
+                </div>
+            </div>
+
             <!-- ===== Discount (touch-friendly) ===== -->
             <div class="pay-disc">
                 <div class="pay-disc-row">
@@ -43,15 +59,30 @@
                 <div class="pay-disc-quick">
                     @foreach (var v in (_discountKind == "Percent" ? _percentChips : _fixedChips))
                     {
-                        <button type="button" class="pay-chip" disabled="@_busy"
+                        <button type="button" class="pay-chip" disabled="@(_busy || _alreadyPaid > 0m)"
                                 @onclick="() => ApplyDiscountAsync(v)">@(_discountKind == "Percent" ? $"{v}%" : v.ToString("0.##"))</button>
                     }
-                    <button type="button" class="pay-chip pay-chip--clear" disabled="@(_busy || _discount <= 0m)"
+                    <button type="button" class="pay-chip pay-chip--clear" disabled="@(_busy || _discount <= 0m || _alreadyPaid > 0m)"
                             @onclick="ClearDiscountAsync">Clear</button>
                 </div>
             </div>
 
-            <!-- ===== Payment method ===== -->
+            <!-- ===== Staged tenders ===== -->
+            @if (_tenders.Count > 0)
+            {
+                <div class="pay-tenders">
+                    @foreach (var t in _tenders)
+                    {
+                        <div class="pay-tender" @key="t.Key">
+                            <span class="pay-tender-method">@TenderLabel(t)</span>
+                            <span class="pay-tender-amt">@t.Amount.ToString("0.##") Tk.@(t.Change > 0m ? $" (chg {t.Change:0.##})" : null)</span>
+                            <button type="button" class="pay-tender-x" title="Remove" disabled="@_busy" @onclick="() => RemoveTender(t)">✕</button>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- ===== Tender entry ===== -->
             <div class="pay-method">
                 @foreach (var m in _methods)
                 {
@@ -60,106 +91,181 @@
                 }
             </div>
 
+            @if (_method == PaymentMethod.Mobile)
+            {
+                <div class="pay-providers">
+                    @foreach (var p in _mobileProviders)
+                    {
+                        <button type="button" class="pay-chip @(_provider == p ? "pay-chip--active" : null)"
+                                disabled="@_busy" @onclick="() => _provider = p">@p.ToString()</button>
+                    }
+                </div>
+            }
+
+            @if (_method != PaymentMethod.Cash)
+            {
+                <input class="pay-ref" placeholder="@(_method == PaymentMethod.Card ? "Card auth / approval ref (optional)" : "Transaction ID (optional)")"
+                       @bind="_reference" @bind:event="oninput" disabled="@_busy" />
+            }
+
             @if (!string.IsNullOrEmpty(_error))
             {
                 <BoMessageBar Intent="error">@_error</BoMessageBar>
             }
 
+            <div class="pay-entry">@_amount</div>
             @if (_method == PaymentMethod.Cash)
             {
-                <div class="pay-entry">@_tendered</div>
-                <div class="pay-change">Change : <span>@Change.ToString("0.##") Tk.</span></div>
-
-                <div class="pay-pad">
-                    <button type="button" class="pay-key pay-key--exact" @onclick="SetExact">Exact</button>
-                    <button type="button" class="pay-key" @onclick='() => SetQuick(10)'>10</button>
-                    <button type="button" class="pay-key" @onclick='() => SetQuick(20)'>20</button>
-                    <button type="button" class="pay-key pay-key--clear" @onclick="Clear">Clear</button>
-
-                    <button type="button" class="pay-key" @onclick='() => Append("1")'>1</button>
-                    <button type="button" class="pay-key" @onclick='() => Append("2")'>2</button>
-                    <button type="button" class="pay-key" @onclick='() => Append("3")'>3</button>
-                    <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(50)">50+</button>
-
-                    <button type="button" class="pay-key" @onclick='() => Append("4")'>4</button>
-                    <button type="button" class="pay-key" @onclick='() => Append("5")'>5</button>
-                    <button type="button" class="pay-key" @onclick='() => Append("6")'>6</button>
-                    <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(100)">100+</button>
-
-                    <button type="button" class="pay-key" @onclick='() => Append("7")'>7</button>
-                    <button type="button" class="pay-key" @onclick='() => Append("8")'>8</button>
-                    <button type="button" class="pay-key" @onclick='() => Append("9")'>9</button>
-                    <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(500)">500+</button>
-
-                    <button type="button" class="pay-key" @onclick='() => Append(".")'>.</button>
-                    <button type="button" class="pay-key" @onclick='() => Append("0")'>0</button>
-                    <button type="button" class="pay-key" @onclick='() => Append("00")'>00</button>
-                    <button type="button" class="pay-key pay-key--back" @onclick="Backspace">⌫</button>
-                </div>
+                <div class="pay-change">Change : <span>@EntryChange.ToString("0.##") Tk.</span></div>
             }
-            else
-            {
-                <div class="pay-noncash">
-                    <BoIcon Name="@(_method == PaymentMethod.Card ? "Wallet" : "MoneyHand")" Size="22" />
-                    <span>@_method paid in full · @_grandTotal.ToString("0.##") Tk.</span>
-                </div>
-            }
+
+            <div class="pay-pad">
+                <button type="button" class="pay-key pay-key--exact" @onclick="SetRemaining">Remaining</button>
+                <button type="button" class="pay-key" @onclick='() => SetQuick(10)'>10</button>
+                <button type="button" class="pay-key" @onclick='() => SetQuick(20)'>20</button>
+                <button type="button" class="pay-key pay-key--clear" @onclick="ClearEntry">Clear</button>
+
+                <button type="button" class="pay-key" @onclick='() => Append("1")'>1</button>
+                <button type="button" class="pay-key" @onclick='() => Append("2")'>2</button>
+                <button type="button" class="pay-key" @onclick='() => Append("3")'>3</button>
+                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(50)">50+</button>
+
+                <button type="button" class="pay-key" @onclick='() => Append("4")'>4</button>
+                <button type="button" class="pay-key" @onclick='() => Append("5")'>5</button>
+                <button type="button" class="pay-key" @onclick='() => Append("6")'>6</button>
+                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(100)">100+</button>
+
+                <button type="button" class="pay-key" @onclick='() => Append("7")'>7</button>
+                <button type="button" class="pay-key" @onclick='() => Append("8")'>8</button>
+                <button type="button" class="pay-key" @onclick='() => Append("9")'>9</button>
+                <button type="button" class="pay-key pay-key--add" @onclick="() => AddQuick(500)">500+</button>
+
+                <button type="button" class="pay-key" @onclick='() => Append(".")'>.</button>
+                <button type="button" class="pay-key" @onclick='() => Append("0")'>0</button>
+                <button type="button" class="pay-key" @onclick='() => Append("00")'>00</button>
+                <button type="button" class="pay-key pay-key--back" @onclick="Backspace">⌫</button>
+            </div>
+
+            <button type="button" class="pay-add-tender" disabled="@(_busy || !CanAddTender)" @onclick="AddTender">
+                + Add @_method tender
+            </button>
         </div>
     }
 </BoDialogBody>
 
 <BoDialogFooter>
     <BoButton Variant="danger" OnClick="@(() => Dialog.Close(false))" Disabled="_busy">Close</BoButton>
-    <BoButton Variant="accent" OnClick="SaveAsync" Loading="_busy" Disabled="@(!CanSave)">Save Payment</BoButton>
+    <BoButton Variant="accent" OnClick="SaveAsync" Loading="_busy" Disabled="@(!CanSave)">@SaveLabel</BoButton>
 </BoDialogFooter>
 
 @code {
     [Parameter] public Guid Content { get; set; }
     [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
 
+    private sealed class StagedTender
+    {
+        public Guid Key { get; } = Guid.NewGuid();
+        public PaymentMethod Method { get; init; }
+        public PaymentProvider? Provider { get; init; }
+        public decimal Amount { get; init; }     // applied to the bill
+        public decimal Tendered { get; init; }   // cash handed (== Amount for non-cash)
+        public decimal Change { get; init; }
+        public string? Reference { get; init; }
+    }
+
     private OrderDetailDto? _order;
     private decimal _grandTotal;
     private decimal _rounding;
     private decimal _discount;
-    private string _tendered = "0";
+    private decimal _alreadyPaid;
+
+    private readonly List<StagedTender> _tenders = new();
+    private string _amount = "0";
+    private string? _reference;
 
     private static readonly PaymentMethod[] _methods = { PaymentMethod.Cash, PaymentMethod.Card, PaymentMethod.Mobile };
+    private static readonly PaymentProvider[] _mobileProviders =
+        { PaymentProvider.Bkash, PaymentProvider.Nagad, PaymentProvider.Rocket, PaymentProvider.Upay, PaymentProvider.Other };
     private static readonly decimal[] _percentChips = { 5m, 10m, 15m, 20m };
     private static readonly decimal[] _fixedChips = { 10m, 20m, 50m, 100m };
 
     private PaymentMethod _method = PaymentMethod.Cash;
+    private PaymentProvider _provider = PaymentProvider.Bkash;
     private string _discountKind = "Percent";
 
     private bool _busy;
     private string? _error;
 
-    private decimal Tendered => decimal.TryParse(_tendered,
+    private decimal Entry => decimal.TryParse(_amount,
         System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0m;
 
-    private decimal Change => Math.Max(0m, Tendered - _grandTotal);
-    private bool CanSave => !_busy && _order is { IsPaid: false } && Tendered >= _grandTotal;
+    private decimal StagedSum => _tenders.Sum(t => t.Amount);
+    private decimal Remaining => Math.Max(0m, _grandTotal - _alreadyPaid - StagedSum);
+
+    // For cash the entry is the cash received → applied is capped at the remaining, the rest is change.
+    private decimal EntryApplied => _method == PaymentMethod.Cash ? Math.Min(Entry, Remaining) : Math.Min(Entry, Remaining);
+    private decimal EntryChange => _method == PaymentMethod.Cash ? Math.Max(0m, Entry - Remaining) : 0m;
+
+    private bool CanAddTender => Remaining > 0m && Entry > 0m;
+    private bool CanSave => !_busy && _order is { } && (_tenders.Count > 0 || Entry > 0m);
+
+    private string SaveLabel => (Remaining - EntryApplied) <= 0m ? "Settle & Finish" : "Take Partial";
 
     private PosRoundingMode CurrentMode =>
         _rounding < 0m ? PosRoundingMode.Floor : _rounding > 0m ? PosRoundingMode.Ceil : PosRoundingMode.None;
 
     protected override async Task OnInitializedAsync()
     {
+        await ReloadAsync();
+        SetRemaining();
+    }
+
+    private async Task ReloadAsync()
+    {
         _order = await Sender.Send(new GetOrderQuery(Content));
         _grandTotal = _order.GrandTotal;
         _rounding = _order.RoundingAdjustment;
         _discount = _order.DiscountAmount;
+        _alreadyPaid = _order.AmountPaid;
     }
 
-    // ----- payment method -----
+    // ----- tender entry -----
 
     private void SelectMethod(PaymentMethod m)
     {
         _method = m;
-        // Card/Mobile settle in full — no change due, so prefill the exact grand total.
-        if (m != PaymentMethod.Cash) SetExact();
+        _reference = null;
+        if (m != PaymentMethod.Cash) SetRemaining(); // non-cash settles its slice exactly
     }
 
-    // ----- discount -----
+    private void AddTender()
+    {
+        if (!CanAddTender) return;
+        var applied = EntryApplied;
+        if (applied <= 0m) { _error = "Nothing left to pay."; return; }
+
+        _tenders.Add(new StagedTender
+        {
+            Method = _method,
+            Provider = _method == PaymentMethod.Mobile ? _provider : null,
+            Amount = applied,
+            Tendered = _method == PaymentMethod.Cash ? Entry : applied,
+            Change = EntryChange,
+            Reference = string.IsNullOrWhiteSpace(_reference) ? null : _reference!.Trim()
+        });
+
+        _error = null;
+        _reference = null;
+        SetRemaining();
+    }
+
+    private void RemoveTender(StagedTender t)
+    {
+        _tenders.Remove(t);
+        SetRemaining();
+    }
+
+    // ----- discount / rounding (locked once a tender exists on the order) -----
 
     private Task ApplyDiscountAsync(decimal value)
     {
@@ -180,8 +286,7 @@
             _discount = summary.DiscountAmount;
             _grandTotal = summary.GrandTotal;
             _rounding = summary.Rounding;
-            // Keep tendered consistent with the new total for full-settle methods.
-            if (_method != PaymentMethod.Cash) SetExact();
+            SetRemaining();
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _busy = false; }
@@ -189,9 +294,7 @@
 
     private async Task RoundAsync(PosRoundingMode mode)
     {
-        // Clicking the active mode again restores the exact total.
         var target = CurrentMode == mode ? PosRoundingMode.None : mode;
-
         _error = null;
         _busy = true;
         try
@@ -199,6 +302,7 @@
             var summary = await Sender.Send(new ApplyPosRoundingCommand(Content, target));
             _grandTotal = summary.GrandTotal;
             _rounding = summary.Rounding;
+            SetRemaining();
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _busy = false; }
@@ -208,43 +312,56 @@
 
     private void Append(string s)
     {
-        if (_tendered.Length >= 10) return;
-        if (s == "." && _tendered.Contains('.')) return;
-
-        if (_tendered == "0" && s != ".")
-            _tendered = s == "00" ? "0" : s;
-        else
-            _tendered += s;
+        if (_amount.Length >= 10) return;
+        if (s == "." && _amount.Contains('.')) return;
+        if (_amount == "0" && s != ".") _amount = s == "00" ? "0" : s;
+        else _amount += s;
     }
 
-    private void Backspace() =>
-        _tendered = _tendered.Length <= 1 ? "0" : _tendered[..^1];
+    private void Backspace() => _amount = _amount.Length <= 1 ? "0" : _amount[..^1];
+    private void ClearEntry() => _amount = "0";
+    private void SetRemaining() => _amount = Remaining.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    private void SetQuick(decimal value) => _amount = value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    private void AddQuick(decimal value) => _amount = (Entry + value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
-    private void Clear() => _tendered = "0";
-
-    private void SetExact() => _tendered = _grandTotal.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-
-    private void SetQuick(decimal value) => _tendered = value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-
-    private void AddQuick(decimal value) =>
-        _tendered = (Tendered + value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    // ----- save -----
 
     private async Task SaveAsync()
     {
         _error = null;
+
+        // Fold any un-staged entry into the batch so a single full tender needs no extra tap.
+        if (Entry > 0m && Remaining > 0m) AddTender();
+        if (_tenders.Count == 0) { _error = "Enter a payment amount."; return; }
+
         _busy = true;
         try
         {
-            var summary = await Sender.Send(new RecordPaymentCommand(Content, _method, Tendered));
-            ToastService.ShowSuccess($"Payment saved · change {summary.Change:0.##} Tk.");
-            _ = AutoPrintAsync(); // fire-and-forget: payment never waits on (or fails with) the printer
-            Dialog.Close(true);
+            var inputs = _tenders
+                .Select(t => new PaymentEntryInput(t.Method, t.Provider, t.Amount, t.Tendered, t.Reference))
+                .ToList();
+
+            var result = await Sender.Send(new AddPaymentCommand(Content, inputs));
+
+            if (result.PaymentStatus == PaymentStatus.Paid)
+            {
+                ToastService.ShowSuccess($"Paid in full · change {result.Change:0.##} Tk.");
+                _ = AutoPrintAsync(); // fire-and-forget: payment never waits on the printer
+                Dialog.Close(true);
+                return;
+            }
+
+            // Partial: keep the dialog open so the cashier can take the rest, reflecting new balance.
+            ToastService.ShowInfo($"Partial payment recorded · {result.BalanceDue:0.##} Tk. remaining.");
+            _tenders.Clear();
+            await ReloadAsync();
+            SetRemaining();
         }
         catch (Exception ex)
         {
             _error = ex.Message;
-            _busy = false;
         }
+        finally { _busy = false; }
     }
 
     private async Task AutoPrintAsync()
@@ -253,6 +370,9 @@
         if (result.Success) ToastService.ShowSuccess(result.Message);
         else ToastService.ShowWarning(result.Message);
     }
+
+    private static string TenderLabel(StagedTender t) =>
+        t.Method == PaymentMethod.Mobile && t.Provider is { } p ? $"{t.Method} · {p}" : t.Method.ToString();
 }
 
 <style>
@@ -262,12 +382,19 @@
     .pay-total-label { font-size: 18px; font-weight: 800; }
     .pay-total-amount { font-size: 18px; font-weight: 800; color: var(--bo-danger); margin-right: auto; }
 
+    .pay-summary {
+        display: flex; flex-direction: column; gap: 2px;
+        padding: 8px 12px; border-radius: var(--bo-radius-md, 8px); background: var(--bo-bg-soft);
+    }
+    .pay-sum-row { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; }
+    .pay-sum-row--bal { font-size: 15px; font-weight: 800; color: var(--bo-danger); }
+    .pay-sum-row--clear { color: var(--bo-success); }
+
     .pay-round {
         padding: 4px 12px; border-radius: 999px; cursor: pointer;
         background: var(--bo-bg-card); font-size: 12px; font-weight: 700;
         transition: background .12s, color .12s;
     }
-    /* ----- shared touch chips (discount + method) ----- */
     .pay-chip {
         padding: 8px 14px; border-radius: 999px; cursor: pointer;
         border: 1px solid var(--bo-border); background: var(--bo-bg-card);
@@ -287,21 +414,23 @@
     .pay-disc-applied { margin-left: auto; font-size: 13px; font-weight: 800; color: var(--bo-danger); }
     .pay-disc-quick { display: flex; flex-wrap: wrap; gap: 6px; }
 
+    .pay-tenders { display: flex; flex-direction: column; gap: 6px; }
+    .pay-tender {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 10px; border: 1px solid var(--bo-border); border-radius: 999px; background: var(--bo-bg-card);
+    }
+    .pay-tender-method { font-size: 13px; font-weight: 800; }
+    .pay-tender-amt { margin-left: auto; font-size: 13px; font-weight: 700; }
+    .pay-tender-x { border: none; background: none; color: var(--bo-danger); cursor: pointer; font-weight: 800; }
+
     .pay-method { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .pay-chip--method { padding: 12px 4px; font-size: 14px; }
+    .pay-providers { display: flex; flex-wrap: wrap; gap: 6px; }
 
-    .pay-noncash {
-        display: flex; flex-direction: column; align-items: center; gap: 8px;
-        padding: 22px; border: 1px dashed var(--bo-border); border-radius: var(--bo-radius-md, 8px);
-        background: var(--bo-bg-soft); color: var(--bo-text);
-        font-size: 14px; font-weight: 700; text-align: center;
+    .pay-ref {
+        padding: 10px; border: 1px solid var(--bo-border); border-radius: var(--bo-radius-md, 8px);
+        background: var(--bo-bg-soft); color: var(--bo-text); font-size: 13px;
     }
-
-    .pay-round--floor { border: 1px solid var(--bo-success); color: var(--bo-success); }
-    .pay-round--ceil  { border: 1px solid var(--bo-warning); color: var(--bo-warning); }
-    .pay-round--floor.pay-round--active { background: var(--bo-success); color: #fff; }
-    .pay-round--ceil.pay-round--active  { background: var(--bo-warning); color: #fff; }
-    .pay-round:disabled { opacity: .6; cursor: default; }
 
     .pay-entry {
         padding: 10px; text-align: center;
@@ -310,26 +439,31 @@
         font-size: 18px; font-weight: 700; color: var(--bo-danger);
         font-variant-numeric: tabular-nums;
     }
-
     .pay-change { text-align: center; font-size: 14px; font-weight: 700; }
     .pay-change span { color: var(--bo-danger); }
 
-    .pay-pad {
-        display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-        margin-top: 4px;
-    }
-
+    .pay-pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
     .pay-key {
         padding: 13px 4px; border: none; border-radius: var(--bo-radius-md, 8px); cursor: pointer;
         background: var(--bo-slate-800, #1E293B); color: #fff;
-        font-size: 15px; font-weight: 700;
-        transition: filter .1s, transform .06s;
+        font-size: 15px; font-weight: 700; transition: filter .1s, transform .06s;
     }
     .pay-key:hover { filter: brightness(1.15); }
     .pay-key:active { transform: scale(.96); }
-
     .pay-key--exact { background: var(--bo-success-strong, #15803D); }
     .pay-key--clear { background: var(--bo-warning); }
     .pay-key--add { background: var(--bo-slate-700, #334155); }
     .pay-key--back { background: var(--bo-danger); }
+
+    .pay-add-tender {
+        padding: 11px; border: 1px dashed var(--bo-primary); border-radius: var(--bo-radius-md, 8px);
+        background: var(--bo-bg-soft); color: var(--bo-primary); font-size: 14px; font-weight: 800; cursor: pointer;
+    }
+    .pay-add-tender:disabled { opacity: .45; cursor: default; }
+
+    .pay-round--floor { border: 1px solid var(--bo-success); color: var(--bo-success); }
+    .pay-round--ceil  { border: 1px solid var(--bo-warning); color: var(--bo-warning); }
+    .pay-round--floor.pay-round--active { background: var(--bo-success); color: #fff; }
+    .pay-round--ceil.pay-round--active  { background: var(--bo-warning); color: #fff; }
+    .pay-round:disabled { opacity: .6; cursor: default; }
 </style>
