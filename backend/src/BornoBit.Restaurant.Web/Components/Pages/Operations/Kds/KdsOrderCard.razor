@@ -1,0 +1,119 @@
+@namespace BornoBit.Restaurant.Web.Components.Pages.Operations.Kds
+@using BornoBit.Restaurant.Application.Kitchen.Queries
+@using BornoBit.Restaurant.Domain.Ordering
+
+<div class="kds-card @(Card.IsPriority ? "kds-card--priority" : "") kds-card--@TimerBucket">
+    <div class="kds-card-top">
+        <div class="kds-card-id">
+            <span class="kds-order-no">@Card.OrderNumber</span>
+            @if (Card.IsPriority)
+            {
+                <BoBadge Tone="danger">PRIORITY</BoBadge>
+            }
+        </div>
+        <button type="button"
+                class="kds-star @(Card.IsPriority ? "is-on" : "")"
+                title="@(Card.IsPriority ? "Clear priority" : "Mark priority")"
+                @onclick="TogglePriority">★</button>
+    </div>
+
+    <div class="kds-card-meta">
+        <span class="kds-type">@TypeLabel(Card.OrderType)</span>
+        @if (!string.IsNullOrWhiteSpace(Card.TableNumber))
+        {
+            <span class="kds-table">Table @Card.TableNumber</span>
+        }
+        @if (!string.IsNullOrWhiteSpace(Card.CustomerName))
+        {
+            <span class="kds-cust">@Card.CustomerName</span>
+        }
+    </div>
+
+    <div class="kds-card-time">
+        <span class="kds-clock">@Card.OrderedAtUtc.ToLocalTime().ToString("hh:mm tt")</span>
+        <span class="kds-timer kds-timer--@TimerBucket">@ElapsedLabel</span>
+    </div>
+
+    <ul class="kds-items">
+        @foreach (var item in Card.Items)
+        {
+            <li class="kds-item">
+                <span class="kds-qty">@item.Quantity×</span>
+                <span class="kds-name">@item.Name</span>
+                @if (!string.IsNullOrWhiteSpace(item.StationName) && ShowStationTag)
+                {
+                    <span class="kds-item-station">@item.StationName</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(item.Notes))
+                {
+                    <span class="kds-item-note">↳ @item.Notes</span>
+                }
+            </li>
+        }
+    </ul>
+
+    @if (!string.IsNullOrWhiteSpace(Card.CustomerNotes))
+    {
+        <div class="kds-note kds-note--cust"><strong>Note:</strong> @Card.CustomerNotes</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Card.KitchenNotes))
+    {
+        <div class="kds-note kds-note--kitchen"><strong>Kitchen:</strong> @Card.KitchenNotes</div>
+    }
+
+    <div class="kds-card-actions">
+        <BoButton Variant="ghost" Size="sm" OnClick="EditNotes">Notes</BoButton>
+        <BoButton Variant="@AdvanceVariant" Size="sm" OnClick="Advance">@AdvanceLabel ⟶</BoButton>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public KitchenOrderCardDto Card { get; set; } = default!;
+    [Parameter] public DateTime Now { get; set; } = DateTime.UtcNow;
+    [Parameter] public bool ShowStationTag { get; set; } = true;
+    [Parameter] public EventCallback<Guid> OnAdvance { get; set; }
+    [Parameter] public EventCallback<(Guid OrderId, bool Value)> OnTogglePriority { get; set; }
+    [Parameter] public EventCallback<KitchenOrderCardDto> OnEditNotes { get; set; }
+
+    private double ElapsedMinutes => Math.Max(0, (Now - Card.OrderedAtUtc).TotalMinutes);
+
+    private string TimerBucket => ElapsedMinutes >= 20 ? "critical" : ElapsedMinutes >= 10 ? "warning" : "normal";
+
+    private string ElapsedLabel
+    {
+        get
+        {
+            var m = (int)ElapsedMinutes;
+            return m < 60 ? $"{m} min" : $"{m / 60}h {m % 60}m";
+        }
+    }
+
+    private string AdvanceLabel => Card.Status switch
+    {
+        OrderStatus.Placed or OrderStatus.Confirmed => "Start",
+        OrderStatus.Preparing => "Ready",
+        OrderStatus.Ready => "Served",
+        _ => "Next"
+    };
+
+    private string AdvanceVariant => Card.Status switch
+    {
+        OrderStatus.Preparing => "success",
+        OrderStatus.Ready => "accent",
+        _ => "primary"
+    };
+
+    private Task Advance() => OnAdvance.InvokeAsync(Card.Id);
+    private Task TogglePriority() => OnTogglePriority.InvokeAsync((Card.Id, !Card.IsPriority));
+    private Task EditNotes() => OnEditNotes.InvokeAsync(Card);
+
+    private static string TypeLabel(OrderType t) => t switch
+    {
+        OrderType.DineIn => "Dine In",
+        OrderType.Takeaway => "Takeaway",
+        OrderType.Delivery => "Delivery",
+        OrderType.Collection => "Collection",
+        OrderType.Waiting => "Waiting",
+        _ => t.ToString()
+    };
+}

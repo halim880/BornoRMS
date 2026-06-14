@@ -1,0 +1,85 @@
+@namespace BornoBit.Restaurant.Web.Components.Pages.Waiter.Dialogs
+
+<BoDialogBody>
+    <span class="sp-prompt">Pick the orders to move onto a new table.</span>
+    @if (Content.Orders.Count == 0)
+    {
+        <BoMessageBar Intent="info">This session has no orders to split.</BoMessageBar>
+    }
+    else
+    {
+        <div class="sp-list">
+            @foreach (var o in Content.Orders)
+            {
+                <label class="sp-row @(_orders.Contains(o.OrderId) ? "sp-row--on" : null)">
+                    <input type="checkbox" checked="@_orders.Contains(o.OrderId)"
+                           @onchange="e => Toggle(o.OrderId, (bool)e.Value!)" />
+                    <span class="sp-no">@o.OrderNumber</span>
+                    <span class="sp-status">@o.Status</span>
+                    <span class="sp-total">@o.Currency @o.Total.ToString("0.##")</span>
+                </label>
+            }
+        </div>
+
+        <div class="sp-target">
+            <span class="sp-label">Move to table</span>
+            @if (Content.Tables.Count == 0)
+            {
+                <BoMessageBar Intent="warning">No free tables available.</BoMessageBar>
+            }
+            else
+            {
+                <div class="sp-tables">
+                    @foreach (var t in Content.Tables)
+                    {
+                        <button type="button" @key="t.Id"
+                                class="sp-chip @(_table == t.Id ? "sp-chip--active" : null)"
+                                @onclick="() => _table = t.Id">@t.Number</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close())">Cancel</BoButton>
+    <BoButton Variant="primary" Disabled="@(_orders.Count == 0 || _table is null)" OnClick="Confirm">Split</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public SplitInput Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private readonly HashSet<Guid> _orders = new();
+    private Guid? _table;
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on) _orders.Add(id); else _orders.Remove(id);
+    }
+
+    private void Confirm()
+    {
+        if (_table is { } tid && _orders.Count > 0)
+            Dialog.Close(new SplitResult(_orders.ToList(), tid, 0));
+    }
+}
+
+<style>
+    .sp-prompt { display:block; font-size:13.5px; color:var(--bo-text-muted); margin-bottom:10px; }
+    .sp-list { display:flex; flex-direction:column; gap:6px; max-height:240px; overflow-y:auto; margin-bottom:14px; }
+    .sp-row {
+        display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:10px; cursor:pointer;
+        padding:9px 12px; border:1px solid var(--bo-border); border-radius:10px; background:var(--bo-bg-card);
+    }
+    .sp-row--on { border-color:var(--bo-primary); background:color-mix(in srgb, var(--bo-primary) 8%, transparent); }
+    .sp-no { font-weight:700; }
+    .sp-status { font-size:11px; text-transform:uppercase; color:var(--bo-text-muted); }
+    .sp-total { font-weight:700; color:var(--bo-primary); }
+    .sp-label { display:block; font-size:13px; font-weight:600; color:var(--bo-text-muted); margin-bottom:6px; }
+    .sp-tables { display:flex; flex-wrap:wrap; gap:6px; }
+    .sp-chip { padding:8px 14px; border-radius:999px; cursor:pointer; border:1px solid var(--bo-border); background:var(--bo-bg-card); color:var(--bo-text); font-weight:700; }
+    .sp-chip:hover { border-color:var(--bo-primary); }
+    .sp-chip--active { border-color:var(--bo-primary); background:var(--bo-primary); color:var(--bo-on-primary,#fff); }
+</style>

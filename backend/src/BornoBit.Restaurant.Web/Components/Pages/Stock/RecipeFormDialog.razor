@@ -1,0 +1,126 @@
+@using BornoBit.Restaurant.Application.Inventory.Items
+@using BornoBit.Restaurant.Application.Inventory.Recipes
+@using BornoBit.Restaurant.Application.Inventory.Units
+@using BornoBit.Restaurant.Application.Products
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="display:flex; gap:12px; align-items:flex-end;">
+            @if (Content.IsExisting)
+            {
+                <BoInput Value="@Content.ProductName" Label="Product" Disabled="true" Style="flex:1;" />
+            }
+            else
+            {
+                <BoSelect TOption="ProductDto"
+                          Items="@_products"
+                          OptionValue="@(p => p.Id.ToString())"
+                          OptionText="@(p => $"{p.Code} · {p.Name}")"
+                          SelectedOption="@_selectedProduct"
+                          SelectedOptionChanged="@(p => Content.ProductId = p?.Id ?? Guid.Empty)"
+                          Label="Product" Placeholder="Select a product" Required="true" Style="flex:1;" />
+            }
+            <BoNumeric T="decimal" @bind-Value="Content.Yield" Label="Yield (servings)" Style="width:160px;" Min="0.001" Step="1" Decimals="3" />
+        </div>
+
+        <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <strong>Ingredients</strong>
+                <BoButton Variant="ghost" OnClick="AddRow">+ Add ingredient</BoButton>
+            </div>
+
+            @if (Content.Items.Count == 0)
+            {
+                <EmptyState Description="Add at least one ingredient." />
+            }
+            else
+            {
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    @foreach (var row in Content.Items)
+                    {
+                        <div style="display:flex; gap:8px; align-items:flex-end;">
+                            <BoSelect TOption="InventoryItemDto"
+                                      Items="@_items"
+                                      OptionValue="@(i => i.Id.ToString())"
+                                      OptionText="@(i => $"{i.Name} ({i.UnitCode})")"
+                                      SelectedOption="@_items.FirstOrDefault(i => i.Id == row.InventoryItemId)"
+                                      SelectedOptionChanged="@(i => row.InventoryItemId = i?.Id ?? Guid.Empty)"
+                                      Label="Ingredient" Placeholder="Select" Style="flex:1;" />
+                            <BoNumeric T="decimal" @bind-Value="row.Quantity" Label="Qty" Style="width:120px;" Min="0.001" Step="0.001" Decimals="3" />
+                            <BoSelect TOption="UnitDto"
+                                      Items="@_units"
+                                      OptionValue="@(u => u.Id.ToString())"
+                                      OptionText="@(u => u.Code)"
+                                      SelectedOption="@_units.FirstOrDefault(u => u.Id == row.UnitId)"
+                                      SelectedOptionChanged="@(u => row.UnitId = u?.Id ?? Guid.Empty)"
+                                      Label="Unit" Placeholder="Unit" Style="width:120px;" />
+                            <BoButton Variant="ghost" OnClick="@(() => Content.Items.Remove(row))">✕</BoButton>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.IsExisting ? "Save" : "Create")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public RecipeFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private List<ProductDto> _products = new();
+    private List<InventoryItemDto> _items = new();
+    private List<UnitDto> _units = new();
+
+    private ProductDto? _selectedProduct => _products.FirstOrDefault(p => p.Id == Content.ProductId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _products = (await Mediator.Send(new GetProductsQuery())).Where(p => p.IsActive).ToList();
+            _items = (await Mediator.Send(new GetInventoryItemsQuery(PageSize: 500, IncludeInactive: false))).Items.ToList();
+            _units = (await Mediator.Send(new GetUnitsQuery())).Where(u => u.IsActive).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load reference data: {ex.Message}"; }
+    }
+
+    private void AddRow() => Content.Items.Add(new RecipeFormModel.RecipeRow());
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (Content.ProductId == Guid.Empty) { _error = "Select a product."; return; }
+        if (Content.Items.Count == 0) { _error = "Add at least one ingredient."; return; }
+        if (Content.Items.Any(r => r.InventoryItemId == Guid.Empty || r.UnitId == Guid.Empty)) { _error = "Every ingredient row needs an item and a unit."; return; }
+
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new UpsertRecipeCommand(
+                Content.ProductId, null, Content.Yield,
+                Content.Items.Select(r => new RecipeItemInput(r.Id, r.InventoryItemId, r.Quantity, r.UnitId)).ToList()));
+            Content.Saved = true;
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

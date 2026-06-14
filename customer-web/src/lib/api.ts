@@ -1,6 +1,7 @@
 import { getCustomerToken } from "@/lib/auth";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
+const IMAGE_BASE_URL = process.env.IMAGE_BASE_URL || "http://localhost:5002";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -43,6 +44,12 @@ export async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promis
 
 export function getBackendUrl(): string {
   return BACKEND_URL;
+}
+
+export function resolveImageUrl(imageUrl: string | null): string | null {
+  if (!imageUrl) return null;
+  if (/^https?:\/\//i.test(imageUrl)) return imageUrl; // already absolute (future S3/CDN)
+  return `${IMAGE_BASE_URL}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 }
 
 export type PagedResult<T> = {

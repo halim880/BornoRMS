@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Ordering.Commands;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using MediatR;
@@ -15,7 +16,8 @@ public record OrderLineDto(
     string Name,
     decimal UnitPrice,
     int Quantity,
-    decimal LineTotal);
+    decimal LineTotal,
+    string? Notes = null);
 
 public record OrderDetailDto(
     Guid Id,
@@ -33,15 +35,24 @@ public record OrderDetailDto(
     decimal Subtotal,
     decimal DiscountAmount,
     string? DiscountReason,
+    decimal TaxAmount,
+    decimal ServiceChargeAmount,
+    decimal TipAmount,
     decimal RoundingAdjustment,
     decimal GrandTotal,
     decimal Total,
     bool IsPaid,
+    PaymentStatus PaymentStatus,
+    decimal AmountPaid,
+    decimal BalanceDue,
     PaymentMethod? PaymentMethod,
     decimal? AmountTendered,
     decimal? ChangeGiven,
     DateTime? PaidAtUtc,
-    IReadOnlyList<OrderLineDto> Lines);
+    string? WaiterName,
+    Guid? DiningSessionId,
+    IReadOnlyList<OrderLineDto> Lines,
+    IReadOnlyList<PaymentLineDto> Payments);
 
 public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDto>
 {
@@ -64,36 +75,56 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
 
         var lines = await _db.OrderLines
             .Where(l => l.OrderId == request.OrderId)
-            .Select(l => new OrderLineDto(l.MenuItemId, l.VariantId, l.Code, l.Name, l.UnitPriceSnapshot, l.Quantity, l.UnitPriceSnapshot * l.Quantity))
+            .Select(l => new OrderLineDto(l.MenuItemId, l.VariantId, l.Code, l.Name, l.UnitPriceSnapshot, l.Quantity, l.UnitPriceSnapshot * l.Quantity, l.Notes))
             .ToListAsync(cancellationToken);
 
+        var payments = await _db.Payments
+            .Where(p => p.OrderId == request.OrderId)
+            .OrderBy(p => p.CreatedAtUtc)
+            .Select(p => new PaymentLineDto(p.Id, p.Method, p.Provider, p.Amount, p.Tendered, p.Change, p.Kind, p.Status, p.CreatedAtUtc, p.CashierName, p.Reference))
+            .ToListAsync(cancellationToken);
+
+        var ord = row.Order;
         var subtotal = lines.Sum(l => l.LineTotal);
-        var grandTotal = Math.Max(0m, subtotal - row.Order.DiscountAmount + row.Order.RoundingAdjustment);
+        var grandTotal = Math.Max(0m, subtotal - ord.DiscountAmount + ord.TaxAmount + ord.ServiceChargeAmount + ord.TipAmount + ord.RoundingAdjustment);
+        var amountPaid = payments
+            .Where(p => p.Status == PaymentEntryStatus.Captured)
+            .Sum(p => p.Kind == PaymentKind.Charge ? p.Amount : -p.Amount);
+        var balanceDue = Math.Max(0m, grandTotal - amountPaid);
 
         return new OrderDetailDto(
-            row.Order.Id,
-            row.Order.OrderNumber,
-            row.Order.CustomerId,
+            ord.Id,
+            ord.OrderNumber,
+            ord.CustomerId,
             row.Customer.Phone,
             row.Customer.FullName,
             row.Customer.Address,
             row.Table != null ? row.Table.TableNumber : null,
-            row.Order.OrderType,
-            row.Order.Status,
-            row.Order.OrderedAtUtc,
-            row.Order.Currency,
-            row.Order.Notes,
+            ord.OrderType,
+            ord.Status,
+            ord.OrderedAtUtc,
+            ord.Currency,
+            ord.Notes,
             subtotal,
-            row.Order.DiscountAmount,
-            row.Order.DiscountReason,
-            row.Order.RoundingAdjustment,
+            ord.DiscountAmount,
+            ord.DiscountReason,
+            ord.TaxAmount,
+            ord.ServiceChargeAmount,
+            ord.TipAmount,
+            ord.RoundingAdjustment,
             grandTotal,
             grandTotal,
-            row.Order.IsPaid,
-            row.Order.PaymentMethod,
-            row.Order.AmountTendered,
-            row.Order.ChangeGiven,
-            row.Order.PaidAtUtc,
-            lines);
+            ord.IsPaid,
+            ord.PaymentStatus,
+            amountPaid,
+            balanceDue,
+            ord.PaymentMethod,
+            ord.AmountTendered,
+            ord.ChangeGiven,
+            ord.PaidAtUtc,
+            ord.WaiterName,
+            ord.DiningSessionId,
+            lines,
+            payments);
     }
 }

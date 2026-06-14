@@ -11,7 +11,7 @@ namespace BornoBit.Restaurant.Application.Ordering.Commands;
 /// </summary>
 internal static class OrderLineResolver
 {
-    public static (string Name, decimal Price, string Currency, string Code) Resolve(
+    public static (string Name, decimal Price, string Currency, string Code, Guid? StationId) Resolve(
         IReadOnlyDictionary<Guid, Product> products, Guid productId, Guid? variantId)
     {
         if (!products.TryGetValue(productId, out var product))
@@ -25,12 +25,12 @@ internal static class OrderLineResolver
         {
             var variant = activeVariants.FirstOrDefault(v => v.Id == vid)
                 ?? throw new ConflictException($"The selected variant of '{product.Name}' is no longer available.");
-            return ($"{product.Name} ({variant.Name})", variant.Price, product.Currency, product.Code);
+            return ($"{product.Name} ({variant.Name})", variant.Price, product.Currency, product.Code, product.KitchenStationId);
         }
 
         if (activeVariants.Count > 0)
             throw new ConflictException($"'{product.Name}' requires a variant (e.g. {activeVariants[0].Name}).");
 
-        return (product.Name, product.Price, product.Currency, product.Code);
+        return (product.Name, product.Price, product.Currency, product.Code, product.KitchenStationId);
     }
 }

@@ -15,6 +15,12 @@ public class Product : AuditableEntity
     public int DisplayOrder { get; private set; }
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>Kitchen station this product is routed to on the Kitchen Display. Null = unassigned ("All").</summary>
+    public Guid? KitchenStationId { get; private set; }
+
+    /// <summary>How selling this product impacts stock. Defaults to <see cref="InventoryMethod.None"/> (no deduction).</summary>
+    public InventoryMethod InventoryMethod { get; private set; } = InventoryMethod.None;
+
     private readonly List<ProductVariant> _variants = new();
     public IReadOnlyCollection<ProductVariant> Variants => _variants.AsReadOnly();
 
@@ -29,7 +35,8 @@ public class Product : AuditableEntity
         string? imagePath = null,
         string? description = null,
         int displayOrder = 0,
-        string currency = "Tk")
+        string currency = "Tk",
+        Guid? kitchenStationId = null)
     {
         if (productCategoryId == Guid.Empty) throw new ArgumentException("Category is required.", nameof(productCategoryId));
         if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Code is required.", nameof(code));
@@ -48,6 +55,7 @@ public class Product : AuditableEntity
             ImagePath = Trim(imagePath),
             Description = Trim(description),
             DisplayOrder = displayOrder,
+            KitchenStationId = kitchenStationId,
             IsActive = true
         };
     }
@@ -60,7 +68,8 @@ public class Product : AuditableEntity
         string? banglaName,
         string? imagePath,
         string? description,
-        int displayOrder)
+        int displayOrder,
+        Guid? kitchenStationId = null)
     {
         if (productCategoryId == Guid.Empty) throw new ArgumentException("Category is required.", nameof(productCategoryId));
         if (string.IsNullOrWhiteSpace(code)) throw new ArgumentException("Code is required.", nameof(code));
@@ -75,10 +84,17 @@ public class Product : AuditableEntity
         ImagePath = Trim(imagePath);
         Description = Trim(description);
         DisplayOrder = displayOrder;
+        KitchenStationId = kitchenStationId;
     }
 
     public void Activate() => IsActive = true;
     public void Deactivate() => IsActive = false;
+
+    /// <summary>Routes this product to a kitchen station (null = unassigned / "All").</summary>
+    public void AssignStation(Guid? stationId) => KitchenStationId = stationId;
+
+    /// <summary>Sets how selling this product impacts stock (None / DirectStock / RecipeBased).</summary>
+    public void SetInventoryMethod(InventoryMethod method) => InventoryMethod = method;
 
     public ProductVariant AddVariant(string name, decimal price, int displayOrder = 0)
     {

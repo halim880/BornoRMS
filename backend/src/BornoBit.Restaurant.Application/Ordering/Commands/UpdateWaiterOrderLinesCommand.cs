@@ -70,14 +70,17 @@ public class UpdateWaiterOrderLinesCommandHandler : IRequestHandler<UpdateWaiter
                 .Where(p => productIds.Contains(p.Id))
                 .ToDictionaryAsync(p => p.Id, cancellationToken);
 
+            var stationNames = await _db.KitchenStations.ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+
             foreach (var (productId, variantId, quantity) in newPairs)
             {
-                var (name, price, currency, code) = OrderLineResolver.Resolve(products, productId, variantId);
+                var (name, price, currency, code, stationId) = OrderLineResolver.Resolve(products, productId, variantId);
                 if (currency != order.Currency)
                     throw new ConflictException($"'{name}' uses {currency}; order is in {order.Currency}.");
+                var stationName = stationId is { } sid && stationNames.TryGetValue(sid, out var sn) ? sn : null;
                 // The order is tracked, so the new line (pre-set Guid key) would be discovered as
                 // Modified and saved as an UPDATE — mark it Added explicitly.
-                _db.OrderLines.Add(order.AddLine(productId, code, name, price, currency, quantity, variantId));
+                _db.OrderLines.Add(order.AddLine(productId, code, name, price, currency, quantity, variantId, stationId, stationName));
             }
         }
 

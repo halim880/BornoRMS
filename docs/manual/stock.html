@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock (Raw) — BornoBit Manual</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="brand"><span class="logo">🍽</span>BornoBit Manual</div>
+  <input type="search" id="navSearch" placeholder="Search…" autocomplete="off" aria-label="Search manual">
+  <ul class="navlist">
+    <li><a href="index.html">Home</a></li>
+    <li class="group">Operations</li>
+    <li><a href="orders.html">Orders</a></li>
+    <li><a href="pos.html">POS</a></li>
+    <li><a href="kitchen-display.html">Kitchen Display</a></li>
+    <li><a href="dashboard.html">Operations Dashboard</a></li>
+    <li><a href="cash-counter.html">Cash Counter</a></li>
+    <li class="group">Inventory</li>
+    <li><a href="inventory.html">Menu &amp; Tables</a></li>
+    <li><a href="stock.html">Stock (Raw)</a></li>
+    <li><a href="store.html">Store (Finished)</a></li>
+    <li class="group">Finance</li>
+    <li><a href="accounts.html">Accounts</a></li>
+    <li><a href="reports.html">Reports</a></li>
+    <li class="group">Administration</li>
+    <li><a href="users-roles.html">Users &amp; Roles</a></li>
+    <li><a href="menu-permissions.html">Menu &amp; Modules</a></li>
+    <li><a href="numbering.html">Numbering</a></li>
+    <li><a href="settings.html">Settings</a></li>
+  </ul>
+</nav>
+<main class="content">
+  <header class="topbar"><h1>Stock (Raw Materials)</h1><button id="themeToggle" aria-label="Toggle theme">🌙</button></header>
+  <article>
+    <p><span class="route">/stock/items</span> · <span class="route">/stock/goods-receipts</span>
+       · <span class="route">/stock/movements</span> · <span class="route">/stock/wastage</span>
+       · <span class="route">/stock/low-stock</span> · <span class="route">/stock/suppliers</span></p>
+    <div class="roles"><strong>Who can access:</strong>
+      <span class="role-chip">Manager</span><span class="role-chip">Admin</span><span class="role-chip">SuperAdmin</span></div>
+
+    <h2>Purpose</h2>
+    <p>Track raw ingredients: on-hand quantity, average cost, deliveries, usage, and waste. This is the
+    POS-side inventory (separate from <a href="store.html">Store</a>).</p>
+
+    <h2>Common tasks</h2>
+    <h3>Add stock items</h3>
+    <ol><li>Open <code>/stock/items</code> → <strong>New</strong>; set name, unit, reorder threshold.</li></ol>
+    <h3>Receive a delivery</h3>
+    <ol><li>Open <code>/stock/goods-receipts</code>; record supplier, items, quantities, cost. On-hand and average cost update.</li></ol>
+    <h3>Record wastage</h3>
+    <ol><li>Open <code>/stock/wastage</code>; log spoilage/loss — it deducts from on-hand.</li></ol>
+    <h3>Watch low stock</h3>
+    <ol><li>Open <code>/stock/low-stock</code> to see items below their reorder threshold; reorder from suppliers.</li></ol>
+
+    <h2>Screenshot</h2>
+    <div class="shot"><img src="assets/img/stock.png" alt="Stock items list" onerror="this.style.display='none';this.parentNode.insertAdjacentText('beforeend','Screenshot placeholder — capture assets/img/stock.png')"></div>
+    <!-- TODO: capture screenshot assets/img/stock.png -->
+
+    <div class="callout"><strong>Note.</strong> Download the inventory valuation report at
+    <code>/reports/stock/valuation.pdf</code> (see <a href="reports.html">Reports</a>).</div>
+
+    <footer class="updated">Last updated: 2026-06-14</footer>
+  </article>
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,29 +1,72 @@
+using BornoBit.Restaurant.Application.Accounting.Drawers;
 using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Domain.Ordering;
+using BornoBit.Restaurant.Shared.Common;
 using BornoBit.Restaurant.Web.Components.BornoUi.Dialog;
 using BornoBit.Restaurant.Web.Components.BornoUi.Toast;
-using BornoBit.Restaurant.Web.Components.Shared;
+using BornoBit.Restaurant.Web.Components.Pages.Operations.Dialogs;
+using BornoBit.Restaurant.Web.Hubs;
 using BornoBit.Restaurant.Web.Services.Printing;
 using MediatR;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.SignalR.Client;
 
 namespace BornoBit.Restaurant.Web.Components.Pages.Operations;
 
-public partial class CashCounter : ComponentBase
+public partial class CashCounter : ComponentBase, IAsyncDisposable
 {
     [Inject] private ISender Mediator { get; set; } = default!;
     [Inject] private IBoDialogService DialogService { get; set; } = default!;
     [Inject] private IBoToastService ToastService { get; set; } = default!;
     [Inject] private IReceiptPrintService PrintService { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
 
     private bool _loading = true;
     private string? _error;
-    private CashSummaryDto? _summary;
-    private List<OrderListItemDto> _pending = new();
-    private List<OrderListItemDto> _paidToday = new();
+
+    private DailySummaryDto? _summary;
+    private DrawerDto? _drawer;
+    private PagedResult<CashCounterRowDto> _board = new(Array.Empty<CashCounterRowDto>(), 1, BoardPageSize, 0);
+    private PagedResult<PaymentLedgerRowDto> _ledger = new(Array.Empty<PaymentLedgerRowDto>(), 1, LedgerPageSize, 0);
+
+    private readonly Dictionary<Guid, OrderDetailDto?> _expanded = new();
     private Guid? _printingId;
 
-    protected override Task OnInitializedAsync() => ReloadAsync();
+    // Filters
+    private DateOnly _date = DateOnly.FromDateTime(DateTime.Now);
+    private PaymentStatus? _statusFilter;
+    private OrderType? _typeFilter;
+    private string? _waiterFilter;
+
+    private const int BoardPageSize = 25;
+    private const int LedgerPageSize = 25;
+    private int _boardPage = 1;
+    private int _ledgerPage = 1;
+
+    private HubConnection? _hub;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+        await ConnectHubAsync();
+    }
+
+    private async Task ConnectHubAsync()
+    {
+        try
+        {
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Nav.ToAbsoluteUri("/hubs/dashboard"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hub.On<string>(DashboardHub.ChangedEvent, async _ =>
+                await InvokeAsync(async () => { await ReloadAsync(); StateHasChanged(); }));
+
+            await _hub.StartAsync();
+        }
+        catch { /* real-time is best-effort; manual refresh still works */ }
+    }
 
     private async Task ReloadAsync()
     {
@@ -31,16 +74,10 @@ public partial class CashCounter : ComponentBase
         _error = null;
         try
         {
-            _summary = await Mediator.Send(new GetCashSummaryQuery());
-
-            var pending = await Mediator.Send(new GetOrdersQuery(
-                IsPaid: false, ExcludeCancelled: true, PageSize: 200));
-            _pending = pending.Items.ToList();
-
-            var paid = await Mediator.Send(new GetOrdersQuery(
-                IsPaid: true, PageSize: 200));
-            var todayUtc = DateTime.UtcNow.Date;
-            _paidToday = paid.Items.Where(o => o.PaidAtUtc?.Date == todayUtc).ToList();
+            _summary = await Mediator.Send(new GetDailySummaryQuery(_date));
+            _drawer = await Mediator.Send(new GetCurrentDrawerQuery());
+            await LoadBoardAsync();
+            await LoadLedgerAsync();
         }
         catch (Exception ex)
         {
@@ -52,35 +89,138 @@ public partial class CashCounter : ComponentBase
         }
     }
 
-    private async Task TakePaymentAsync(OrderListItemDto o)
+    private async Task LoadBoardAsync()
     {
-        var result = await DialogService.ShowAsync<BillDialog, Guid>(
-            o.Id,
-            new BoDialogOptions { Title = $"Bill · {o.OrderNumber}", Width = "520px" });
+        _board = await Mediator.Send(new GetCashCounterBoardQuery(
+            Date: _date, Waiter: _waiterFilter, OrderType: _typeFilter, PaymentStatus: _statusFilter,
+            Page: _boardPage, PageSize: BoardPageSize));
+    }
 
-        // BillDialog returns true when discount/payment changed something.
+    private async Task LoadLedgerAsync()
+    {
+        _ledger = await Mediator.Send(new GetPaymentLedgerQuery(Date: _date, Page: _ledgerPage, PageSize: LedgerPageSize));
+    }
+
+    // String-backed filter selects (avoids nullable-enum generic friction with BoSelect).
+    private static readonly string[] StatusItems = { "All", "Pending", "Partial", "Paid", "Refunded" };
+    private static readonly string[] TypeItems = { "All", "DineIn", "Takeaway", "Delivery", "Collection" };
+    private string _statusItem = "All";
+    private string _typeItem = "All";
+
+    private Task OnStatusChanged(string? value)
+    {
+        _statusItem = value ?? "All";
+        _statusFilter = _statusItem switch
+        {
+            "Pending" => PaymentStatus.Pending,
+            "Partial" => PaymentStatus.PartiallyPaid,
+            "Paid" => PaymentStatus.Paid,
+            "Refunded" => PaymentStatus.Refunded,
+            _ => null
+        };
+        return OnFilterChanged();
+    }
+
+    private Task OnTypeChanged(string? value)
+    {
+        _typeItem = value ?? "All";
+        _typeFilter = Enum.TryParse<OrderType>(_typeItem, out var t) ? t : null;
+        return OnFilterChanged();
+    }
+
+    private Task OnWaiterChanged(string? value)
+    {
+        _waiterFilter = string.IsNullOrWhiteSpace(value) ? null : value;
+        return OnFilterChanged();
+    }
+
+    private Task OnFilterChanged()
+    {
+        _boardPage = 1;
+        return LoadBoardAsync();
+    }
+
+    private Task OnDateChanged(DateOnly? d)
+    {
+        _date = d ?? DateOnly.FromDateTime(DateTime.Now);
+        _boardPage = 1; _ledgerPage = 1;
+        return ReloadAsync();
+    }
+
+    private Task BoardPrev() { if (_boardPage > 1) { _boardPage--; return LoadBoardAsync(); } return Task.CompletedTask; }
+    private Task BoardNext() { if (_boardPage < _board.TotalPages) { _boardPage++; return LoadBoardAsync(); } return Task.CompletedTask; }
+    private Task LedgerPrev() { if (_ledgerPage > 1) { _ledgerPage--; return LoadLedgerAsync(); } return Task.CompletedTask; }
+    private Task LedgerNext() { if (_ledgerPage < _ledger.TotalPages) { _ledgerPage++; return LoadLedgerAsync(); } return Task.CompletedTask; }
+
+    private async Task ToggleExpandAsync(Guid orderId)
+    {
+        if (_expanded.Remove(orderId)) return;
+        _expanded[orderId] = null; // show loading
+        try { _expanded[orderId] = await Mediator.Send(new GetOrderQuery(orderId)); }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); _expanded.Remove(orderId); }
+    }
+
+    private async Task SettleAsync(CashCounterRowDto row)
+    {
+        var result = await DialogService.ShowAsync<Dialogs.SettlementDialog, Guid>(
+            row.OrderId,
+            new BoDialogOptions { Title = $"Settle · {row.OrderNumber}", Width = "640px" });
+
         if (!result.Cancelled && result.Data is true)
             await ReloadAsync();
     }
 
-    private async Task ReprintAsync(OrderListItemDto o)
+    private async Task OpenDrawerDialogAsync()
     {
-        _printingId = o.Id;
+        var result = await DialogService.ShowAsync<Dialogs.DrawerDialog, bool>(
+            false, new BoDialogOptions { Title = "Cash drawer", Width = "460px" });
+        if (!result.Cancelled && result.Data is true)
+            await ReloadAsync();
+    }
+
+    private async Task OpenSettingsAsync()
+    {
+        var result = await DialogService.ShowAsync<Dialogs.BillingSettingsDialog, bool>(
+            false, new BoDialogOptions { Title = "Billing settings", Width = "460px" });
+        if (!result.Cancelled && result.Data is true)
+            await ReloadAsync();
+    }
+
+    private async Task ReprintAsync(Guid orderId)
+    {
+        _printingId = orderId;
         try
         {
-            var result = await PrintService.PrintReceiptAsync(o.Id, isReprint: true);
+            var result = await PrintService.PrintReceiptAsync(orderId, isReprint: true);
             if (result.Success) ToastService.ShowSuccess(result.Message);
             else ToastService.ShowWarning(result.Message);
         }
-        catch (Exception ex)
-        {
-            ToastService.ShowError(ex.Message);
-        }
-        finally
-        {
-            _printingId = null;
-        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _printingId = null; }
     }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null) await _hub.DisposeAsync();
+    }
+
+    // ----- display helpers -----
+
+    private static string PaymentTone(PaymentStatus s) => s switch
+    {
+        PaymentStatus.Pending => "warning",
+        PaymentStatus.PartiallyPaid => "info",
+        PaymentStatus.Paid => "success",
+        PaymentStatus.Refunded => "neutral",
+        PaymentStatus.Cancelled => "danger",
+        _ => "neutral"
+    };
+
+    private static string PaymentLabel(PaymentStatus s) => s switch
+    {
+        PaymentStatus.PartiallyPaid => "Partial",
+        _ => s.ToString()
+    };
 
     private static string MethodIcon(PaymentMethod method) => method switch
     {
@@ -90,32 +230,11 @@ public partial class CashCounter : ComponentBase
         _ => "Money"
     };
 
-    // (chip background, icon/text color) — mirrors the SalesReport stat-card tints.
-    private static (string Bg, string Color) MethodTint(PaymentMethod method) => method switch
-    {
-        PaymentMethod.Cash => ("color-mix(in srgb, var(--bo-success) 14%, #fff)", "var(--bo-success)"),
-        PaymentMethod.Card => ("color-mix(in srgb, var(--bo-info) 14%, #fff)", "var(--bo-info)"),
-        PaymentMethod.Mobile => ("color-mix(in srgb, var(--bo-primary) 14%, #fff)", "var(--bo-primary)"),
-        _ => ("var(--bo-bg-soft)", "var(--bo-text-muted)")
-    };
-
     private static string MethodTone(PaymentMethod method) => method switch
     {
         PaymentMethod.Cash => "success",
         PaymentMethod.Card => "info",
         PaymentMethod.Mobile => "primary",
-        _ => "neutral"
-    };
-
-    private static string StatusTone(OrderStatus status) => status switch
-    {
-        OrderStatus.Placed => "warning",
-        OrderStatus.Confirmed => "info",
-        OrderStatus.Preparing => "primary",
-        OrderStatus.Ready => "success",
-        OrderStatus.Served => "success",
-        OrderStatus.Completed => "neutral",
-        OrderStatus.Cancelled => "danger",
         _ => "neutral"
     };
 }

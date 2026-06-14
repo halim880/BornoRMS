@@ -1,0 +1,105 @@
+@namespace BornoBit.Restaurant.Web.Components.Pages.Waiter.Dialogs
+@using BornoBit.Restaurant.Application.Operations.Sessions
+@using MediatR
+@inject ISender Sender
+@inject IBoToastService ToastService
+
+<BoDialogBody>
+    @if (_bill is null)
+    {
+        <LoadingState Message="Loading bill…" />
+    }
+    else
+    {
+        <div class="sb">
+            <div class="sb-head">
+                <div><span class="sb-k">Session</span><strong>@_bill.SessionNumber</strong></div>
+                <div><span class="sb-k">Table</span><strong>@_bill.TableNumber</strong></div>
+                <div><span class="sb-k">Guests</span><strong>@_bill.GuestCount</strong></div>
+            </div>
+
+            @foreach (var o in _bill.Orders)
+            {
+                <div class="sb-order">
+                    <div class="sb-order-head">
+                        <strong>@o.OrderNumber</strong>
+                        <span class="sb-order-status">@o.Status@(o.IsPaid ? " · Paid" : "")</span>
+                        <a class="bo-link" href="/reports/order/@o.OrderId/kot.pdf" target="_blank">KOT</a>
+                        <a class="bo-link" href="/reports/order/@o.OrderId/receipt.pdf" target="_blank">Invoice</a>
+                    </div>
+                    @foreach (var l in o.Lines)
+                    {
+                        <div class="sb-line"><span>@l.Quantity × @l.Name</span><span>@_bill.Currency @l.LineTotal.ToString("0.##")</span></div>
+                    }
+                </div>
+            }
+
+            <div class="sb-totals">
+                <div class="sb-row"><span>Subtotal</span><span>@_bill.Currency @_bill.Subtotal.ToString("0.##")</span></div>
+                @if (_bill.DiscountAmount > 0m)
+                {
+                    <div class="sb-row"><span>Discount</span><span>− @_bill.Currency @_bill.DiscountAmount.ToString("0.##")</span></div>
+                }
+                @if (_bill.TaxAmount > 0m)
+                {
+                    <div class="sb-row"><span>Tax</span><span>@_bill.Currency @_bill.TaxAmount.ToString("0.##")</span></div>
+                }
+                @if (_bill.ServiceChargeAmount > 0m)
+                {
+                    <div class="sb-row"><span>Service charge</span><span>@_bill.Currency @_bill.ServiceChargeAmount.ToString("0.##")</span></div>
+                }
+                <div class="sb-row sb-grand"><span>Grand total</span><span>@_bill.Currency @_bill.GrandTotal.ToString("0.##")</span></div>
+                @if (_bill.PaidAmount > 0m)
+                {
+                    <div class="sb-row"><span>Paid</span><span>@_bill.Currency @_bill.PaidAmount.ToString("0.##")</span></div>
+                    <div class="sb-row sb-due"><span>Balance due</span><span>@_bill.Currency @_bill.BalanceDue.ToString("0.##")</span></div>
+                }
+            </div>
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close(_changed))">Close</BoButton>
+    <BoButton Variant="accent" Loading="_busy" OnClick="RequestPaymentAsync">Request payment</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public Guid Content { get; set; }
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private SessionBillDto? _bill;
+    private bool _busy;
+    private bool _changed;
+
+    protected override async Task OnInitializedAsync() => _bill = await Sender.Send(new GetSessionBillQuery(Content));
+
+    private async Task RequestPaymentAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Sender.Send(new RequestCashierSettlementCommand(Content));
+            ToastService.ShowSuccess("Cashier settlement requested.");
+            _changed = true;
+            Dialog.Close(true);
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _busy = false; }
+    }
+}
+
+<style>
+    .sb { display:flex; flex-direction:column; gap:14px; }
+    .sb-head { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .sb-head > div { display:flex; flex-direction:column; gap:2px; font-size:13px; }
+    .sb-k { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--bo-text-muted); }
+    .sb-order { border-top:1px solid var(--bo-border-soft,#eee); padding-top:8px; }
+    .sb-order-head { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+    .sb-order-status { font-size:11px; text-transform:uppercase; color:var(--bo-text-muted); margin-right:auto; }
+    .sb-line { display:flex; justify-content:space-between; font-size:13px; padding:2px 0; }
+    .sb-totals { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--bo-border,#ddd); padding-top:8px; }
+    .sb-row { display:flex; justify-content:space-between; font-size:13px; }
+    .sb-grand { font-weight:700; font-size:16px; border-top:1px solid var(--bo-border,#ddd); padding-top:6px; margin-top:2px; }
+    .sb-due { font-weight:700; color:var(--bo-danger); }
+</style>

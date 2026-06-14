@@ -1,6 +1,8 @@
+using BornoBit.Restaurant.Application.Accounting.Audit;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Ordering;
+using BornoBit.Restaurant.Shared.Identity;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,11 +21,13 @@ public class ImportCashCounterCommandHandler : IRequestHandler<ImportCashCounter
 {
     private readonly IAppDbContext _db;
     private readonly TimeProvider _timeProvider;
+    private readonly ICurrentUser _currentUser;
 
-    public ImportCashCounterCommandHandler(IAppDbContext db, TimeProvider timeProvider)
+    public ImportCashCounterCommandHandler(IAppDbContext db, TimeProvider timeProvider, ICurrentUser currentUser)
     {
         _db = db;
         _timeProvider = timeProvider;
+        _currentUser = currentUser;
     }
 
     public async Task<CashImportResultDto> Handle(ImportCashCounterCommand request, CancellationToken cancellationToken)
@@ -32,20 +36,27 @@ public class ImportCashCounterCommandHandler : IRequestHandler<ImportCashCounter
         var start = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var end = start.AddDays(1);
 
-        // Tracked (mutated below) — load lines so GrandTotal computes.
+        // Tracked (mutated below) so MarkAccounted persists.
         var orders = await _db.Orders
-            .Include(o => o.Lines)
             .Where(o => o.IsPaid
                         && o.Status != OrderStatus.Cancelled
                         && o.AccountedAtUtc == null
                         && o.PaidAtUtc != null
                         && o.PaidAtUtc >= start
-                        && o.PaidAtUtc < end
-                        && o.PaymentMethod != null)
+                        && o.PaidAtUtc < end)
             .ToListAsync(cancellationToken);
 
         if (orders.Count == 0)
             return new CashImportResultDto(0, 0m, Array.Empty<string>());
+
+        var orderIds = orders.Select(o => o.Id).ToList();
+
+        // Net captured takings per method, sourced from the payment ledger (reflects split/partial + refunds).
+        var byMethod = await _db.Payments
+            .Where(p => orderIds.Contains(p.OrderId) && p.Status == PaymentEntryStatus.Captured)
+            .GroupBy(p => p.Method)
+            .Select(g => new { Method = g.Key, Amount = g.Sum(p => p.Kind == PaymentKind.Charge ? p.Amount : -p.Amount) })
+            .ToListAsync(cancellationToken);
 
         var salesCategory = await _db.FinanceCategories
             .Where(c => c.Type == TransactionType.Income && c.IsActive)
@@ -67,14 +78,13 @@ public class ImportCashCounterCommandHandler : IRequestHandler<ImportCashCounter
             .CountAsync(t => t.Number.StartsWith(prefix), cancellationToken);
 
         var skipped = new List<string>();
-        var importedCount = 0;
-        var importedTotal = 0m;
+        var postedTotal = 0m;
+        var posted = false;
 
-        foreach (var group in orders.GroupBy(o => o.PaymentMethod!.Value).OrderBy(g => g.Key))
+        foreach (var group in byMethod.OrderBy(g => g.Method))
         {
-            var method = group.Key;
-            var groupOrders = group.ToList();
-            var amount = groupOrders.Sum(o => o.GrandTotal);
+            var method = group.Method;
+            var amount = group.Amount;
             if (amount <= 0m) continue;
 
             var account = accounts.FirstOrDefault(a => a.Kind == MapKind(method));
@@ -87,20 +97,26 @@ public class ImportCashCounterCommandHandler : IRequestHandler<ImportCashCounter
             var number = $"{prefix}{++seq:D4}";
             var txn = FinanceTransaction.Create(
                 number, occurredOn, TransactionType.Income, account.Id, salesCategory.Id,
-                amount, $"CashCounter {date:yyyy-MM-dd}", $"Imported {groupOrders.Count} order(s) ({method}) from Cash Counter");
+                amount, $"CashCounter {date:yyyy-MM-dd}", $"Imported {method} takings from Cash Counter");
             _db.FinanceTransactions.Add(txn);
 
-            foreach (var order in groupOrders)
-                order.MarkAccounted();
-
-            importedCount += groupOrders.Count;
-            importedTotal += amount;
+            postedTotal += amount;
+            posted = true;
         }
 
-        if (importedCount > 0)
-            await _db.SaveChangesAsync(cancellationToken);
+        // If every method posted (nothing skipped), the orders are fully accounted.
+        if (posted && skipped.Count == 0)
+            foreach (var order in orders)
+                order.MarkAccounted();
 
-        return new CashImportResultDto(importedCount, importedTotal, skipped);
+        if (posted)
+        {
+            FinancialAudit.Write(_db, FinancialAuditAction.CashImported, _currentUser, nameof(FinanceTransaction), Guid.Empty,
+                amount: postedTotal, notes: $"Imported {date:yyyy-MM-dd} cash-counter takings ({orders.Count} order(s))");
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        return new CashImportResultDto(orders.Count, postedTotal, skipped);
     }
 
     private static CashAccountKind MapKind(PaymentMethod method) => method switch

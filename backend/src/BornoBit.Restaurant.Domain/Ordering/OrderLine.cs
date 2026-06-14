@@ -14,5 +14,12 @@ public class OrderLine : BaseEntity
     public string Currency { get; set; } = "Tk";
     public int Quantity { get; set; } = 1;
 
+    /// <summary>Kitchen station this line is routed to, snapshotted from the product at order time.</summary>
+    public Guid? StationId { get; set; }
+    /// <summary>Denormalised station name so the Kitchen Display can render without a join.</summary>
+    public string? StationName { get; set; }
+    /// <summary>Per-line special instructions / modifiers (free text), e.g. "No onion", "Extra spicy".</summary>
+    public string? Notes { get; set; }
+
     public decimal LineTotal => UnitPriceSnapshot * Quantity;
 }

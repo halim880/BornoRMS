@@ -1,0 +1,395 @@
+@using System.Globalization
+@using BornoBit.Restaurant.Application.Ordering.Commands
+@using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Application.Settings
+@using BornoBit.Restaurant.Domain.Ordering
+@using BornoBit.Restaurant.Web.Services.Printing
+@using MediatR
+@inject ISender Sender
+@inject IBoToastService ToastService
+@inject IReceiptPrintService PrintService
+
+<BoDialogBody>
+    @if (_order is null)
+    {
+        <LoadingState Message="Loading bill…" />
+    }
+    else
+    {
+        <div class="set-grid" @onkeydown="OnKeyDown">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+
+            <div class="set-meta">
+                <span class="bo-code bo-code-slate">@_order.OrderNumber</span>
+                <span>@_order.OrderType</span>
+                @if (!string.IsNullOrEmpty(_order.TableNumber)) { <span>· Table @_order.TableNumber</span> }
+                @if (!string.IsNullOrEmpty(_order.WaiterName)) { <span>· @_order.WaiterName</span> }
+                <span class="set-spacer"></span>
+                <BoBadge Tone="@PaymentTone(_order.PaymentStatus)">@PaymentLabel(_order.PaymentStatus)</BoBadge>
+            </div>
+
+            @* Bill lines with modifiers *@
+            <div class="set-lines">
+                @foreach (var l in _order.Lines)
+                {
+                    <div class="set-line">
+                        <span>@l.Quantity × @l.Name</span>
+                        <span>@_order.Currency @l.LineTotal.ToString("0.##")</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(l.Notes))
+                    {
+                        <div class="set-modifier">↳ @l.Notes</div>
+                    }
+                }
+            </div>
+
+            @if (!_order.IsPaid)
+            {
+                <div class="set-cols">
+                    <AuthorizeView Policy="CanDiscount">
+                        <Authorized>
+                            <fieldset class="set-fieldset">
+                                <legend>Discount</legend>
+                                <div class="two-col">
+                                    <BoSelect TOption="string" Items="_discountKinds"
+                                              OptionValue="@(k => k)" OptionText="@(k => k)"
+                                              SelectedOption="_discountKind"
+                                              SelectedOptionChanged="@(k => { _discountKind = k ?? "Percent"; })"
+                                              Label="Type" />
+                                    <BoInput Value="_discountValue" ValueChanged="@(v => { _discountValue = v; })" Immediate="true"
+                                             Type="number" Label="@(_discountKind == "Percent" ? "Percent (%)" : "Amount")" Placeholder="0" />
+                                </div>
+                                <BoInput @bind-Value="_discountReason" Label="Reason (optional)" />
+                            </fieldset>
+                        </Authorized>
+                        <NotAuthorized>
+                            <fieldset class="set-fieldset set-muted">
+                                <legend>Discount</legend>
+                                <span class="set-hint">Manager approval required to apply a discount.</span>
+                            </fieldset>
+                        </NotAuthorized>
+                    </AuthorizeView>
+
+                    <fieldset class="set-fieldset">
+                        <legend>Charges</legend>
+                        <div class="two-col">
+                            <BoInput Value="_vatValue" ValueChanged="@(v => { _vatValue = v; })" Immediate="true" Type="number" Label="VAT" Placeholder="0" />
+                            <BoInput Value="_serviceValue" ValueChanged="@(v => { _serviceValue = v; })" Immediate="true" Type="number" Label="Service charge" Placeholder="0" />
+                        </div>
+                        <div class="two-col">
+                            @if (_tipEnabled)
+                            {
+                                <BoInput Value="_tipValue" ValueChanged="@(v => { _tipValue = v; })" Immediate="true" Type="number" Label="Tip" Placeholder="0" />
+                            }
+                            <BoSelect TOption="string" Items="_roundingKinds"
+                                      OptionValue="@(k => k)" OptionText="@(k => k)"
+                                      SelectedOption="_roundingKind"
+                                      SelectedOptionChanged="@(k => { _roundingKind = k ?? "None"; })"
+                                      Label="Rounding" />
+                        </div>
+                    </fieldset>
+                </div>
+            }
+
+            @* Live totals preview *@
+            <div class="set-totals">
+                <div class="set-row"><span>Subtotal</span><span>@_order.Currency @Subtotal.ToString("0.##")</span></div>
+                @if (DiscountAmount > 0m) { <div class="set-row"><span>Discount</span><span>− @_order.Currency @DiscountAmount.ToString("0.##")</span></div> }
+                @if (VatAmount > 0m) { <div class="set-row"><span>VAT</span><span>@_order.Currency @VatAmount.ToString("0.##")</span></div> }
+                @if (ServiceAmount > 0m) { <div class="set-row"><span>Service charge</span><span>@_order.Currency @ServiceAmount.ToString("0.##")</span></div> }
+                @if (TipAmount > 0m) { <div class="set-row"><span>Tip</span><span>@_order.Currency @TipAmount.ToString("0.##")</span></div> }
+                @if (RoundingAmount != 0m) { <div class="set-row"><span>Rounding</span><span>@_order.Currency @RoundingAmount.ToString("0.##")</span></div> }
+                <div class="set-row set-grand"><span>Grand total</span><span>@_order.Currency @GrandTotal.ToString("0.##")</span></div>
+                @if (_order.AmountPaid > 0m)
+                {
+                    <div class="set-row"><span>Paid</span><span>@_order.Currency @_order.AmountPaid.ToString("0.##")</span></div>
+                    <div class="set-row set-balance"><span>Balance due</span><span>@_order.Currency @BalanceDue.ToString("0.##")</span></div>
+                }
+            </div>
+
+            @if (!_order.IsPaid)
+            {
+                @* Split payment tenders *@
+                <fieldset class="set-fieldset">
+                    <legend>Payment @(_tenders.Count > 1 ? "(split)" : "")</legend>
+                    @foreach (var t in _tenders)
+                    {
+                        <div class="set-tender">
+                            <BoSelect TOption="PaymentMethod" Items="_methods"
+                                      OptionValue="@(m => ((int)m).ToString())" OptionText="@(m => m.ToString())"
+                                      SelectedOption="t.Method"
+                                      SelectedOptionChanged="@(m => { t.Method = m; })" Label="Method" />
+                            @if (t.Method == PaymentMethod.Mobile)
+                            {
+                                <BoSelect TOption="PaymentProvider" Items="_providers"
+                                          OptionValue="@(p => ((int)p).ToString())" OptionText="@(p => p.ToString())"
+                                          SelectedOption="t.Provider"
+                                          SelectedOptionChanged="@(p => { t.Provider = p; })" Label="Provider" />
+                            }
+                            <BoInput Value="t.Amount" ValueChanged="@(v => { t.Amount = v; })" Immediate="true" Type="number" Label="Amount" Placeholder="0" />
+                            @if (t.Method == PaymentMethod.Cash)
+                            {
+                                <BoInput Value="t.Tendered" ValueChanged="@(v => { t.Tendered = v; })" Immediate="true" Type="number" Label="Tendered" Placeholder="0" />
+                            }
+                            @if (_tenders.Count > 1)
+                            {
+                                <BoButton Variant="ghost" Size="sm" OnClick="@(() => RemoveTender(t))">✕</BoButton>
+                            }
+                        </div>
+                    }
+                    <div class="set-tender-actions">
+                        <BoButton Variant="ghost" Size="sm" OnClick="AddTender">+ Split payment</BoButton>
+                        <BoButton Variant="ghost" Size="sm" OnClick="FillBalance">Exact balance</BoButton>
+                        <span class="set-spacer"></span>
+                        <span class="set-hint">Tendered @_order.Currency @TenderedTotal.ToString("0.##") · change @_order.Currency @ChangeTotal.ToString("0.##")</span>
+                    </div>
+                </fieldset>
+            }
+
+            @* Payment history *@
+            @if (_order.Payments.Count > 0)
+            {
+                <div class="set-history">
+                    <div class="set-history-title">Payment history</div>
+                    @foreach (var p in _order.Payments)
+                    {
+                        <div class="set-hrow @(p.Status != PaymentEntryStatus.Captured ? "set-hrow-void" : "")">
+                            <span>@p.CreatedAtUtc.ToLocalTime().ToString("HH:mm")</span>
+                            <span>@(p.Kind == PaymentKind.Refund ? "Refund · " : "")@p.Method@(p.Provider is { } pr ? $" ({pr})" : "")</span>
+                            <span>@p.CashierName</span>
+                            <span class="set-hamt">@(p.Kind == PaymentKind.Refund ? "−" : "")@_order.Currency @p.Amount.ToString("0.##")</span>
+                            <span>
+                                @if (p.Status == PaymentEntryStatus.Captured && p.Kind == PaymentKind.Charge)
+                                {
+                                    <AuthorizeView Policy="CanVoid">
+                                        <BoButton Variant="ghost" Size="sm" OnClick="@(() => VoidAsync(p))">Void</BoButton>
+                                        <BoButton Variant="ghost" Size="sm" OnClick="@(() => RefundAsync(p))">Refund</BoButton>
+                                    </AuthorizeView>
+                                }
+                                else
+                                {
+                                    <BoBadge Tone="neutral">@p.Status</BoBadge>
+                                }
+                            </span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close(_changed))" Disabled="_busy">Close</BoButton>
+    @if (_order is { IsPaid: false })
+    {
+        <BoButton Variant="primary" OnClick="SettleAsync" Loading="_busy" Disabled="@(!CanSettle)">Settle &amp; pay</BoButton>
+    }
+</BoDialogFooter>
+
+@code {
+    [Parameter] public Guid Content { get; set; }
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private OrderDetailDto? _order;
+    private BillingSettingsDto _settings = new(0m, 0m, "Tk", true, 20m);
+    private bool _tipEnabled = true;
+
+    private static readonly string[] _discountKinds = { "Percent", "Fixed" };
+    private static readonly string[] _roundingKinds = { "None", "Floor", "Ceil" };
+    private static readonly PaymentMethod[] _methods = { PaymentMethod.Cash, PaymentMethod.Card, PaymentMethod.Mobile };
+    private static readonly PaymentProvider[] _providers = { PaymentProvider.Bkash, PaymentProvider.Nagad, PaymentProvider.Rocket, PaymentProvider.Upay, PaymentProvider.Other };
+
+    private string _discountKind = "Percent";
+    private string? _discountValue;
+    private string? _discountReason;
+    private string? _vatValue;
+    private string? _serviceValue;
+    private string? _tipValue;
+    private string _roundingKind = "None";
+
+    private readonly List<TenderRow> _tenders = new();
+
+    private bool _busy;
+    private string? _error;
+    private bool _changed;
+
+    private sealed class TenderRow
+    {
+        public PaymentMethod Method { get; set; } = PaymentMethod.Cash;
+        public PaymentProvider Provider { get; set; } = PaymentProvider.Bkash;
+        public string? Amount { get; set; }
+        public string? Tendered { get; set; }
+    }
+
+    private decimal Subtotal => _order?.Subtotal ?? 0m;
+    private decimal DiscountAmount => _discountKind == "Percent"
+        ? Math.Round(Subtotal * P(_discountValue) / 100m, 2)
+        : P(_discountValue);
+    private decimal TaxableBase => Math.Max(0m, Subtotal - DiscountAmount);
+    private decimal VatAmount => _vatValue is null ? Math.Round(TaxableBase * _settings.VatPercent / 100m, 2) : P(_vatValue);
+    private decimal ServiceAmount => _serviceValue is null ? Math.Round(TaxableBase * _settings.ServiceChargePercent / 100m, 2) : P(_serviceValue);
+    private decimal TipAmount => P(_tipValue);
+    private decimal PreRound => TaxableBase + VatAmount + ServiceAmount + TipAmount;
+    private decimal RoundingAmount => _roundingKind switch
+    {
+        "Floor" => Math.Floor(PreRound) - PreRound,
+        "Ceil" => Math.Ceiling(PreRound) - PreRound,
+        _ => 0m
+    };
+    private decimal GrandTotal => Math.Max(0m, PreRound + RoundingAmount);
+    private decimal BalanceDue => Math.Max(0m, GrandTotal - (_order?.AmountPaid ?? 0m));
+
+    private decimal TenderedTotal => _tenders.Sum(t => t.Method == PaymentMethod.Cash ? Math.Max(P(t.Tendered), P(t.Amount)) : P(t.Amount));
+    private decimal AppliedTotal => _tenders.Sum(t => P(t.Amount));
+    private decimal ChangeTotal => Math.Max(0m, TenderedTotal - AppliedTotal);
+
+    private bool CanSettle => !_busy && _order is not null && AppliedTotal > 0m && AppliedTotal <= BalanceDue + 0.001m;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await Sender.Send(new GetBillingSettingsQuery());
+        _tipEnabled = _settings.TipEnabled;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _order = await Sender.Send(new GetOrderQuery(Content));
+        // Seed adjustment fields from any already-applied values so re-settle preserves them.
+        if (_order.DiscountAmount > 0m) { _discountKind = "Fixed"; _discountValue = _order.DiscountAmount.ToString(CultureInfo.InvariantCulture); }
+        if (_order.TaxAmount > 0m) _vatValue = _order.TaxAmount.ToString(CultureInfo.InvariantCulture);
+        if (_order.ServiceChargeAmount > 0m) _serviceValue = _order.ServiceChargeAmount.ToString(CultureInfo.InvariantCulture);
+        if (_order.TipAmount > 0m) _tipValue = _order.TipAmount.ToString(CultureInfo.InvariantCulture);
+        _discountReason ??= _order.DiscountReason;
+        if (_tenders.Count == 0 && !_order.IsPaid) { _tenders.Add(new TenderRow()); FillBalance(); }
+    }
+
+    private void AddTender() => _tenders.Add(new TenderRow());
+    private void RemoveTender(TenderRow t) => _tenders.Remove(t);
+
+    private void FillBalance()
+    {
+        var assigned = _tenders.Where(t => t != _tenders[^1]).Sum(t => P(t.Amount));
+        var remaining = Math.Max(0m, BalanceDue - assigned);
+        _tenders[^1].Amount = remaining.ToString("0.##", CultureInfo.InvariantCulture);
+        if (_tenders[^1].Method == PaymentMethod.Cash) _tenders[^1].Tendered = _tenders[^1].Amount;
+    }
+
+    private async Task SettleAsync()
+    {
+        _error = null; _busy = true;
+        try
+        {
+            decimal? percent = _discountKind == "Percent" && P(_discountValue) > 0m ? P(_discountValue) : null;
+            decimal? amount = _discountKind == "Fixed" && P(_discountValue) > 0m ? P(_discountValue) : null;
+
+            var payments = _tenders
+                .Where(t => P(t.Amount) > 0m)
+                .Select(t => new PaymentEntryInput(
+                    t.Method,
+                    t.Method == PaymentMethod.Mobile ? t.Provider : null,
+                    P(t.Amount),
+                    t.Method == PaymentMethod.Cash ? Math.Max(P(t.Tendered), P(t.Amount)) : P(t.Amount)))
+                .ToList();
+
+            var result = await Sender.Send(new SettleOrderCommand(
+                Content, percent, amount, _discountReason,
+                VatAmount, ServiceAmount, TipAmount, RoundingAmount, payments));
+
+            _changed = true;
+            ToastService.ShowSuccess($"Settled · {result.PaymentStatus} · change {result.Change:0.##}");
+            _ = AutoPrintAsync();
+            Dialog.Close(true);
+        }
+        catch (Exception ex) { _error = ex.Message; _busy = false; }
+    }
+
+    private async Task VoidAsync(PaymentLineDto p)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Sender.Send(new VoidPaymentCommand(Content, p.PaymentId, "Voided at cash counter"));
+            _changed = true;
+            ToastService.ShowSuccess("Payment voided.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task RefundAsync(PaymentLineDto p)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Sender.Send(new RefundPaymentCommand(Content, p.PaymentId, p.Amount, "Refunded at cash counter"));
+            _changed = true;
+            ToastService.ShowSuccess("Payment refunded.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task AutoPrintAsync()
+    {
+        var result = await PrintService.PrintReceiptAsync(Content, isReprint: false);
+        if (result.Success) ToastService.ShowSuccess(result.Message);
+        else ToastService.ShowWarning(result.Message);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && CanSettle) await SettleAsync();
+    }
+
+    private static decimal P(string? s) =>
+        decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : 0m;
+
+    private static string PaymentTone(PaymentStatus s) => s switch
+    {
+        PaymentStatus.Pending => "warning",
+        PaymentStatus.PartiallyPaid => "info",
+        PaymentStatus.Paid => "success",
+        PaymentStatus.Refunded => "neutral",
+        PaymentStatus.Cancelled => "danger",
+        _ => "neutral"
+    };
+
+    private static string PaymentLabel(PaymentStatus s) => s switch
+    {
+        PaymentStatus.PartiallyPaid => "Partial",
+        _ => s.ToString()
+    };
+}
+
+<style>
+    .set-grid { display:flex; flex-direction:column; gap:14px; }
+    .set-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; color:var(--bo-text-muted); }
+    .set-spacer { flex:1; }
+    .set-lines { display:flex; flex-direction:column; gap:3px; max-height:170px; overflow-y:auto; }
+    .set-line { display:flex; justify-content:space-between; font-size:13px; }
+    .set-modifier { font-size:11px; color:var(--bo-text-subtle); padding-left:10px; }
+    .set-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .set-fieldset { border:1px solid var(--bo-border,#e3e3e3); border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; gap:10px; }
+    .set-fieldset legend { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--bo-text-muted); padding:0 4px; }
+    .set-muted { opacity:.75; }
+    .set-hint { font-size:11px; color:var(--bo-text-subtle); }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .set-totals { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--bo-border,#ddd); padding-top:8px; }
+    .set-row { display:flex; justify-content:space-between; font-size:13px; }
+    .set-grand { font-weight:700; font-size:16px; border-top:1px solid var(--bo-border,#ddd); padding-top:6px; margin-top:2px; }
+    .set-balance { font-weight:700; color:var(--bo-warning,#b26a00); }
+    .set-tender { display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:end; }
+    .set-tender-actions { display:flex; align-items:center; gap:8px; margin-top:6px; }
+    .set-history { border-top:1px solid var(--bo-border,#ddd); padding-top:8px; }
+    .set-history-title { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--bo-text-muted); margin-bottom:6px; }
+    .set-hrow { display:grid; grid-template-columns:auto 1fr auto auto auto; gap:10px; align-items:center; font-size:12px; padding:3px 0; }
+    .set-hrow-void { opacity:.55; text-decoration:line-through; }
+    .set-hamt { font-weight:600; text-align:right; }
+</style>

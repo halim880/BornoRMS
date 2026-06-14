@@ -36,6 +36,9 @@ public class InventoryItem : AuditableEntity
     public bool IsLowStock => ReorderLevel > 0 && QtyOnHand <= ReorderLevel;
     public decimal StockValue => QtyOnHand * AvgCost;
 
+    /// <summary>Optimistic-concurrency token guarding against two cashiers deducting the same item concurrently.</summary>
+    public byte[]? RowVersion { get; private set; }
+
     private InventoryItem() { }
 
     public static InventoryItem Create(
@@ -126,12 +129,24 @@ public class InventoryItem : AuditableEntity
         QtyOnHand = newQty;
     }
 
-    /// <summary>Reduce stock through consumption (recipe deduction — phase 2).</summary>
+    /// <summary>
+    /// Reduce stock through order consumption (recipe / direct-stock deduction). Stock may go negative —
+    /// the kitchen never blocks a sale on the inventory count; shortages surface as warnings/alerts instead.
+    /// </summary>
     public void Consume(decimal qtyBase)
     {
         if (qtyBase <= 0) throw new ArgumentOutOfRangeException(nameof(qtyBase));
-        if (qtyBase > QtyOnHand) throw new InvalidOperationException($"Cannot consume {qtyBase}; only {QtyOnHand} on hand for '{Name}'.");
         QtyOnHand -= qtyBase;
+    }
+
+    /// <summary>
+    /// Adds back stock previously taken by <see cref="Consume"/> (order cancellation / reversal).
+    /// Deliberately does NOT recompute <see cref="AvgCost"/> — a reversal restores quantity at the cost it left.
+    /// </summary>
+    public void RestoreConsumed(decimal qtyBase)
+    {
+        if (qtyBase <= 0) throw new ArgumentOutOfRangeException(nameof(qtyBase));
+        QtyOnHand += qtyBase;
     }
 
     /// <summary>Reduce stock through wastage / spoilage (nosto).</summary>

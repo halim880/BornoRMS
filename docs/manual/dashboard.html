@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Operations Dashboard — BornoBit Manual</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="brand"><span class="logo">🍽</span>BornoBit Manual</div>
+  <input type="search" id="navSearch" placeholder="Search…" autocomplete="off" aria-label="Search manual">
+  <ul class="navlist">
+    <li><a href="index.html">Home</a></li>
+    <li class="group">Operations</li>
+    <li><a href="orders.html">Orders</a></li>
+    <li><a href="pos.html">POS</a></li>
+    <li><a href="kitchen-display.html">Kitchen Display</a></li>
+    <li><a href="dashboard.html">Operations Dashboard</a></li>
+    <li><a href="cash-counter.html">Cash Counter</a></li>
+    <li class="group">Inventory</li>
+    <li><a href="inventory.html">Menu &amp; Tables</a></li>
+    <li><a href="stock.html">Stock (Raw)</a></li>
+    <li><a href="store.html">Store (Finished)</a></li>
+    <li class="group">Finance</li>
+    <li><a href="accounts.html">Accounts</a></li>
+    <li><a href="reports.html">Reports</a></li>
+    <li class="group">Administration</li>
+    <li><a href="users-roles.html">Users &amp; Roles</a></li>
+    <li><a href="menu-permissions.html">Menu &amp; Modules</a></li>
+    <li><a href="numbering.html">Numbering</a></li>
+    <li><a href="settings.html">Settings</a></li>
+  </ul>
+</nav>
+<main class="content">
+  <header class="topbar"><h1>Operations Dashboard</h1><button id="themeToggle" aria-label="Toggle theme">🌙</button></header>
+  <article>
+    <p><span class="route">/operations/dashboard</span></p>
+    <div class="roles"><strong>Who can access:</strong>
+      <span class="role-chip">Manager</span><span class="role-chip">Admin</span><span class="role-chip">SuperAdmin</span></div>
+
+    <h2>Purpose</h2>
+    <p>Live operational overview of the restaurant: sales figures, open orders, table status, kitchen
+    state, and customer service requests in one screen.</p>
+
+    <h2>What you see</h2>
+    <ul>
+      <li><strong>Sales metrics</strong> — today's revenue and order count.</li>
+      <li><strong>Open orders</strong> — currently active tickets by status.</li>
+      <li><strong>Table status</strong> — which tables are occupied / free.</li>
+      <li><strong>Kitchen state</strong> — pending vs in-progress items.</li>
+      <li><strong>Customer requests</strong> — call-waiter / bill / water raised from the customer app.</li>
+    </ul>
+
+    <h2>How to use</h2>
+    <ol>
+      <li>Open <code>/operations/dashboard</code> — data refreshes live (DB-poll bridge).</li>
+      <li>Use the quick links to jump to POS, tables, reservations, or reports.</li>
+      <li>Act on customer requests as they appear.</li>
+    </ol>
+
+    <h2>Screenshot</h2>
+    <div class="shot"><img src="assets/img/dashboard.png" alt="Operations dashboard tiles" onerror="this.style.display='none';this.parentNode.insertAdjacentText('beforeend','Screenshot placeholder — capture assets/img/dashboard.png')"></div>
+    <!-- TODO: capture screenshot assets/img/dashboard.png -->
+
+    <div class="callout"><strong>Tip.</strong> Table status is derived from active orders — there is no
+    manual "seat table" step; placing/closing orders updates it.</div>
+
+    <footer class="updated">Last updated: 2026-06-14</footer>
+  </article>
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>

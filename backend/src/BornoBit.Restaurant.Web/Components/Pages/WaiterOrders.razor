@@ -1,584 +1,583 @@
 @page "/waiter/orders"
-@attribute [Authorize(Policy = "Staff")]
+@attribute [Authorize(Policy = "WaiterFloor")]
 @using Microsoft.AspNetCore.Authorization
 @using BornoBit.Restaurant.Application.Dining.Queries
+@using BornoBit.Restaurant.Application.Operations.Dashboard
+@using BornoBit.Restaurant.Application.Operations.Sessions
 @using BornoBit.Restaurant.Application.Ordering.Commands
 @using BornoBit.Restaurant.Application.Ordering.Queries
 @using BornoBit.Restaurant.Application.ProductCategories
 @using BornoBit.Restaurant.Application.Products
+@using BornoBit.Restaurant.Domain.Dining
 @using BornoBit.Restaurant.Domain.Ordering
 @using BornoBit.Restaurant.Shared.Common
-@using MediatR
-@inject ISender Sender
-@inject IBoToastService ToastService
 @rendermode InteractiveServer
 
-<PageTitle>Take Order · BornoBit</PageTitle>
+<PageTitle>Waiter · BornoBit</PageTitle>
 
 @if (_loading)
 {
-    <LoadingState Message="Loading products…" />
+    <LoadingState Message="Loading waiter console…" />
 }
 else
 {
-    <!-- ============ RUNNING ORDERS ============ -->
-    <div class="run-bar">
-        <span class="run-bar-label">Running orders</span>
-        @if (!RunningOrders.Any())
-        {
-            <span class="run-bar-empty">None right now — new orders show up here.</span>
-        }
-        else
-        {
-            @foreach (var o in RunningOrders)
-            {
-                <button type="button" @key="o.Id"
-                        class="@($"run-chip run-chip--{StatusTone(o.Status)} {(_activeOrder?.Id == o.Id ? "run-chip--active" : "")}")"
-                        title="@o.OrderNumber · @o.Status — tap to load and edit this order"
-                        @onclick="() => SelectRunningOrderAsync(o)">
-                    <span class="run-chip-line1">@ChipTitle(o)</span>
-                    <span class="run-chip-line2">
-                        @o.Currency @o.Total.ToString("0.##")
-                        <span class="run-chip-status">@o.Status</span>
-                    </span>
-                </button>
-            }
-        }
-        <button type="button" class="run-refresh" title="Refresh orders" @onclick="LoadRecent">↻</button>
+    <!-- ============ HEADER ============ -->
+    <div class="wc-head">
+        <div class="wc-title">
+            <h2>Waiter console</h2>
+            <span class="wc-conn @(_connected ? "wc-conn--on" : "wc-conn--off")">
+                <span class="wc-dot"></span>@(_connected ? "Live" : "Reconnecting…")
+            </span>
+        </div>
+        <div class="wc-tabs">
+            <button class="wc-tab @(_tab == WaiterTab.Floor ? "wc-tab--active" : null)" @onclick="() => SetTab(WaiterTab.Floor)">Floor</button>
+            <button class="wc-tab @(_tab == WaiterTab.TakeOrder ? "wc-tab--active" : null)" @onclick="() => SetTab(WaiterTab.TakeOrder)">Take order</button>
+            <button class="wc-tab @(_tab == WaiterTab.Ready ? "wc-tab--active" : null)" @onclick="() => SetTab(WaiterTab.Ready)">
+                Ready @(_ready.Count > 0 ? $"({_ready.Count})" : "")
+            </button>
+            <button class="wc-tab @(_tab == WaiterTab.Requests ? "wc-tab--active" : null)" @onclick="() => SetTab(WaiterTab.Requests)">
+                Requests @(_requests.Count > 0 ? $"({_requests.Count})" : "")
+            </button>
+        </div>
     </div>
 
-    <div class="pos">
-        <!-- ============ PRODUCT PICKER ============ -->
-        <div class="pos-menu">
-            @if (_products is null || _products.Count == 0)
+    <!-- ============ WIDGET STRIP ============ -->
+    @if (_widgets is { } w)
+    {
+        <div class="wc-widgets">
+            <div class="wc-widget"><span class="wc-w-num">@w.MyTables</span><span class="wc-w-lbl">My tables</span></div>
+            <div class="wc-widget wc-widget--ok"><span class="wc-w-num">@w.AvailableTables</span><span class="wc-w-lbl">Available</span></div>
+            <div class="wc-widget wc-widget--warn"><span class="wc-w-num">@w.OccupiedTables</span><span class="wc-w-lbl">Occupied</span></div>
+            <div class="wc-widget wc-widget--info"><span class="wc-w-num">@w.PendingRequests</span><span class="wc-w-lbl">Requests</span></div>
+            <div class="wc-widget wc-widget--primary"><span class="wc-w-num">@w.ReadyToServeOrders</span><span class="wc-w-lbl">Ready to serve</span></div>
+            <div class="wc-widget wc-widget--danger"><span class="wc-w-num">@w.BillsWaiting</span><span class="wc-w-lbl">Bills waiting</span></div>
+            <div class="wc-widget"><span class="wc-w-num">@w.MyActiveSessions</span><span class="wc-w-lbl">My sessions</span></div>
+            <div class="wc-widget"><span class="wc-w-num">@w.Currency @w.MyRevenueServedToday.ToString("0")</span><span class="wc-w-lbl">My revenue</span></div>
+        </div>
+    }
+
+    @if (_tab == WaiterTab.Floor)
+    {
+        <!-- ============ FLOOR ============ -->
+        <div class="wc-filters">
+            <button class="flt @(_statusFilter is null ? "flt--active" : null)" @onclick="() => SetStatusFilter(null)">All</button>
+            <button class="flt @(_statusFilter == DerivedTableStatus.Available ? "flt--active" : null)" @onclick="() => SetStatusFilter(DerivedTableStatus.Available)">Available</button>
+            <button class="flt @(_statusFilter == DerivedTableStatus.Occupied ? "flt--active" : null)" @onclick="() => SetStatusFilter(DerivedTableStatus.Occupied)">Occupied</button>
+            <button class="flt @(_statusFilter == DerivedTableStatus.WaitingPayment ? "flt--active" : null)" @onclick="() => SetStatusFilter(DerivedTableStatus.WaitingPayment)">Waiting payment</button>
+            <button class="flt @(_statusFilter == DerivedTableStatus.Reserved ? "flt--active" : null)" @onclick="() => SetStatusFilter(DerivedTableStatus.Reserved)">Reserved</button>
+            <label class="flt-mine">
+                <input type="checkbox" checked="@_mineOnly" @onchange="e => _mineOnly = (bool)e.Value!" /> My tables only
+            </label>
+        </div>
+
+        <div class="wc-floor-wrap">
+            <div class="wc-floor">
+                @foreach (var t in FilteredFloor)
+                {
+                    <button type="button" @key="t.TableId"
+                            class="@($"tbl tbl--{TableTone(t.Status)} {(_selectedFloorTable?.TableId == t.TableId ? "tbl--sel" : "")}")"
+                            @onclick="() => SelectFloorTable(t)">
+                        <div class="tbl-top">
+                            <span class="tbl-no">@t.TableNumber</span>
+                            <BoBadge Tone="@TableTone(t.Status)">@TableStatusLabel(t.Status)</BoBadge>
+                        </div>
+                        <div class="tbl-meta">
+                            <span>👥 @(t.GuestCount?.ToString() ?? "—")/@t.Capacity</span>
+                            @if (t.SessionMinutes is { } m) { <span>⏱ @m m</span> }
+                            @if (t.OrderCount > 0) { <span>🧾 @t.OrderCount</span> }
+                        </div>
+                        @if (t.CurrentBill > 0m)
+                        {
+                            <div class="tbl-bill">@t.Currency @t.CurrentBill.ToString("0.##")</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(t.WaiterName))
+                        {
+                            <div class="tbl-waiter">@t.WaiterName</div>
+                        }
+                    </button>
+                }
+            </div>
+
+            @if (_selectedFloorTable is { } sel)
             {
-                <BoCard>
-                    <EmptyState Icon="DocumentBulletList" Title="No products"
-                                Description="Add products from Inventory → Products first." />
-                </BoCard>
+                <div class="wc-actions">
+                    <div class="wc-actions-head">
+                        <strong>Table @sel.TableNumber</strong>
+                        <BoBadge Tone="@TableTone(sel.Status)">@TableStatusLabel(sel.Status)</BoBadge>
+                    </div>
+
+                    @if (sel.SessionId is null)
+                    {
+                        <BoButton Variant="primary" OnClick="() => OpenTableAsync(sel)">Open table</BoButton>
+                    }
+                    else
+                    {
+                        <BoButton Variant="primary" OnClick="() => TakeOrderForTable(sel)">Take order</BoButton>
+                        <BoButton Variant="outline" OnClick="() => ViewBillAsync(sel)">View bill</BoButton>
+                        <BoButton Variant="outline" OnClick="() => RequestPaymentAsync(sel)">Request payment</BoButton>
+                        <BoButton Variant="ghost" OnClick="() => ChangeGuestsAsync(sel)">Guest count</BoButton>
+                        <BoButton Variant="ghost" OnClick="() => MoveTableAsync(sel)">Move / transfer table</BoButton>
+                        <BoButton Variant="ghost" OnClick="() => MergeTablesAsync(sel)">Merge tables</BoButton>
+                        <BoButton Variant="ghost" OnClick="() => SplitTableAsync(sel)">Split session</BoButton>
+                        <BoButton Variant="ghost" OnClick="() => TransferWaiterAsync(sel)">Transfer waiter</BoButton>
+                        <BoButton Variant="ghost" OnClick="() => PrintKot(sel)">Print KOT</BoButton>
+                        <BoButton Variant="ghost" OnClick="() => PrintBill(sel)">Print bill</BoButton>
+                        <AuthorizeView Policy="CanCloseSession">
+                            <BoButton Variant="danger" OnClick="() => CloseSessionAsync(sel)">Close session</BoButton>
+                        </AuthorizeView>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else if (_tab == WaiterTab.Ready)
+    {
+        <!-- ============ READY TO SERVE ============ -->
+        <BoCard Title="Ready to serve">
+            <HeaderActions>
+                @if (_ready.Count > 0)
+                {
+                    <BoButton Variant="primary" Size="sm" OnClick="ServeAllAsync">Serve all</BoButton>
+                }
+            </HeaderActions>
+            <ChildContent>
+                @if (_ready.Count == 0)
+                {
+                    <EmptyState Icon="DocumentBulletList" Title="Nothing waiting"
+                                Description="Cooked orders ready to carry out will appear here." />
+                }
+                else
+                {
+                    <div class="rts-list">
+                        @foreach (var r in _ready)
+                        {
+                            <div class="rts" @key="r.OrderId">
+                                <div class="rts-info">
+                                    <div class="rts-top">
+                                        <strong>@(r.TableNumber ?? "Takeaway")</strong>
+                                        <span class="rts-no">@r.OrderNumber</span>
+                                        <span class="rts-wait">⏱ @r.WaitingMinutes m</span>
+                                    </div>
+                                    <div class="rts-items">
+                                        @string.Join(", ", r.Items.Select(i => $"{i.Quantity}× {i.Name}"))
+                                    </div>
+                                </div>
+                                <BoButton Variant="primary" Size="sm" OnClick="() => ServeAsync(r.OrderId)">Mark served</BoButton>
+                            </div>
+                        }
+                    </div>
+                }
+            </ChildContent>
+        </BoCard>
+    }
+    else if (_tab == WaiterTab.Requests)
+    {
+        <!-- ============ CUSTOMER REQUESTS ============ -->
+        <BoCard Title="Customer requests">
+            @if (_requests.Count == 0)
+            {
+                <EmptyState Icon="Send" Title="No pending requests"
+                            Description="Call-waiter, bill and other table requests show up here." />
             }
             else
             {
-                <div class="pos-toolbar">
-                    <BoSearch @bind-Value="_search" Placeholder="Search by name, code or বাংলা নাম…" DebounceMs="150" />
-                </div>
-
-                <div class="cat-bar">
-                    <button type="button"
-                            class="cat-chip @(_selectedCategoryId is null ? "cat-chip--active" : null)"
-                            @onclick="() => SelectCategory(null)">
-                        All <span class="cat-chip-count">@_products.Count</span>
-                    </button>
-                    @foreach (var cat in VisibleCategories)
+                <div class="req-list">
+                    @foreach (var r in _requests)
                     {
-                        <button type="button" @key="cat.Id"
-                                class="cat-chip @(_selectedCategoryId == cat.Id ? "cat-chip--active" : null)"
-                                @onclick="() => SelectCategory(cat.Id)">
-                            <span class="cat-chip-text">
-                                @cat.Name
-                                @if (BanglaOf(cat) is { } bn)
+                        <div class="req" @key="r.Id">
+                            <div class="req-info">
+                                <div class="req-top">
+                                    <strong>Table @r.TableNumber</strong>
+                                    <BoBadge Tone="warning">@RequestLabel(r.Type)</BoBadge>
+                                    <span class="req-wait">⏱ @r.WaitingMinutes m</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(r.Note))
                                 {
-                                    <span class="cat-chip-bn">@bn</span>
+                                    <div class="req-note">@r.Note</div>
                                 }
-                            </span>
-                            <span class="cat-chip-count">@_products.Count(p => p.ProductCategoryId == cat.Id)</span>
-                        </button>
+                            </div>
+                            <BoButton Variant="primary" Size="sm" OnClick="() => ResolveRequestAsync(r.Id)">Resolve</BoButton>
+                        </div>
                     }
                 </div>
+            }
+        </BoCard>
+    }
+    else
+    {
+        <!-- ============ TAKE ORDER ============ -->
+        <div class="run-bar">
+            <span class="run-bar-label">Running orders</span>
+            @if (!RunningOrders.Any())
+            {
+                <span class="run-bar-empty">None right now — new orders show up here.</span>
+            }
+            else
+            {
+                @foreach (var o in RunningOrders)
+                {
+                    <button type="button" @key="o.Id"
+                            class="@($"run-chip run-chip--{StatusTone(o.Status)} {(_activeOrder?.Id == o.Id ? "run-chip--active" : "")}")"
+                            title="@o.OrderNumber · @o.Status — tap to load and edit this order"
+                            @onclick="() => SelectRunningOrderAsync(o)">
+                        <span class="run-chip-line1">@ChipTitle(o)</span>
+                        <span class="run-chip-line2">
+                            @o.Currency @o.Total.ToString("0.##")
+                            <span class="run-chip-status">@o.Status</span>
+                        </span>
+                    </button>
+                }
+            }
+            <button type="button" class="run-refresh" title="Refresh orders" @onclick="LoadRecent">↻</button>
+        </div>
 
-                @if (!FilteredProducts.Any())
+        <div class="pos">
+            <!-- ============ PRODUCT PICKER ============ -->
+            <div class="pos-menu">
+                @if (_products is null || _products.Count == 0)
                 {
                     <BoCard>
-                        <EmptyState Icon="Search" Title="No matching items"
-                                    Description="Try a different search or category." />
+                        <EmptyState Icon="DocumentBulletList" Title="No products"
+                                    Description="Add products from Inventory → Products first." />
                     </BoCard>
                 }
                 else
                 {
-                    @foreach (var cat in VisibleCategories)
+                    <div class="pos-toolbar">
+                        <BoSearch @bind-Value="_search" Placeholder="Search by name, code or বাংলা নাম…" DebounceMs="150" />
+                    </div>
+
+                    <div class="cat-bar">
+                        <button type="button"
+                                class="cat-chip @(_selectedCategoryId is null ? "cat-chip--active" : null)"
+                                @onclick="() => SelectCategory(null)">
+                            All <span class="cat-chip-count">@_products.Count</span>
+                        </button>
+                        @foreach (var cat in VisibleCategories)
+                        {
+                            <button type="button" @key="cat.Id"
+                                    class="cat-chip @(_selectedCategoryId == cat.Id ? "cat-chip--active" : null)"
+                                    @onclick="() => SelectCategory(cat.Id)">
+                                <span class="cat-chip-text">
+                                    @cat.Name
+                                    @if (BanglaOf(cat) is { } bn)
+                                    {
+                                        <span class="cat-chip-bn">@bn</span>
+                                    }
+                                </span>
+                                <span class="cat-chip-count">@_products.Count(p => p.ProductCategoryId == cat.Id)</span>
+                            </button>
+                        }
+                    </div>
+
+                    @if (!FilteredProducts.Any())
                     {
-                        var items = FilteredProducts.Where(p => p.ProductCategoryId == cat.Id).ToList();
-                        if (items.Count == 0) { continue; }
-                        <div class="prod-section">
-                            <div class="prod-section-title">
-                                @cat.Name
-                                @if (BanglaOf(cat) is { } bn)
-                                {
-                                    <span class="prod-section-bn">@bn</span>
-                                }
+                        <BoCard>
+                            <EmptyState Icon="Search" Title="No matching items"
+                                        Description="Try a different search or category." />
+                        </BoCard>
+                    }
+                    else
+                    {
+                        @foreach (var cat in VisibleCategories)
+                        {
+                            var items = FilteredProducts.Where(p => p.ProductCategoryId == cat.Id).ToList();
+                            if (items.Count == 0) { continue; }
+                            <div class="prod-section">
+                                <div class="prod-section-title">
+                                    @cat.Name
+                                    @if (BanglaOf(cat) is { } bn)
+                                    {
+                                        <span class="prod-section-bn">@bn</span>
+                                    }
+                                </div>
+                                <div class="prod-grid">
+                                    @foreach (var item in items)
+                                    {
+                                        var qty = QtyOf(item.Id);
+                                        <div @key="item.Id"
+                                             class="prod-card @(qty > 0 ? "prod-card--selected" : null) @(item.HasVariants ? null : "prod-card--tappable")"
+                                             title="@(item.HasVariants ? "Pick a size below" : $"Tap to add {item.Name}")"
+                                             @onclick="() => AddBase(item)">
+                                            @if (qty > 0)
+                                            {
+                                                <span class="prod-qty">@qty</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(item.ImagePath))
+                                            {
+                                                <img class="prod-img" src="@item.ImagePath" alt="@item.Name" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <span class="prod-img prod-img--initial">@char.ToUpperInvariant(item.Name[0])</span>
+                                            }
+                                            <span class="prod-name">@item.Name</span>
+                                            @if (!string.IsNullOrEmpty(item.BanglaName))
+                                            {
+                                                <span class="prod-bn">@item.BanglaName</span>
+                                            }
+                                            @if (item.HasVariants)
+                                            {
+                                                <span class="prod-price">from @item.Currency @item.MinPrice.ToString("0.##")</span>
+                                                <div class="prod-variant-row">
+                                                    @foreach (var v in item.Variants)
+                                                    {
+                                                        <button type="button" @key="v.Id" class="prod-variant"
+                                                                title="Add @item.Name (@v.Name)"
+                                                                @onclick="() => AddVariant(item, v)"
+                                                                @onclick:stopPropagation="true">
+                                                            @v.Name <strong>@v.Price.ToString("0.##")</strong>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="prod-price">@item.Currency @item.Price.ToString("0.##")</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
                             </div>
-                            <div class="prod-grid">
-                                @foreach (var item in items)
+                        }
+                    }
+                }
+            </div>
+
+            <!-- ============ ORDER PANEL ============ -->
+            <div class="pos-order">
+                <BoCard Title="@(IsEditMode ? "Edit order" : "Current order")"
+                        Subtitle="@(_cart.Count == 0 ? null : $"{_cart.Sum(l => l.Qty)} item(s)")">
+                    <HeaderActions>
+                        @if (_cart.Count > 0 && !IsEditMode)
+                        {
+                            <BoButton Variant="ghost" Size="sm" OnClick="ClearCart">Clear</BoButton>
+                        }
+                    </HeaderActions>
+                    <ChildContent>
+                        <div class="order-form">
+                            @if (IsEditMode)
+                            {
+                                <div class="append-banner">
+                                    <div class="append-banner-text">
+                                        <strong>Editing @_activeOrder!.OrderNumber</strong>
+                                        <span>@(_activeOrder!.TableNumber is { } tn ? $"Table {tn}" : "Takeaway") · @_activeOrder!.Status — adjust items, then save</span>
+                                    </div>
+                                    <button type="button" class="append-banner-close" title="Back to new order" @onclick="DeselectOrder">✕</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="type-toggle">
+                                    <button type="button" class="type-btn @(_type == OrderType.DineIn ? "type-btn--active" : null)"
+                                            @onclick="() => SetType(OrderType.DineIn)">
+                                        🍽️ Dine-in
+                                    </button>
+                                    <button type="button" class="type-btn @(_type == OrderType.Takeaway ? "type-btn--active" : null)"
+                                            @onclick="() => SetType(OrderType.Takeaway)">
+                                        🥡 Takeaway
+                                    </button>
+                                </div>
+
+                                @if (_type == OrderType.DineIn)
                                 {
-                                    var qty = QtyOf(item.Id);
-                                    <div @key="item.Id"
-                                         class="prod-card @(qty > 0 ? "prod-card--selected" : null) @(item.HasVariants ? null : "prod-card--tappable")"
-                                         title="@(item.HasVariants ? "Pick a size below" : $"Tap to add {item.Name}")"
-                                         @onclick="() => AddBase(item)">
-                                        @if (qty > 0)
+                                    <div class="field-row">
+                                        <span class="field-label">Table @(_selectedTable is null ? "· choose one" : $"· {_selectedTable.TableNumber}")@(_currentSessionId is not null ? " · session open" : "")</span>
+                                        @if (_tables.Count == 0)
                                         {
-                                            <span class="prod-qty">@qty</span>
-                                        }
-                                        @if (!string.IsNullOrEmpty(item.ImagePath))
-                                        {
-                                            <img class="prod-img" src="@item.ImagePath" alt="@item.Name" loading="lazy" />
+                                            <BoMessageBar Intent="warning">No tables configured.</BoMessageBar>
                                         }
                                         else
                                         {
-                                            <span class="prod-img prod-img--initial">@char.ToUpperInvariant(item.Name[0])</span>
-                                        }
-                                        <span class="prod-name">@item.Name</span>
-                                        @if (!string.IsNullOrEmpty(item.BanglaName))
-                                        {
-                                            <span class="prod-bn">@item.BanglaName</span>
-                                        }
-                                        @if (item.HasVariants)
-                                        {
-                                            <span class="prod-price">from @item.Currency @item.MinPrice.ToString("0.##")</span>
-                                            <div class="prod-variant-row">
-                                                @foreach (var v in item.Variants)
+                                            <div class="table-grid">
+                                                @foreach (var t in _tables)
                                                 {
-                                                    <button type="button" @key="v.Id" class="prod-variant"
-                                                            title="Add @item.Name (@v.Name)"
-                                                            @onclick="() => AddVariant(item, v)"
-                                                            @onclick:stopPropagation="true">
-                                                        @v.Name <strong>@v.Price.ToString("0.##")</strong>
+                                                    <button type="button" @key="t.Id"
+                                                            class="table-chip @(_selectedTable?.Id == t.Id ? "table-chip--active" : null)"
+                                                            @onclick="() => { _selectedTable = t; _currentSessionId = null; }">
+                                                        <span class="table-chip-no">@t.TableNumber</span>
+                                                        <span class="table-chip-cap">@t.Capacity seats</span>
                                                     </button>
                                                 }
                                             </div>
                                         }
-                                        else
-                                        {
-                                            <span class="prod-price">@item.Currency @item.Price.ToString("0.##")</span>
-                                        }
                                     </div>
                                 }
-                            </div>
+
+                                <details class="guest-details" open="@(!string.IsNullOrEmpty(_phone) || !string.IsNullOrEmpty(_name))">
+                                    <summary>Guest info (optional)</summary>
+                                    <div class="two-col">
+                                        <BoInput @bind-Value="_phone" Label="Phone" Placeholder="01XXXXXXXXX" />
+                                        <BoInput @bind-Value="_name" Label="Name" />
+                                    </div>
+                                </details>
+                            }
+
+                            @if (_cart.Count == 0)
+                            {
+                                <div class="cart-empty">
+                                    <BoIcon Name="Cart" Size="28" />
+                                    <span>@(IsEditMode
+                                        ? "All items removed — an order needs at least one item. Cancel the order from the list instead."
+                                        : "Tap items on the left to add them.")</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="cart-lines">
+                                    @foreach (var line in _cart)
+                                    {
+                                        <div class="cart-line" @key="@($"{line.ProductId}:{line.VariantId}")">
+                                            <div class="cart-line-info">
+                                                <span class="cart-line-name">@line.Name</span>
+                                                <span class="cart-line-sub">@line.Currency @line.Price.ToString("0.##") each</span>
+                                            </div>
+                                            <div class="qty">
+                                                <button type="button" class="qty-btn" @onclick="() => Decrement(line)">−</button>
+                                                <span class="qty-val">@line.Qty</span>
+                                                <button type="button" class="qty-btn qty-btn--plus" @onclick="() => Increment(line)">+</button>
+                                            </div>
+                                            <span class="cart-line-total">@((line.Price * line.Qty).ToString("0.##"))</span>
+                                            <button type="button" class="line-remove" title="Remove" @onclick="() => Remove(line)">✕</button>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="cart-total">
+                                    <span>Total</span>
+                                    <strong>@Currency @Total.ToString("0.##")</strong>
+                                </div>
+                            }
+
+                            @if (!IsEditMode)
+                            {
+                                <BoInput @bind-Value="_notes" Label="Kitchen notes (optional)" Placeholder="e.g. no onions, extra spicy" />
+                            }
+
+                            @if (!string.IsNullOrEmpty(_error))
+                            {
+                                <BoMessageBar Intent="error">@_error</BoMessageBar>
+                            }
+
+                            <BoButton Variant="primary" OnClick="PlaceAsync" Loading="_placing" Disabled="@(!CanPlace)">
+                                @(IsEditMode
+                                    ? $"Update {_activeOrder!.OrderNumber} · {Currency} {Total:0.##}"
+                                    : _cart.Count == 0 ? "Place order" : $"Place order · {Currency} {Total:0.##}")
+                            </BoButton>
                         </div>
-                    }
-                }
-            }
+                    </ChildContent>
+                </BoCard>
+            </div>
         </div>
 
-        <!-- ============ ORDER PANEL ============ -->
-        <div class="pos-order">
-            <BoCard Title="@(IsEditMode ? "Edit order" : "Current order")"
-                    Subtitle="@(_cart.Count == 0 ? null : $"{_cart.Sum(l => l.Qty)} item(s)")">
-                <HeaderActions>
-                    @if (_cart.Count > 0 && !IsEditMode)
-                    {
-                        <BoButton Variant="ghost" Size="sm" OnClick="ClearCart">Clear</BoButton>
-                    }
-                </HeaderActions>
-                <ChildContent>
-                    <div class="order-form">
-                        @if (IsEditMode)
-                        {
-                            <div class="append-banner">
-                                <div class="append-banner-text">
-                                    <strong>Editing @_activeOrder!.OrderNumber</strong>
-                                    <span>@(_activeOrder!.TableNumber is { } tn ? $"Table {tn}" : "Takeaway") · @_activeOrder!.Status — adjust items, then save</span>
-                                </div>
-                                <button type="button" class="append-banner-close" title="Back to new order" @onclick="DeselectOrder">✕</button>
-                            </div>
-                        }
-                        else
-                        {
-                        <div class="type-toggle">
-                            <button type="button" class="type-btn @(_type == OrderType.DineIn ? "type-btn--active" : null)"
-                                    @onclick="() => SetType(OrderType.DineIn)">
-                                🍽️ Dine-in
-                            </button>
-                            <button type="button" class="type-btn @(_type == OrderType.Takeaway ? "type-btn--active" : null)"
-                                    @onclick="() => SetType(OrderType.Takeaway)">
-                                🥡 Takeaway
-                            </button>
-                        </div>
-
-                        @if (_type == OrderType.DineIn)
-                        {
-                            <div class="field-row">
-                                <span class="field-label">Table @(_selectedTable is null ? "· choose one" : $"· {_selectedTable.TableNumber}")</span>
-                                @if (_tables.Count == 0)
-                                {
-                                    <BoMessageBar Intent="warning">No tables configured.</BoMessageBar>
-                                }
-                                else
-                                {
-                                    <div class="table-grid">
-                                        @foreach (var t in _tables)
-                                        {
-                                            <button type="button" @key="t.Id"
-                                                    class="table-chip @(_selectedTable?.Id == t.Id ? "table-chip--active" : null)"
-                                                    @onclick="() => _selectedTable = t">
-                                                <span class="table-chip-no">@t.TableNumber</span>
-                                                <span class="table-chip-cap">@t.Capacity seats</span>
-                                            </button>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        }
-
-                        <details class="guest-details" open="@(!string.IsNullOrEmpty(_phone) || !string.IsNullOrEmpty(_name))">
-                            <summary>Guest info (optional)</summary>
-                            <div class="two-col">
-                                <BoInput @bind-Value="_phone" Label="Phone" Placeholder="01XXXXXXXXX" />
-                                <BoInput @bind-Value="_name" Label="Name" />
-                            </div>
-                        </details>
-                        }
-
-                        @if (_cart.Count == 0)
-                        {
-                            <div class="cart-empty">
-                                <BoIcon Name="Cart" Size="28" />
-                                <span>@(IsEditMode
-                                    ? "All items removed — an order needs at least one item. Cancel the order from the list instead."
-                                    : "Tap items on the left to add them.")</span>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="cart-lines">
-                                @foreach (var line in _cart)
-                                {
-                                    <div class="cart-line" @key="@($"{line.ProductId}:{line.VariantId}")">
-                                        <div class="cart-line-info">
-                                            <span class="cart-line-name">@line.Name</span>
-                                            <span class="cart-line-sub">@line.Currency @line.Price.ToString("0.##") each</span>
-                                        </div>
-                                        <div class="qty">
-                                            <button type="button" class="qty-btn" @onclick="() => Decrement(line)">−</button>
-                                            <span class="qty-val">@line.Qty</span>
-                                            <button type="button" class="qty-btn qty-btn--plus" @onclick="() => Increment(line)">+</button>
-                                        </div>
-                                        <span class="cart-line-total">@((line.Price * line.Qty).ToString("0.##"))</span>
-                                        <button type="button" class="line-remove" title="Remove" @onclick="() => Remove(line)">✕</button>
-                                    </div>
-                                }
-                            </div>
-
-                            <div class="cart-total">
-                                <span>Total</span>
-                                <strong>@Currency @Total.ToString("0.##")</strong>
-                            </div>
-                        }
-
-                        @if (!IsEditMode)
-                        {
-                            <BoInput @bind-Value="_notes" Label="Kitchen notes (optional)" Placeholder="e.g. no onions, extra spicy" />
-                        }
-
-                        @if (!string.IsNullOrEmpty(_error))
-                        {
-                            <BoMessageBar Intent="error">@_error</BoMessageBar>
-                        }
-
-                        <BoButton Variant="primary" OnClick="PlaceAsync" Loading="_placing" Disabled="@(!CanPlace)">
-                            @(IsEditMode
-                                ? $"Update {_activeOrder!.OrderNumber} · {Currency} {Total:0.##}"
-                                : _cart.Count == 0 ? "Place order" : $"Place order · {Currency} {Total:0.##}")
-                        </BoButton>
-                    </div>
-                </ChildContent>
+        <!-- ============ RECENT ORDERS ============ -->
+        <div style="margin-top:24px;">
+            <BoCard Title="Recent orders">
+                @if (_recent is null || _recent.Items.Count == 0)
+                {
+                    <EmptyState Icon="DocumentBulletList" Title="No orders yet"
+                                Description="Placed orders will appear here." />
+                }
+                else
+                {
+                    <DataGrid TItem="OrderListItemDto" Items="@_recent.Items" PageSize="10"
+                              SearchPlaceholder="Search order #, customer…"
+                              SearchPredicate="@((o, q) => o.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase)
+                                  || (o.CustomerName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                                  || o.CustomerPhone.Contains(q, StringComparison.OrdinalIgnoreCase))">
+                        <Columns>
+                            <DataGridColumn TItem="OrderListItemDto" Title="Order #" Property="@(o => o.OrderNumber)" Sortable="true">
+                                <strong>@context.OrderNumber</strong>
+                            </DataGridColumn>
+                            <DataGridColumn TItem="OrderListItemDto" Title="Customer">
+                                @(context.CustomerName ?? context.CustomerPhone)
+                            </DataGridColumn>
+                            <DataGridColumn TItem="OrderListItemDto" Title="Type" Property="@(o => o.OrderType)" Sortable="true" />
+                            <DataGridColumn TItem="OrderListItemDto" Title="Table">
+                                @(context.TableNumber ?? "—")
+                            </DataGridColumn>
+                            <DataGridColumn TItem="OrderListItemDto" Title="Items" Align="DataGridAlign.Center" Width="80px">
+                                @context.ItemCount
+                            </DataGridColumn>
+                            <DataGridColumn TItem="OrderListItemDto" Title="Total" Align="DataGridAlign.Right" Width="120px">
+                                <strong>@context.Currency @context.Total.ToString("0.##")</strong>
+                            </DataGridColumn>
+                            <DataGridColumn TItem="OrderListItemDto" Title="Status" Align="DataGridAlign.Center" Width="280px">
+                                <OrderStatusCell Order="context" OnChanged="LoadRecent" />
+                            </DataGridColumn>
+                            <DataGridColumn TItem="OrderListItemDto" Title="Placed" Property="@(o => (object?)o.OrderedAtUtc)" Format="g" Width="150px" />
+                        </Columns>
+                    </DataGrid>
+                }
             </BoCard>
         </div>
-    </div>
-
-    <!-- ============ RECENT ORDERS ============ -->
-    <div style="margin-top:24px;">
-        <BoCard Title="Recent orders">
-            @if (_recent is null || _recent.Items.Count == 0)
-            {
-                <EmptyState Icon="DocumentBulletList" Title="No orders yet"
-                            Description="Placed orders will appear here." />
-            }
-            else
-            {
-                <DataGrid TItem="OrderListItemDto" Items="@_recent.Items" PageSize="10"
-                          SearchPlaceholder="Search order #, customer…"
-                          SearchPredicate="@((o, q) => o.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase)
-                              || (o.CustomerName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-                              || o.CustomerPhone.Contains(q, StringComparison.OrdinalIgnoreCase))">
-                    <Columns>
-                        <DataGridColumn TItem="OrderListItemDto" Title="Order #" Property="@(o => o.OrderNumber)" Sortable="true">
-                            <strong>@context.OrderNumber</strong>
-                        </DataGridColumn>
-                        <DataGridColumn TItem="OrderListItemDto" Title="Customer">
-                            @(context.CustomerName ?? context.CustomerPhone)
-                        </DataGridColumn>
-                        <DataGridColumn TItem="OrderListItemDto" Title="Type" Property="@(o => o.OrderType)" Sortable="true" />
-                        <DataGridColumn TItem="OrderListItemDto" Title="Table">
-                            @(context.TableNumber ?? "—")
-                        </DataGridColumn>
-                        <DataGridColumn TItem="OrderListItemDto" Title="Items" Align="DataGridAlign.Center" Width="80px">
-                            @context.ItemCount
-                        </DataGridColumn>
-                        <DataGridColumn TItem="OrderListItemDto" Title="Total" Align="DataGridAlign.Right" Width="120px">
-                            <strong>@context.Currency @context.Total.ToString("0.##")</strong>
-                        </DataGridColumn>
-                        <DataGridColumn TItem="OrderListItemDto" Title="Status" Align="DataGridAlign.Center" Width="280px">
-                            <OrderStatusCell Order="context" OnChanged="LoadRecent" />
-                        </DataGridColumn>
-                        <DataGridColumn TItem="OrderListItemDto" Title="Placed" Property="@(o => (object?)o.OrderedAtUtc)" Format="g" Width="150px" />
-                    </Columns>
-                </DataGrid>
-            }
-        </BoCard>
-    </div>
-}
-
-@code {
-    private sealed class CartLine
-    {
-        public required Guid ProductId { get; init; }
-        public Guid? VariantId { get; init; }
-        public required string Name { get; init; }
-        public required decimal Price { get; init; }
-        public required string Currency { get; init; }
-        public int Qty { get; set; } = 1;
-    }
-
-    private IReadOnlyList<ProductDto>? _products;
-    private IReadOnlyList<ProductCategoryDto> _categories = Array.Empty<ProductCategoryDto>();
-    private IReadOnlyList<TableDto> _tables = Array.Empty<TableDto>();
-    private PagedResult<OrderListItemDto>? _recent;
-
-    private readonly List<CartLine> _cart = new();
-    private OrderType _type = OrderType.DineIn;
-    private TableDto? _selectedTable;
-    private string? _phone;
-    private string? _name;
-    private string? _notes;
-
-    private string? _search;
-    private Guid? _selectedCategoryId;
-    private OrderListItemDto? _activeOrder;
-
-    private bool _loading = true;
-    private bool _placing;
-    private string? _error;
-
-    private string Currency => IsEditMode ? _activeOrder!.Currency
-        : _cart.Count > 0 ? _cart[0].Currency : "Tk";
-    private decimal Total => _cart.Sum(l => l.Price * l.Qty);
-    private bool IsEditMode => _activeOrder is not null;
-    private bool CanPlace => !_placing && _cart.Count > 0
-        && (IsEditMode || _type != OrderType.DineIn || _selectedTable is not null);
-
-    // Categories already sorted by DisplayOrder (GetProductCategoriesQuery); only show ones
-    // that actually have active products so the picker never renders an empty section.
-    private IEnumerable<ProductCategoryDto> VisibleCategories =>
-        _categories.Where(c => _products?.Any(p => p.ProductCategoryId == c.Id) == true);
-
-    // Seed convention stores the Bangla label as the first "—"-separated segment of Description.
-    private static string? BanglaOf(ProductCategoryDto cat)
-    {
-        var bn = cat.Description?.Split('—')[0].Trim();
-        return string.IsNullOrEmpty(bn) ? null : bn;
-    }
-
-    private IEnumerable<OrderListItemDto> RunningOrders =>
-        _recent?.Items.Where(o => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled))
-        ?? Enumerable.Empty<OrderListItemDto>();
-
-    // "T05#0012" for dine-in, "TW#0012" for takeaway.
-    private static string ChipTitle(OrderListItemDto o) =>
-        $"{(o.OrderType == OrderType.DineIn ? o.TableNumber ?? "T?" : "TW")}#{ShortNo(o.OrderNumber)}";
-
-    // "ORD-yyyyMMdd-NNNN" → "NNNN"
-    private static string ShortNo(string orderNumber) =>
-        orderNumber[(orderNumber.LastIndexOf('-') + 1)..];
-
-    // Keep in sync with the canonical map in Shared/OrderStatusCell.razor (StatusTone is private there).
-    private static string StatusTone(OrderStatus status) => status switch
-    {
-        OrderStatus.Placed => "warning",
-        OrderStatus.Confirmed => "info",
-        OrderStatus.Preparing => "primary",
-        OrderStatus.Ready => "success",
-        OrderStatus.Served => "success",
-        OrderStatus.Cancelled => "danger",
-        _ => "neutral"
-    };
-
-    private IEnumerable<ProductDto> FilteredProducts =>
-        (_products ?? Array.Empty<ProductDto>()).Where(p =>
-            (_selectedCategoryId is null || p.ProductCategoryId == _selectedCategoryId)
-            && (string.IsNullOrWhiteSpace(_search)
-                || p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
-                || p.Code.Contains(_search, StringComparison.OrdinalIgnoreCase)
-                || (p.BanglaName?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)));
-
-    protected override async Task OnInitializedAsync()
-    {
-        _products = (await Sender.Send(new GetProductsQuery()))
-            .Where(p => p.IsActive)
-            .ToList();
-        _categories = await Sender.Send(new GetProductCategoriesQuery());
-        _tables = await Sender.Send(new GetTablesQuery());
-        await LoadRecent();
-        _loading = false;
-    }
-
-    private async Task LoadRecent()
-    {
-        _recent = await Sender.Send(new GetOrdersQuery(Page: 1, PageSize: 50));
-
-        // Re-resolve the selected running order; drop it (and its loaded cart) if it finished/was paid meanwhile.
-        if (_activeOrder is not null)
-        {
-            var fresh = _recent.Items.FirstOrDefault(o => o.Id == _activeOrder.Id);
-            if (fresh is null || fresh.Status is OrderStatus.Completed or OrderStatus.Cancelled || fresh.IsPaid)
-            {
-                ToastService.ShowInfo($"Order {_activeOrder.OrderNumber} is no longer open — back to new order.");
-                _activeOrder = null;
-                _cart.Clear();
-            }
-            else
-            {
-                _activeOrder = fresh;
-            }
-        }
-
-        StateHasChanged();
-    }
-
-    private void SelectCategory(Guid? categoryId) => _selectedCategoryId = categoryId;
-
-    private void SetType(OrderType type)
-    {
-        _type = type;
-        if (type == OrderType.Takeaway) _selectedTable = null;
-    }
-
-    private async Task SelectRunningOrderAsync(OrderListItemDto order)
-    {
-        _error = null;
-
-        if (_activeOrder?.Id == order.Id)
-        {
-            DeselectOrder();
-            return;
-        }
-
-        try
-        {
-            var detail = await Sender.Send(new GetOrderQuery(order.Id));
-
-            var hadDraft = _cart.Count > 0 && _activeOrder is null;
-            _cart.Clear();
-            foreach (var l in detail.Lines)
-            {
-                _cart.Add(new CartLine
-                {
-                    ProductId = l.MenuItemId,
-                    VariantId = l.VariantId,
-                    Name = l.Name,
-                    Price = l.UnitPrice,
-                    Currency = detail.Currency,
-                    Qty = l.Quantity
-                });
-            }
-            _activeOrder = order;
-
-            if (hadDraft)
-                ToastService.ShowInfo($"Draft cart replaced with the items of {order.OrderNumber}.");
-        }
-        catch (Exception ex)
-        {
-            ToastService.ShowError(ex.Message);
-        }
-    }
-
-    private void DeselectOrder()
-    {
-        _error = null;
-        _activeOrder = null;
-        _cart.Clear();
-    }
-
-    private int QtyOf(Guid productId) =>
-        _cart.Where(l => l.ProductId == productId).Sum(l => l.Qty);
-
-    private void AddBase(ProductDto item)
-    {
-        if (item.HasVariants) return; // variant pills are the click targets
-        AddToCart(item.Id, null, item.Name, item.Price, item.Currency);
-    }
-
-    private void AddVariant(ProductDto item, ProductVariantDto variant) =>
-        AddToCart(item.Id, variant.Id, $"{item.Name} ({variant.Name})", variant.Price, item.Currency);
-
-    private void AddToCart(Guid productId, Guid? variantId, string name, decimal price, string currency)
-    {
-        var existing = _cart.FirstOrDefault(l => l.ProductId == productId && l.VariantId == variantId);
-        if (existing is null)
-            _cart.Add(new CartLine { ProductId = productId, VariantId = variantId, Name = name, Price = price, Currency = currency });
-        else
-            existing.Qty++;
-    }
-
-    private void Increment(CartLine line) => line.Qty++;
-
-    private void Decrement(CartLine line)
-    {
-        if (line.Qty <= 1) _cart.Remove(line);
-        else line.Qty--;
-    }
-
-    private void Remove(CartLine line) => _cart.Remove(line);
-
-    private void ClearCart() => _cart.Clear();
-
-    private async Task PlaceAsync()
-    {
-        _error = null;
-        _placing = true;
-        try
-        {
-            var lines = _cart.Select(l => new PlaceOrderLineInput(l.ProductId, l.Qty, l.VariantId)).ToList();
-
-            if (IsEditMode)
-            {
-                var result = await Sender.Send(new UpdateWaiterOrderLinesCommand(_activeOrder!.Id, lines));
-                ToastService.ShowSuccess($"Order {result.OrderNumber} updated · {result.Currency} {result.Total:0.##}");
-
-                _cart.Clear();
-                _activeOrder = null;
-            }
-            else
-            {
-                var result = await Sender.Send(new PlaceWaiterOrderCommand(
-                    _phone, _name, _selectedTable?.Id, _type, _notes, lines));
-                ToastService.ShowSuccess($"Order {result.OrderNumber} placed · {result.Currency} {result.Total:0.##}");
-
-                _cart.Clear();
-                _phone = _name = _notes = null;
-                _selectedTable = null;
-            }
-
-            await LoadRecent();
-        }
-        catch (FluentValidation.ValidationException vex)
-        {
-            _error = vex.Errors.Any()
-                ? string.Join("; ", vex.Errors.Select(e => e.ErrorMessage))
-                : vex.Message;
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-        finally
-        {
-            _placing = false;
-        }
     }
 }
 
 <style>
+    /* ---------- console header / tabs / widgets ---------- */
+    .wc-head { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px; }
+    .wc-title { display:flex; align-items:center; gap:12px; }
+    .wc-title h2 { margin:0; }
+    .wc-conn { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; }
+    .wc-conn--on { background:color-mix(in srgb, var(--bo-success) 14%, transparent); color:var(--bo-success); }
+    .wc-conn--off { background:color-mix(in srgb, var(--bo-warning) 14%, transparent); color:var(--bo-warning); }
+    .wc-dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+    .wc-tabs { display:flex; gap:4px; padding:4px; background:var(--bo-bg-soft); border-radius:var(--bo-radius-md,10px); border:1px solid var(--bo-border-soft); }
+    .wc-tab { padding:8px 16px; border:none; border-radius:8px; cursor:pointer; background:transparent; color:var(--bo-text-muted); font-size:14px; font-weight:600; }
+    .wc-tab--active { background:var(--bo-bg-card); color:var(--bo-text); box-shadow:0 1px 3px rgb(0 0 0 / .12); }
+
+    .wc-widgets { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px; margin-bottom:16px; }
+    .wc-widget { display:flex; flex-direction:column; gap:2px; padding:12px 14px; border-radius:var(--bo-radius-md,10px); background:var(--bo-bg-card); border:1px solid var(--bo-border-soft); }
+    .wc-widget--ok { border-left:3px solid var(--bo-success); }
+    .wc-widget--warn { border-left:3px solid var(--bo-warning); }
+    .wc-widget--info { border-left:3px solid var(--bo-info); }
+    .wc-widget--primary { border-left:3px solid var(--bo-primary); }
+    .wc-widget--danger { border-left:3px solid var(--bo-danger); }
+    .wc-w-num { font-size:22px; font-weight:800; }
+    .wc-w-lbl { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--bo-text-muted); }
+
+    /* ---------- floor ---------- */
+    .wc-filters { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+    .flt { padding:7px 14px; border-radius:999px; cursor:pointer; border:1px solid var(--bo-border); background:var(--bo-bg-card); color:var(--bo-text); font-size:13px; font-weight:600; }
+    .flt:hover { border-color:var(--bo-primary); color:var(--bo-primary); }
+    .flt--active { background:var(--bo-primary); border-color:var(--bo-primary); color:var(--bo-on-primary,#fff); }
+    .flt-mine { display:inline-flex; align-items:center; gap:6px; margin-left:8px; font-size:13px; color:var(--bo-text-muted); cursor:pointer; }
+
+    .wc-floor-wrap { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; align-items:start; }
+    @@media (max-width: 980px) { .wc-floor-wrap { grid-template-columns:1fr; } }
+    .wc-floor { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px; }
+    .tbl { display:flex; flex-direction:column; gap:8px; padding:14px; text-align:left; cursor:pointer;
+           border:1px solid var(--bo-border); border-radius:var(--bo-radius-lg,12px); background:var(--bo-bg-card); color:var(--bo-text);
+           transition:transform .08s, box-shadow .12s, border-color .12s; min-height:120px; }
+    .tbl:hover { transform:translateY(-2px); box-shadow:var(--bo-shadow-md, 0 4px 8px rgb(0 0 0 / .08)); }
+    .tbl--sel { outline:2px solid var(--bo-primary); outline-offset:1px; }
+    .tbl--success { border-top:4px solid var(--bo-success); }
+    .tbl--warning { border-top:4px solid var(--bo-warning); }
+    .tbl--info { border-top:4px solid var(--bo-info); }
+    .tbl--danger { border-top:4px solid var(--bo-danger); }
+    .tbl--neutral { border-top:4px solid var(--bo-border-strong); }
+    .tbl-top { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+    .tbl-no { font-size:20px; font-weight:800; }
+    .tbl-meta { display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:var(--bo-text-muted); }
+    .tbl-bill { font-size:16px; font-weight:800; color:var(--bo-primary); }
+    .tbl-waiter { font-size:11px; color:var(--bo-text-subtle); }
+
+    .wc-actions { position:sticky; top:16px; display:flex; flex-direction:column; gap:8px;
+                  padding:16px; border:1px solid var(--bo-border); border-radius:var(--bo-radius-lg,12px); background:var(--bo-bg-card); }
+    .wc-actions-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+    .wc-actions ::deep .bo-btn { width:100%; justify-content:center; }
+
+    /* ---------- ready-to-serve + requests ---------- */
+    .rts-list, .req-list { display:flex; flex-direction:column; gap:8px; }
+    .rts, .req { display:flex; align-items:center; gap:12px; padding:12px 14px; border:1px solid var(--bo-border-soft); border-radius:var(--bo-radius-md,10px); background:var(--bo-bg-card); }
+    .rts-info, .req-info { flex:1; min-width:0; }
+    .rts-top, .req-top { display:flex; align-items:center; gap:10px; }
+    .rts-no { font-size:12px; color:var(--bo-text-muted); }
+    .rts-wait, .req-wait { font-size:12px; color:var(--bo-text-subtle); margin-left:auto; }
+    .rts-items { font-size:13px; color:var(--bo-text-muted); margin-top:4px; }
+    .req-note { font-size:13px; color:var(--bo-text-muted); margin-top:4px; }
+
     /* ---------- running orders bar ---------- */
     .run-bar {
         display: flex; align-items: center; gap: 8px; flex-wrap: wrap;

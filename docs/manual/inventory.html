@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Menu &amp; Tables — BornoBit Manual</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="brand"><span class="logo">🍽</span>BornoBit Manual</div>
+  <input type="search" id="navSearch" placeholder="Search…" autocomplete="off" aria-label="Search manual">
+  <ul class="navlist">
+    <li><a href="index.html">Home</a></li>
+    <li class="group">Operations</li>
+    <li><a href="orders.html">Orders</a></li>
+    <li><a href="pos.html">POS</a></li>
+    <li><a href="kitchen-display.html">Kitchen Display</a></li>
+    <li><a href="dashboard.html">Operations Dashboard</a></li>
+    <li><a href="cash-counter.html">Cash Counter</a></li>
+    <li class="group">Inventory</li>
+    <li><a href="inventory.html">Menu &amp; Tables</a></li>
+    <li><a href="stock.html">Stock (Raw)</a></li>
+    <li><a href="store.html">Store (Finished)</a></li>
+    <li class="group">Finance</li>
+    <li><a href="accounts.html">Accounts</a></li>
+    <li><a href="reports.html">Reports</a></li>
+    <li class="group">Administration</li>
+    <li><a href="users-roles.html">Users &amp; Roles</a></li>
+    <li><a href="menu-permissions.html">Menu &amp; Modules</a></li>
+    <li><a href="numbering.html">Numbering</a></li>
+    <li><a href="settings.html">Settings</a></li>
+  </ul>
+</nav>
+<main class="content">
+  <header class="topbar"><h1>Menu &amp; Tables</h1><button id="themeToggle" aria-label="Toggle theme">🌙</button></header>
+  <article>
+    <p><span class="route">/inventory/categories</span> · <span class="route">/inventory/products</span>
+       · <span class="route">/inventory/tables</span> · <span class="route">/operations/menu</span></p>
+    <div class="roles"><strong>Who can access:</strong>
+      <span class="role-chip">Manager</span><span class="role-chip">Admin</span><span class="role-chip">SuperAdmin</span></div>
+
+    <h2>Purpose</h2>
+    <p>Define what you sell and where customers sit: menu categories, products (with prices and variants),
+    and dining tables with their QR codes for self-ordering.</p>
+
+    <h2>Product categories</h2>
+    <ol>
+      <li>Open <code>/inventory/categories</code>.</li>
+      <li>Add/edit a category and set its display order.</li>
+    </ol>
+
+    <h2>Products (menu items)</h2>
+    <ol>
+      <li>Open <code>/inventory/products</code> → <strong>New</strong>.</li>
+      <li>Set name, category, price, and variants/options.</li>
+      <li>Toggle availability to show/hide on the customer menu.</li>
+    </ol>
+
+    <h2>Tables &amp; QR codes</h2>
+    <ol>
+      <li>Open <code>/inventory/tables</code> and add tables with numbers.</li>
+      <li>Generate each table's QR code (deep-links the customer site to <code>/menu?table=&lt;id&gt;</code>).</li>
+      <li>Bulk-print QR codes for placement on tables.</li>
+    </ol>
+
+    <h2>Screenshot</h2>
+    <div class="shot"><img src="assets/img/inventory.png" alt="Products and tables management" onerror="this.style.display='none';this.parentNode.insertAdjacentText('beforeend','Screenshot placeholder — capture assets/img/inventory.png')"></div>
+    <!-- TODO: capture screenshot assets/img/inventory.png -->
+
+    <div class="callout"><strong>Note.</strong> Products here are the menu items customers order; raw
+    ingredients live separately under <a href="stock.html">Stock</a>.</div>
+
+    <footer class="updated">Last updated: 2026-06-14</footer>
+  </article>
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>

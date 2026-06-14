@@ -1,0 +1,53 @@
+@namespace BornoBit.Restaurant.Web.Components.Pages.Waiter.Dialogs
+
+<BoDialogBody>
+    <span class="pt-prompt">@Content.Prompt</span>
+    @if (Content.Tables.Count == 0)
+    {
+        <BoMessageBar Intent="warning">No free tables available.</BoMessageBar>
+    }
+    else
+    {
+        <div class="pt-grid">
+            @foreach (var t in Content.Tables)
+            {
+                <button type="button" @key="t.Id"
+                        class="pt-chip @(_selected == t.Id ? "pt-chip--active" : null)"
+                        @onclick="() => _selected = t.Id">
+                    <span class="pt-no">@t.Number</span>
+                    <span class="pt-cap">@t.Capacity seats</span>
+                </button>
+            }
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close())">Cancel</BoButton>
+    <BoButton Variant="primary" Disabled="@(_selected is null)" OnClick="Confirm">Confirm</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public PickTableInput Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private Guid? _selected;
+
+    private void Confirm()
+    {
+        if (_selected is { } id) Dialog.Close(id);
+    }
+}
+
+<style>
+    .pt-prompt { display:block; font-size:14px; color:var(--bo-text-muted); margin-bottom:12px; }
+    .pt-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px,1fr)); gap:8px; max-height:320px; overflow-y:auto; }
+    .pt-chip {
+        display:flex; flex-direction:column; align-items:center; gap:2px; padding:14px 6px; cursor:pointer;
+        border:1px solid var(--bo-border); border-radius:12px; background:var(--bo-bg-card); color:var(--bo-text);
+    }
+    .pt-chip:hover { border-color:var(--bo-primary); }
+    .pt-chip--active { border-color:var(--bo-primary); background:var(--bo-primary); color:var(--bo-on-primary,#fff); }
+    .pt-no { font-weight:800; font-size:16px; }
+    .pt-cap { font-size:11px; opacity:.8; }
+</style>

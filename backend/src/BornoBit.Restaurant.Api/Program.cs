@@ -91,12 +91,15 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<SuperAdminSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<MenuSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<TableSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<KitchenStationSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<CustomerSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<InventorySeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<UnitSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StockSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<RecipeSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AccountingSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<BillingSettingsSeeder>().SeedAsync();
     }
     catch (Exception ex)
     {
@@ -123,6 +126,7 @@ app.MapCustomerAuthEndpoints();
 app.MapStaffAuthEndpoints();
 app.MapOrderEndpoints();
 app.MapAdminOrderEndpoints();
+app.MapCustomerRequestEndpoints();
 app.MapReceiptEndpoints();
 
 app.MapGet("/", () => Results.Ok(new { app = "BornoBit.Restaurant.Api", version = "0.1.0" }));

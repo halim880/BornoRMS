@@ -1,0 +1,53 @@
+@namespace BornoBit.Restaurant.Web.Components.Pages.Waiter.Dialogs
+
+<BoDialogBody>
+    <span class="mg-prompt">Merge other tables into <strong>@Content.SurvivorTable</strong>. Their orders move onto this table's bill.</span>
+    @if (Content.Candidates.Count == 0)
+    {
+        <BoMessageBar Intent="info">No other occupied tables to merge.</BoMessageBar>
+    }
+    else
+    {
+        <div class="mg-list">
+            @foreach (var c in Content.Candidates)
+            {
+                <label class="mg-row @(_selected.Contains(c.SessionId) ? "mg-row--on" : null)">
+                    <input type="checkbox" checked="@_selected.Contains(c.SessionId)"
+                           @onchange="e => Toggle(c.SessionId, (bool)e.Value!)" />
+                    <span class="mg-table">Table @c.Table</span>
+                    <span class="mg-bill">@c.Currency @c.Bill.ToString("0.##")</span>
+                </label>
+            }
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close())">Cancel</BoButton>
+    <BoButton Variant="primary" Disabled="@(_selected.Count == 0)"
+              OnClick="@(() => Dialog.Close(_selected.ToList()))">Merge @(_selected.Count > 0 ? $"({_selected.Count})" : "")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public MergeInput Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private readonly HashSet<Guid> _selected = new();
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on) _selected.Add(id); else _selected.Remove(id);
+    }
+}
+
+<style>
+    .mg-prompt { display:block; font-size:13.5px; color:var(--bo-text-muted); margin-bottom:12px; }
+    .mg-list { display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto; }
+    .mg-row {
+        display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; cursor:pointer;
+        padding:10px 12px; border:1px solid var(--bo-border); border-radius:10px; background:var(--bo-bg-card);
+    }
+    .mg-row--on { border-color:var(--bo-primary); background:color-mix(in srgb, var(--bo-primary) 8%, transparent); }
+    .mg-table { font-weight:700; }
+    .mg-bill { font-weight:700; color:var(--bo-primary); }
+</style>

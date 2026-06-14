@@ -1,8 +1,10 @@
 using BornoBit.Restaurant.Application.Common.Numbering;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Domain.Customers;
+using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
+using BornoBit.Restaurant.Shared.Identity;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +23,9 @@ public record PlaceWaiterOrderCommand(
     Guid? TableId,
     OrderType Type,
     string? Notes,
-    IReadOnlyList<PlaceOrderLineInput> Lines) : IRequest<PlaceOrderResult>;
+    IReadOnlyList<PlaceOrderLineInput> Lines,
+    int? GuestCount = null,
+    Guid? DiningSessionId = null) : IRequest<PlaceOrderResult>;
 
 public class PlaceWaiterOrderCommandValidator : AbstractValidator<PlaceWaiterOrderCommand>
 {
@@ -39,13 +43,17 @@ public class PlaceWaiterOrderCommandHandler : IRequestHandler<PlaceWaiterOrderCo
 {
     private readonly IAppDbContext _db;
     private readonly IOrderNumberGenerator _numbers;
+    private readonly ISessionNumberGenerator _sessionNumbers;
     private readonly TimeProvider _timeProvider;
+    private readonly ICurrentUser _currentUser;
 
-    public PlaceWaiterOrderCommandHandler(IAppDbContext db, IOrderNumberGenerator numbers, TimeProvider timeProvider)
+    public PlaceWaiterOrderCommandHandler(IAppDbContext db, IOrderNumberGenerator numbers, ISessionNumberGenerator sessionNumbers, TimeProvider timeProvider, ICurrentUser currentUser)
     {
         _db = db;
         _numbers = numbers;
+        _sessionNumbers = sessionNumbers;
         _timeProvider = timeProvider;
+        _currentUser = currentUser;
     }
 
     public async Task<PlaceOrderResult> Handle(PlaceWaiterOrderCommand request, CancellationToken cancellationToken)
@@ -64,6 +72,8 @@ public class PlaceWaiterOrderCommandHandler : IRequestHandler<PlaceWaiterOrderCo
             .Where(p => productIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, cancellationToken);
 
+        var stationNames = await _db.KitchenStations.ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+
         foreach (var lineInput in request.Lines)
             OrderLineResolver.Resolve(products, lineInput.MenuItemId, lineInput.VariantId);
 
@@ -72,20 +82,56 @@ public class PlaceWaiterOrderCommandHandler : IRequestHandler<PlaceWaiterOrderCo
         var currency = products[request.Lines[0].MenuItemId].Currency;
 
         var order = Order.Create(orderNumber, customerId, request.TableId, request.Type, nowUtc, currency, request.Notes);
+        order.AssignWaiter(_currentUser.UserId, _currentUser.UserName);
+        order.SetGuestCount(request.GuestCount);
+
+        // Dine-in orders belong to a dining session: use the one supplied, the table's open one, or open a new one.
+        if (request.Type == OrderType.DineIn && request.TableId is { } dineTableId)
+        {
+            var sessionId = await ResolveSessionIdAsync(dineTableId, request.DiningSessionId, request.GuestCount, nowUtc, cancellationToken);
+            order.AttachToSession(sessionId);
+        }
 
         // Merge duplicate product+variant pairs into single lines with summed quantity. The Product id
         // is stored in OrderLine.MenuItemId (an unconstrained Guid) alongside a snapshot of code/name/price.
         foreach (var group in request.Lines.GroupBy(l => (l.MenuItemId, l.VariantId)))
         {
-            var (name, price, currency2, code) = OrderLineResolver.Resolve(products, group.Key.MenuItemId, group.Key.VariantId);
+            var (name, price, currency2, code, stationId) = OrderLineResolver.Resolve(products, group.Key.MenuItemId, group.Key.VariantId);
             var qty = group.Sum(l => l.Quantity);
-            order.AddLine(group.Key.MenuItemId, code, name, price, currency2, qty, group.Key.VariantId);
+            var stationName = stationId is { } sid && stationNames.TryGetValue(sid, out var sn) ? sn : null;
+            var notes = group.Select(l => l.Notes).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
+            order.AddLine(group.Key.MenuItemId, code, name, price, currency2, qty, group.Key.VariantId, stationId, stationName, notes);
         }
 
         _db.Orders.Add(order);
         await _db.SaveChangesAsync(cancellationToken);
 
         return new PlaceOrderResult(order.Id, order.OrderNumber, order.Total, order.Currency);
+    }
+
+    private async Task<Guid> ResolveSessionIdAsync(Guid tableId, Guid? requestedSessionId, int? guestCount, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        if (requestedSessionId is { } sid)
+        {
+            var ok = await _db.DiningSessions.AnyAsync(
+                s => s.Id == sid && s.RestaurantTableId == tableId
+                     && (s.Status == DiningSessionStatus.Open || s.Status == DiningSessionStatus.Billing),
+                cancellationToken);
+            if (ok) return sid;
+        }
+
+        var existing = await _db.DiningSessions
+            .Where(s => s.RestaurantTableId == tableId
+                        && (s.Status == DiningSessionStatus.Open || s.Status == DiningSessionStatus.Billing))
+            .Select(s => s.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (existing != Guid.Empty) return existing;
+
+        var sessionNumber = await _sessionNumbers.NextAsync(nowUtc, cancellationToken);
+        var session = DiningSession.Open(sessionNumber, tableId, guestCount ?? 0, nowUtc,
+            _currentUser.UserId, _currentUser.UserName);
+        _db.DiningSessions.Add(session);
+        return session.Id;
     }
 
     private async Task<Guid> ResolveCustomerIdAsync(string? phone, string? name, CancellationToken cancellationToken)

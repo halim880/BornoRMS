@@ -19,7 +19,9 @@ public record ProductDto(
     string? ImagePath,
     int DisplayOrder,
     bool IsActive,
-    IReadOnlyList<ProductVariantDto> Variants)
+    IReadOnlyList<ProductVariantDto> Variants,
+    Guid? KitchenStationId = null,
+    BornoBit.Restaurant.Domain.Catalog.InventoryMethod InventoryMethod = BornoBit.Restaurant.Domain.Catalog.InventoryMethod.None)
 {
     public bool HasVariants => Variants.Count > 0;
 

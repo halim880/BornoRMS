@@ -1,0 +1,52 @@
+@namespace BornoBit.Restaurant.Web.Components.Pages.Waiter.Dialogs
+
+<BoDialogBody>
+    <span class="tw-prompt">Current waiter: <strong>@(string.IsNullOrWhiteSpace(Content.CurrentWaiter) ? "Unassigned" : Content.CurrentWaiter)</strong></span>
+    @if (Content.Staff.Count == 0)
+    {
+        <BoMessageBar Intent="info">No staff available to assign.</BoMessageBar>
+    }
+    else
+    {
+        <div class="tw-list">
+            @foreach (var s in Content.Staff)
+            {
+                <button type="button" @key="s.Id"
+                        class="tw-row @(_selected?.Id == s.Id ? "tw-row--on" : null)"
+                        @onclick="() => _selected = s">
+                    <span class="tw-name">@s.Name</span>
+                    <span class="tw-roles">@s.Roles</span>
+                </button>
+            }
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close())">Cancel</BoButton>
+    <BoButton Variant="primary" Disabled="@(_selected is null)" OnClick="Confirm">Transfer</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public TransferWaiterInput Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private StaffOption? _selected;
+
+    private void Confirm()
+    {
+        if (_selected is { } s) Dialog.Close(new TransferWaiterResult(s.Id, s.Name));
+    }
+}
+
+<style>
+    .tw-prompt { display:block; font-size:13.5px; color:var(--bo-text-muted); margin-bottom:12px; }
+    .tw-list { display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto; }
+    .tw-row {
+        display:flex; flex-direction:column; align-items:flex-start; gap:2px; cursor:pointer; text-align:left;
+        padding:10px 12px; border:1px solid var(--bo-border); border-radius:10px; background:var(--bo-bg-card); color:var(--bo-text);
+    }
+    .tw-row--on { border-color:var(--bo-primary); background:color-mix(in srgb, var(--bo-primary) 8%, transparent); }
+    .tw-name { font-weight:700; }
+    .tw-roles { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--bo-text-muted); }
+</style>

@@ -29,7 +29,9 @@ public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, IReadOn
                     .Where(v => v.ProductId == p.Id && v.IsActive)
                     .OrderBy(v => v.DisplayOrder).ThenBy(v => v.Name)
                     .Select(v => new ProductVariantDto(v.Id, v.Name, v.Price, v.DisplayOrder))
-                    .ToList()))
+                    .ToList(),
+                p.KitchenStationId,
+                p.InventoryMethod))
             .ToListAsync(cancellationToken);
     }
 }

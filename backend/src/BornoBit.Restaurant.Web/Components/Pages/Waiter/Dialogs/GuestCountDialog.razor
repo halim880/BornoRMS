@@ -1,0 +1,41 @@
+@namespace BornoBit.Restaurant.Web.Components.Pages.Waiter.Dialogs
+
+<BoDialogBody>
+    <div class="gc">
+        <span class="gc-label">@Content.Prompt</span>
+        <div class="gc-stepper">
+            <button type="button" class="gc-btn" @onclick="() => Set(_guests - 1)">−</button>
+            <span class="gc-val">@_guests</span>
+            <button type="button" class="gc-btn gc-btn--plus" @onclick="() => Set(_guests + 1)">+</button>
+        </div>
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close())">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="@(() => Dialog.Close(_guests))">Save</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public GuestCountInput Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private int _guests;
+
+    protected override void OnInitialized() => _guests = Math.Max(0, Content.Guests);
+
+    private void Set(int v) => _guests = Math.Max(0, v);
+}
+
+<style>
+    .gc { display:flex; flex-direction:column; align-items:center; gap:18px; padding:12px 0; }
+    .gc-label { font-size:14px; color:var(--bo-text-muted); }
+    .gc-stepper { display:flex; align-items:center; gap:14px; }
+    .gc-btn {
+        width:54px; height:54px; border-radius:14px; cursor:pointer; font-size:28px; font-weight:700;
+        border:1px solid var(--bo-border); background:var(--bo-bg-card); color:var(--bo-text);
+        display:inline-flex; align-items:center; justify-content:center;
+    }
+    .gc-btn:hover { border-color:var(--bo-primary); color:var(--bo-primary); }
+    .gc-val { min-width:64px; text-align:center; font-size:34px; font-weight:800; }
+</style>

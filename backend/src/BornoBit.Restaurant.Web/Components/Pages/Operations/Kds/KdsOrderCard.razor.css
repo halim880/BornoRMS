@@ -1,0 +1,59 @@
+/* One kitchen ticket. Colours come from CSS custom properties set on the parent .kds-page,
+   so the card follows the board's light/dark theme automatically. */
+.kds-card {
+    background: var(--kds-card, #232f3d);
+    border: 1px solid var(--kds-border, #334155);
+    border-left: 6px solid var(--kds-card-line, #475569);
+    border-radius: 12px;
+    padding: 12px 14px;
+    color: var(--kds-text, #f1f5f9);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.kds-card--normal { border-left-color: var(--kds-card-line); }
+.kds-card--warning { border-left-color: var(--kds-warning); }
+.kds-card--critical { border-left-color: var(--kds-critical); box-shadow: 0 0 0 1px var(--kds-critical) inset; }
+.kds-card--priority { background: var(--kds-card-priority-bg); border-left-color: var(--kds-card-priority-line); }
+
+.kds-card-top { display: flex; align-items: center; justify-content: space-between; }
+.kds-card-id { display: flex; align-items: center; gap: 8px; }
+.kds-order-no { font-size: 20px; font-weight: 800; letter-spacing: .02em; }
+
+.kds-star {
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--kds-star-off);
+    cursor: pointer;
+}
+.kds-star.is-on { color: var(--kds-star-on); }
+
+.kds-card-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; color: var(--kds-meta); }
+.kds-type { font-weight: 700; color: var(--kds-text); }
+.kds-table { color: var(--kds-table); font-weight: 700; }
+
+.kds-card-time { display: flex; align-items: center; justify-content: space-between; }
+.kds-clock { font-size: 13px; color: var(--kds-muted); }
+.kds-timer { font-size: 18px; font-weight: 800; }
+.kds-timer--normal { color: var(--kds-timer-normal); }
+.kds-timer--warning { color: var(--kds-timer-warning); }
+.kds-timer--critical { color: var(--kds-timer-critical); }
+
+.kds-items { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.kds-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 17px; line-height: 1.25; }
+.kds-qty { font-weight: 800; color: var(--kds-qty); min-width: 34px; }
+.kds-name { font-weight: 600; }
+.kds-item-station {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    background: var(--kds-station-bg); color: var(--kds-station-text); padding: 1px 7px; border-radius: 999px;
+}
+.kds-item-note { flex-basis: 100%; padding-left: 42px; font-size: 14px; color: var(--kds-item-note); font-style: italic; }
+
+.kds-note { font-size: 13px; padding: 6px 8px; border-radius: 8px; }
+.kds-note--cust { background: var(--kds-note-cust-bg); color: var(--kds-note-cust-text); }
+.kds-note--kitchen { background: var(--kds-note-kitchen-bg); color: var(--kds-note-kitchen-text); }
+
+.kds-card-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }

@@ -182,10 +182,12 @@ public class AppMenuSeeder
     {
         new("Operations", Icon: "ClipboardTextLtr", Children: new()
         {
+            new("Dashboard", Url: "/operations/dashboard", Icon: "DataPie", RequiredRole: Roles.Manager),
             new("Take Order", Url: "/waiter/orders", Icon: "DocumentAdd"),
             new("POS", Url: "/pos", Icon: "ReceiptMoney"),
             new("Cash Counter", Url: "/operations/cash-counter", Icon: "CalculatorMultiple"),
             new("Orders", Url: "/orders", Icon: "DocumentBulletList"),
+            new("Kitchen Display", Url: "/operations/kitchen-display", Icon: "ClipboardTaskListLtr", RequiredRole: Roles.Chef),
             new("Reports", Icon: "ChartMultiple", RequiredRole: Roles.Manager, Children: new()
             {
                 new("Sales Report",       Url: "/operations/reports/sales",      Icon: "ChartMultiple",      RequiredRole: Roles.Manager),
@@ -203,8 +205,10 @@ public class AppMenuSeeder
         }),
         new("Stock", Icon: "Box", RequiredRole: Roles.Manager, Children: new()
         {
+            new("Stock Dashboard", Url: "/stock/dashboard", Icon: "DataPie", RequiredRole: Roles.Manager),
             new("Low Stock", Url: "/stock/low", Icon: "Alert", RequiredRole: Roles.Manager),
             new("Stock Items", Url: "/stock/items", Icon: "BoxMultiple", RequiredRole: Roles.Manager),
+            new("Recipes", Url: "/stock/recipes", Icon: "BookOpenMicroscope", RequiredRole: Roles.Manager),
             new("Goods Receipts", Url: "/stock/grn", Icon: "ReceiptMoney", RequiredRole: Roles.Manager),
             new("Wastage", Url: "/stock/wastage", Icon: "Delete", RequiredRole: Roles.Manager),
             new("Stock History", Url: "/stock/history", Icon: "History", RequiredRole: Roles.Manager),

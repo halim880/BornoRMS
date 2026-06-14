@@ -1,0 +1,411 @@
+@page "/operations/dashboard"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Reports")]
+@rendermode InteractiveServer
+@using BornoBit.Restaurant.Application.Operations.Dashboard
+@using BornoBit.Restaurant.Domain.Dining
+@using BornoBit.Restaurant.Domain.Ordering
+
+<PageTitle>Operations Dashboard · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Operations Dashboard"
+                Description="Live operational overview — sales, orders, kitchen, tables, staff and alerts.">
+        <Actions>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;" class="no-print">
+                <BoButton Variant="primary" Size="sm" OnClick="@(() => Go("/waiter/orders"))"><BoIcon Name="DocumentAdd" Size="15" /> Create Order</BoButton>
+                <BoButton Variant="outline" Size="sm" OnClick="@(() => Go("/pos"))"><BoIcon Name="ReceiptMoney" Size="15" /> POS</BoButton>
+                <BoButton Variant="outline" Size="sm" OnClick="@(() => OpenReservation())"><BoIcon Name="Calendar" Size="15" /> Reservation</BoButton>
+                <BoButton Variant="outline" Size="sm" OnClick="@(() => Go("/inventory/tables"))"><BoIcon Name="Table" Size="15" /> Tables</BoButton>
+                <BoButton Variant="outline" Size="sm" OnClick="@(() => Go("/operations/reports/sales"))"><BoIcon Name="ChartMultiple" Size="15" /> Reports</BoButton>
+                <BoButton Variant="ghost" Size="sm" OnClick="PrintAsync"><BoIcon Name="Print" Size="15" /> Print</BoButton>
+            </div>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading dashboard…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else
+    {
+        @* ----- Reservation quick panel ----- *@
+        @if (_showReservation)
+        {
+            <div class="bo-panel" style="padding:16px; margin-bottom:16px; border:1px solid var(--bo-primary);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <strong>Create Reservation</strong>
+                    <BoButton Variant="ghost" Size="sm" OnClick="@(() => _showReservation = false)">Close</BoButton>
+                </div>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+                    <label style="display:flex; flex-direction:column; gap:4px; font-size:var(--bo-font-xs); color:var(--bo-text-muted);">Table
+                        <select @bind="_resTableId" style="padding:8px; border:1px solid var(--bo-border-soft); border-radius:8px;">
+                            @foreach (var t in _tables)
+                            {
+                                <option value="@t.TableId">@t.TableNumber (seats @t.Capacity)</option>
+                            }
+                        </select>
+                    </label>
+                    <label style="display:flex; flex-direction:column; gap:4px; font-size:var(--bo-font-xs); color:var(--bo-text-muted);">Customer name
+                        <input @bind="_resName" style="padding:8px; border:1px solid var(--bo-border-soft); border-radius:8px;" />
+                    </label>
+                    <label style="display:flex; flex-direction:column; gap:4px; font-size:var(--bo-font-xs); color:var(--bo-text-muted);">Phone
+                        <input @bind="_resPhone" style="padding:8px; border:1px solid var(--bo-border-soft); border-radius:8px;" />
+                    </label>
+                    <label style="display:flex; flex-direction:column; gap:4px; font-size:var(--bo-font-xs); color:var(--bo-text-muted);">Party
+                        <input type="number" min="1" @bind="_resParty" style="width:70px; padding:8px; border:1px solid var(--bo-border-soft); border-radius:8px;" />
+                    </label>
+                    <BoButton Variant="primary" Size="sm" OnClick="SubmitReservation">Save</BoButton>
+                </div>
+                @if (_resMessage is not null)
+                {
+                    <div style="margin-top:8px; color:var(--bo-danger);">@_resMessage</div>
+                }
+            </div>
+        }
+
+        @* ===== Section 1: KPI summary cards ===== *@
+        <div class="bo-grid-4" style="margin-bottom:16px;">
+            <div class="bo-panel" style="padding:16px;">
+                <div style="display:flex; align-items:center; gap:8px; color:var(--bo-text-muted); font-size:var(--bo-font-sm);"><BoIcon Name="Money" Size="18" /> Today's Sales</div>
+                <div style="font-size:var(--bo-font-3xl, 28px); font-weight:700; margin-top:6px;">@Money(_summary!.TodayRevenue)</div>
+                <div style="display:flex; gap:14px; margin-top:8px; font-size:var(--bo-font-sm); color:var(--bo-text-subtle);">
+                    <span><strong>@_summary.TodayOrderCount</strong> orders</span>
+                    <span>AOV <strong>@_summary.AverageOrderValue.ToString("#,##0.00")</strong></span>
+                </div>
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <div style="display:flex; align-items:center; gap:8px; color:var(--bo-text-muted); font-size:var(--bo-font-sm);"><BoIcon Name="Table" Size="18" /> Tables</div>
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <BoBadge Tone="warning">@_summary.OccupiedTables Occupied</BoBadge>
+                    <BoBadge Tone="success">@_summary.AvailableTables Available</BoBadge>
+                    <BoBadge Tone="info">@_summary.ReservedTables Reserved</BoBadge>
+                    <BoBadge Tone="danger">@_summary.WaitingPaymentTables Awaiting Pay</BoBadge>
+                </div>
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <div style="display:flex; align-items:center; gap:8px; color:var(--bo-text-muted); font-size:var(--bo-font-sm);"><BoIcon Name="ClipboardTextLtr" Size="18" /> Kitchen</div>
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <BoBadge Tone="neutral">@_summary.PendingOrders Pending</BoBadge>
+                    <BoBadge Tone="warning">@_summary.PreparingOrders Preparing</BoBadge>
+                    <BoBadge Tone="primary">@_summary.ReadyOrders Ready</BoBadge>
+                </div>
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <div style="display:flex; align-items:center; gap:8px; color:var(--bo-text-muted); font-size:var(--bo-font-sm);"><BoIcon Name="People" Size="18" /> Customer Activity</div>
+                <div style="display:flex; gap:14px; margin-top:10px; font-size:var(--bo-font-sm); color:var(--bo-text-subtle); flex-wrap:wrap;">
+                    <span><strong>@_summary.ActiveDiningSessions</strong> sessions</span>
+                    <span><strong>@_summary.QrOrdersToday</strong> QR</span>
+                    <span><strong>@_summary.WalkInOrdersToday</strong> walk-in</span>
+                </div>
+            </div>
+        </div>
+
+        @* ===== Section 2: Live restaurant overview ===== *@
+        <div class="bo-panel" style="padding:16px; margin-bottom:16px;">
+            <h3 style="margin:0 0 12px;">Live Floor</h3>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px;">
+                @foreach (var t in _tables)
+                {
+                    <button @onclick="@(() => SelectTable(t))" style="text-align:left; cursor:pointer; padding:12px; border-radius:10px; border:1px solid var(--bo-border-soft); background:var(--bo-bg-card); @(_selectedTable?.TableId == t.TableId ? "outline:2px solid var(--bo-primary);" : "")">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong>@t.TableNumber</strong>
+                            <BoBadge Tone="@TableTone(t.Status)">@t.Status</BoBadge>
+                        </div>
+                        <div style="font-size:var(--bo-font-xs); color:var(--bo-text-subtle); margin-top:6px;">Seats @t.Capacity@(t.GuestCount is { } g ? $" · {g} guests" : "")</div>
+                        @if (t.SessionMinutes is { } m)
+                        {
+                            <div style="font-size:var(--bo-font-xs); color:var(--bo-text-muted); margin-top:2px;">@m min · @t.CurrentBill.ToString("#,##0") @t.Currency</div>
+                        }
+                    </button>
+                }
+            </div>
+            @if (_selectedTable is { } sel)
+            {
+                <div style="margin-top:12px; padding:12px; border-radius:10px; background:var(--bo-bg-soft);">
+                    <strong>Table @sel.TableNumber</strong> — @sel.Status
+                    <div style="font-size:var(--bo-font-sm); color:var(--bo-text-muted); margin-top:4px;">
+                        Capacity @sel.Capacity@(sel.GuestCount is { } g ? $" · {g} guests" : "")
+                        @if (sel.OrderNumber is not null) { <text> · Order @sel.OrderNumber · @sel.SessionMinutes min · Bill @Money(sel.CurrentBill)</text> }
+                    </div>
+                    @if (sel.OrderId is { } oid)
+                    {
+                        <div style="margin-top:8px;"><BoButton Variant="outline" Size="sm" OnClick="@(() => Go($"/pos"))">Open in POS</BoButton></div>
+                    }
+                    else if (sel.Status == DerivedTableStatus.Available)
+                    {
+                        <div style="margin-top:8px;"><BoButton Variant="outline" Size="sm" OnClick="@(() => OpenReservation(sel.TableId))">Reserve</BoButton></div>
+                    }
+                </div>
+            }
+        </div>
+
+        @* ===== Section 3: Sales analytics ===== *@
+        <div class="bo-panel" style="padding:16px; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                <h3 style="margin:0;">Sales Analytics</h3>
+                <div class="no-print" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                    @foreach (var r in new[] { DashboardRange.Today, DashboardRange.Yesterday, DashboardRange.Last7Days, DashboardRange.ThisMonth })
+                    {
+                        <BoButton Size="sm" Variant="@(_range == r ? "primary" : "ghost")" OnClick="@(() => SetRange(r))">@RangeLabel(r)</BoButton>
+                    }
+                    <BoDatePicker DateTimeValue="_customFrom" DateTimeValueChanged="OnCustomFrom" Label="From" />
+                    <BoDatePicker DateTimeValue="_customTo" DateTimeValueChanged="OnCustomTo" Label="To" />
+                </div>
+            </div>
+            <div class="bo-grid-3">
+                <div>
+                    <div style="font-size:var(--bo-font-sm); color:var(--bo-text-muted); margin-bottom:8px;">Sales by Hour</div>
+                    <BoAreaChart TItem="HourlySalesDto" Data="_hourly" ValueSelector="h => (double)h.Revenue"
+                                 Height="180" StartLabel="00:00" EndLabel="23:00" />
+                </div>
+                <div>
+                    <div style="font-size:var(--bo-font-sm); color:var(--bo-text-muted); margin-bottom:8px;">Sales by Category</div>
+                    <BoPieChart TItem="CategorySalesDto" Data="_byCategory" ValueSelector="c => (double)c.Revenue"
+                                LabelSelector="c => c.Category" ValueFormat='v => v.ToString("#,##0")' SegmentsLabel="categories" />
+                </div>
+                <div>
+                    <div style="font-size:var(--bo-font-sm); color:var(--bo-text-muted); margin-bottom:8px;">Top Selling Items</div>
+                    <BoBarChart TItem="BornoBit.Restaurant.Application.Ordering.Queries.TopItemRowDto" Data="_topItems"
+                                ValueSelector="i => (double)i.QuantitySold" LabelSelector="i => i.Name"
+                                SecondaryText='i => i.Revenue.ToString("#,##0")' LabelWidth="120" />
+                </div>
+            </div>
+        </div>
+
+        @* ===== Section 4: Live order monitoring ===== *@
+        <div class="bo-panel" style="padding:16px; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                <h3 style="margin:0;">Live Orders</h3>
+                <div class="no-print" style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <BoButton Size="sm" Variant="@(_orderFilter is null ? "primary" : "ghost")" OnClick="@(() => FilterOrders(null))">All</BoButton>
+                    @foreach (var s in new[] { OrderStatus.Placed, OrderStatus.Confirmed, OrderStatus.Preparing, OrderStatus.Ready, OrderStatus.Served, OrderStatus.Completed })
+                    {
+                        <BoButton Size="sm" Variant="@(_orderFilter == s ? "primary" : "ghost")" OnClick="@(() => FilterOrders(s))">@s</BoButton>
+                    }
+                </div>
+            </div>
+            @if (_orders.Items.Count == 0)
+            {
+                <EmptyState Description="No orders match this filter." />
+            }
+            else
+            {
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:var(--bo-bg-soft); text-align:left;">
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Order No</th>
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Table</th>
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Source</th>
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Time</th>
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Amount</th>
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var o in _orders.Items)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:8px 12px; font-weight:600;">@o.OrderNumber</td>
+                                    <td style="padding:8px 12px;">@(o.TableNumber ?? "—")</td>
+                                    <td style="padding:8px 12px;">@o.OrderType <span style="color:var(--bo-text-subtle); font-size:var(--bo-font-xs);">(@o.Channel)</span></td>
+                                    <td style="padding:8px 12px; color:var(--bo-text-muted); white-space:nowrap;">@o.OrderedAtUtc.ToLocalTime().ToString("HH:mm")</td>
+                                    <td style="padding:8px 12px; text-align:right;">@o.Total.ToString("#,##0.00")</td>
+                                    <td style="padding:8px 12px;"><BoBadge Tone="@StatusTone(o.Status)">@o.Status</BoBadge></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_orders.TotalPages > 1)
+                {
+                    <div class="no-print" style="display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-top:10px;">
+                        <BoButton Size="sm" Variant="ghost" Disabled="@(!_orders.HasPrevious)" OnClick="@(() => OrdersPage(_orders.Page - 1))">Prev</BoButton>
+                        <span style="font-size:var(--bo-font-sm); color:var(--bo-text-muted);">Page @_orders.Page / @_orders.TotalPages</span>
+                        <BoButton Size="sm" Variant="ghost" Disabled="@(!_orders.HasNext)" OnClick="@(() => OrdersPage(_orders.Page + 1))">Next</BoButton>
+                    </div>
+                }
+            }
+        </div>
+
+        @* ===== Section 5: Kitchen performance ===== *@
+        <div class="bo-grid-2" style="margin-bottom:16px;">
+            <div class="bo-panel" style="padding:16px;">
+                <h3 style="margin:0 0 12px;">Kitchen Performance</h3>
+                <div class="bo-grid-2">
+                    <div><div style="color:var(--bo-text-muted); font-size:var(--bo-font-sm);">Avg Prep Time</div><div style="font-size:var(--bo-font-xl, 22px); font-weight:700;">@_kitchen!.AveragePrepMinutes min</div></div>
+                    <div><div style="color:var(--bo-text-muted); font-size:var(--bo-font-sm);">Completed Today</div><div style="font-size:var(--bo-font-xl, 22px); font-weight:700;">@_kitchen.CompletedToday</div></div>
+                    <div>
+                        <div style="color:var(--bo-text-muted); font-size:var(--bo-font-sm);">Waiting &gt; 10 min</div>
+                        <div style="font-size:var(--bo-font-xl, 22px); font-weight:700; color:@(_kitchen.OrdersWaitingOver10Min > 0 ? "var(--bo-danger)" : "inherit")">@_kitchen.OrdersWaitingOver10Min</div>
+                    </div>
+                    <div>
+                        <div style="color:var(--bo-text-muted); font-size:var(--bo-font-sm);">Longest Waiting</div>
+                        <div style="font-size:var(--bo-font-xl, 22px); font-weight:700;">@(_kitchen.LongestWaitingMinutes is { } lw ? $"{lw} min" : "—")</div>
+                        @if (_kitchen.LongestWaitingOrderNumber is not null) { <div style="font-size:var(--bo-font-xs); color:var(--bo-text-subtle);">@_kitchen.LongestWaitingOrderNumber</div> }
+                    </div>
+                </div>
+                @if (_kitchen.OrdersWaitingOver10Min > 0)
+                {
+                    <div style="margin-top:12px;"><BoMessageBar Intent="warning">@_kitchen.OrdersWaitingOver10Min order(s) delayed beyond 10 minutes.</BoMessageBar></div>
+                }
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <h3 style="margin:0 0 12px;">Kitchen Load</h3>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <BoBadge Tone="neutral">@_kitchen.PendingCount Pending</BoBadge>
+                    <BoBadge Tone="warning">@_kitchen.PreparingCount Preparing</BoBadge>
+                    <BoBadge Tone="primary">@_kitchen.ReadyCount Ready</BoBadge>
+                </div>
+                <div style="margin-top:12px;"><BoButton Variant="outline" Size="sm" OnClick="@(() => Go("/orders"))">View Orders</BoButton></div>
+            </div>
+        </div>
+
+        @* ===== Section 6: Customer requests ===== *@
+        <div class="bo-panel" style="padding:16px; margin-bottom:16px;">
+            <h3 style="margin:0 0 12px;">Customer Requests</h3>
+            @if (_requests.Count == 0)
+            {
+                <EmptyState Description="No pending requests." />
+            }
+            else
+            {
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Table</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Request</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Waiting</th>
+                            <th style="padding:8px 12px; text-align:right;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _requests)
+                        {
+                            <tr style="border-top:1px solid var(--bo-border-soft);">
+                                <td style="padding:8px 12px; font-weight:600;">@r.TableNumber</td>
+                                <td style="padding:8px 12px;"><BoBadge Tone="warning">@RequestLabel(r.Type)</BoBadge></td>
+                                <td style="padding:8px 12px; color:@(r.WaitingMinutes > 5 ? "var(--bo-danger)" : "var(--bo-text-muted)")">@r.WaitingMinutes min</td>
+                                <td style="padding:8px 12px; text-align:right;"><BoButton Size="sm" Variant="success" OnClick="@(() => ResolveRequest(r.Id))">Resolve</BoButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        @* ===== Section 7: Inventory alerts ===== *@
+        <div class="bo-grid-3" style="margin-bottom:16px;">
+            <div class="bo-panel" style="padding:16px;">
+                <h3 style="margin:0 0 12px;">Low Stock</h3>
+                @if (_inventory!.LowStock.Count == 0) { <EmptyState Description="All good." /> }
+                else
+                {
+                    @foreach (var i in _inventory.LowStock)
+                    {
+                        <div style="display:flex; justify-content:space-between; padding:6px 0; border-top:1px solid var(--bo-border-soft); font-size:var(--bo-font-sm);">
+                            <span>@i.Name</span>
+                            <span style="color:var(--bo-warning);">@i.QtyOnHand / @i.ReorderLevel @i.UnitCode</span>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <h3 style="margin:0 0 12px;">Out of Stock</h3>
+                @if (_inventory.OutOfStock.Count == 0) { <EmptyState Description="None." /> }
+                else
+                {
+                    @foreach (var i in _inventory.OutOfStock)
+                    {
+                        <div style="display:flex; justify-content:space-between; padding:6px 0; border-top:1px solid var(--bo-border-soft); font-size:var(--bo-font-sm); color:var(--bo-danger);">
+                            <span>@i.Name</span>
+                            <span>@i.QtyOnHand @i.UnitCode</span>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <h3 style="margin:0 0 12px;">Today's Consumption</h3>
+                @if (_inventory.TodaysConsumption.Count == 0) { <EmptyState Description="No consumption recorded." /> }
+                else
+                {
+                    @foreach (var c in _inventory.TodaysConsumption)
+                    {
+                        <div style="display:flex; justify-content:space-between; padding:6px 0; border-top:1px solid var(--bo-border-soft); font-size:var(--bo-font-sm);">
+                            <span>@c.Name</span>
+                            <span style="font-weight:600;">@c.QtyConsumed.ToString("#,##0.##") @c.UnitCode</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* ===== Section 8 + 9: Staff leaderboard + revenue breakdown ===== *@
+        <div class="bo-grid-2" style="margin-bottom:16px;">
+            <div class="bo-panel" style="padding:16px;">
+                <h3 style="margin:0 0 12px;">Staff Leaderboard (today)</h3>
+                @if (_staff.Count == 0) { <EmptyState Description="No staff orders yet today." /> }
+                else
+                {
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:var(--bo-bg-soft); text-align:left;">
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Waiter</th>
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Orders</th>
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Tables</th>
+                                <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in _staff)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:8px 12px; font-weight:600;">@s.WaiterName</td>
+                                    <td style="padding:8px 12px; text-align:right;">@s.OrdersProcessed</td>
+                                    <td style="padding:8px 12px; text-align:right;">@s.TablesAssigned</td>
+                                    <td style="padding:8px 12px; text-align:right; font-weight:600;">@s.Revenue.ToString("#,##0.00")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <h3 style="margin:0 0 12px;">Revenue Breakdown</h3>
+                <div class="bo-grid-2" style="gap:8px;">
+                    @RevRow("Dine-In", _revenue!.DineInRevenue)
+                    @RevRow("Takeaway", _revenue.TakeawayRevenue)
+                    @RevRow("Delivery", _revenue.DeliveryRevenue)
+                    @RevRow("QR Ordering", _revenue.QrOrderingRevenue)
+                    @RevRow("Discount", _revenue.DiscountAmount, "var(--bo-danger)")
+                    @RevRow("Tax Collected", _revenue.TaxCollected)
+                    @RevRow("Service Charge", _revenue.ServiceChargeCollected)
+                    @RevRow("Grand Total", _revenue.GrandTotal, "var(--bo-success)")
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private static string RangeLabel(DashboardRange r) => r switch
+    {
+        DashboardRange.Today => "Today",
+        DashboardRange.Yesterday => "Yesterday",
+        DashboardRange.Last7Days => "Last 7 Days",
+        DashboardRange.ThisMonth => "This Month",
+        _ => "Custom"
+    };
+
+    private RenderFragment RevRow(string label, decimal value, string? color = null) => __builder =>
+    {
+        <div style="display:flex; flex-direction:column; padding:8px; background:var(--bo-bg-soft); border-radius:8px;">
+            <span style="font-size:var(--bo-font-xs); color:var(--bo-text-muted);">@label</span>
+            <span style="font-size:var(--bo-font-lg, 18px); font-weight:700; color:@(color ?? "inherit")">@value.ToString("#,##0.00")</span>
+        </div>
+    };
+}

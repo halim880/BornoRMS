@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cash Counter — BornoBit Manual</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="brand"><span class="logo">🍽</span>BornoBit Manual</div>
+  <input type="search" id="navSearch" placeholder="Search…" autocomplete="off" aria-label="Search manual">
+  <ul class="navlist">
+    <li><a href="index.html">Home</a></li>
+    <li class="group">Operations</li>
+    <li><a href="orders.html">Orders</a></li>
+    <li><a href="pos.html">POS</a></li>
+    <li><a href="kitchen-display.html">Kitchen Display</a></li>
+    <li><a href="dashboard.html">Operations Dashboard</a></li>
+    <li><a href="cash-counter.html">Cash Counter</a></li>
+    <li class="group">Inventory</li>
+    <li><a href="inventory.html">Menu &amp; Tables</a></li>
+    <li><a href="stock.html">Stock (Raw)</a></li>
+    <li><a href="store.html">Store (Finished)</a></li>
+    <li class="group">Finance</li>
+    <li><a href="accounts.html">Accounts</a></li>
+    <li><a href="reports.html">Reports</a></li>
+    <li class="group">Administration</li>
+    <li><a href="users-roles.html">Users &amp; Roles</a></li>
+    <li><a href="menu-permissions.html">Menu &amp; Modules</a></li>
+    <li><a href="numbering.html">Numbering</a></li>
+    <li><a href="settings.html">Settings</a></li>
+  </ul>
+</nav>
+<main class="content">
+  <header class="topbar"><h1>Cash Counter</h1><button id="themeToggle" aria-label="Toggle theme">🌙</button></header>
+  <article>
+    <p><span class="route">/operations/cash-counter</span></p>
+    <div class="roles"><strong>Who can access:</strong>
+      <span class="role-chip">Cashier</span><span class="role-chip">Manager</span>
+      <span class="role-chip">Admin</span><span class="role-chip">SuperAdmin</span></div>
+
+    <h2>Purpose</h2>
+    <p>Reconcile physical cash in the drawer against the cash recorded by transactions for a shift/day.</p>
+
+    <h2>How to reconcile</h2>
+    <ol>
+      <li>Open <code>/operations/cash-counter</code>.</li>
+      <li>Count the physical cash and enter the amount.</li>
+      <li>Compare against the system's recorded cash total.</li>
+      <li>Review the difference (over/short) and save the count.</li>
+    </ol>
+
+    <h2>Screenshot</h2>
+    <div class="shot"><img src="assets/img/cash-counter.png" alt="Cash counter reconciliation form" onerror="this.style.display='none';this.parentNode.insertAdjacentText('beforeend','Screenshot placeholder — capture assets/img/cash-counter.png')"></div>
+    <!-- TODO: capture screenshot assets/img/cash-counter.png -->
+
+    <div class="callout"><strong>Tip.</strong> Pair this with <a href="accounts.html">Accounts → Cash Accounts</a>
+    and the Cash Book report for a full daily cash trail.</div>
+
+    <footer class="updated">Last updated: 2026-06-14</footer>
+  </article>
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>

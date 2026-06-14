@@ -1,7 +1,8 @@
-import { apiFetch, type MenuCategory, type TableDto } from "@/lib/api";
+import { apiFetch, resolveImageUrl, type MenuCategory, type TableDto } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 import AddToCartButton from "./AddToCartButton";
 import TableCapture from "@/components/TableCapture";
+import CallWaiter from "@/components/CallWaiter";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export default async function MenuPage({
         <p className="text-sm text-slate-500">Browse and add items to your cart.</p>
       </div>
 
+      <CallWaiter />
+
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
       )}
@@ -47,11 +50,20 @@ export default async function MenuPage({
           <h2 className="text-lg font-semibold text-slate-800">{cat.name}</h2>
           {cat.description && <p className="text-sm text-slate-500">{cat.description}</p>}
           <div className="grid gap-3 sm:grid-cols-2">
-            {cat.items.map((item) => (
+            {cat.items.map((item) => {
+              const img = resolveImageUrl(item.imageUrl);
+              return (
               <div
                 key={item.id}
                 className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4"
               >
+                {img && (
+                  <img
+                    src={img}
+                    alt={item.name}
+                    className="mr-3 h-16 w-16 flex-shrink-0 rounded-lg border border-slate-200 object-cover"
+                  />
+                )}
                 <div className="pr-3">
                   <div className="font-medium">{item.name}</div>
                   {item.banglaName && <div className="text-sm text-slate-500">{item.banglaName}</div>}
@@ -64,7 +76,8 @@ export default async function MenuPage({
                 </div>
                 <AddToCartButton item={item} />
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ))}

@@ -1,0 +1,126 @@
+@page "/operations/kitchen-display"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Kitchen")]
+@rendermode InteractiveServer
+@using BornoBit.Restaurant.Domain.Ordering
+@using BornoBit.Restaurant.Application.Kitchen.Queries
+@using BornoBit.Restaurant.Web.Components.Pages.Operations.Kds
+
+<PageTitle>Kitchen Display · BornoBit.Restaurant</PageTitle>
+
+<div class="kds-page @(_light ? "kds-light" : "")" @ref="_pageEl">
+    <header class="kds-header">
+        <div class="kds-title">
+            <h2>Kitchen Display</h2>
+            <span class="kds-conn kds-conn--@_connState" title="Real-time connection">● @ConnLabel</span>
+        </div>
+        <div class="kds-header-actions">
+            <button type="button" class="kds-ctl" @onclick="ToggleTheme" title="Switch light / dark">
+                @(_light ? "🌙 Dark" : "☀️ Light")
+            </button>
+            <button type="button" class="kds-ctl" @onclick="ToggleMute" title="Mute notifications">
+                @(_muted ? "🔇 Muted" : "🔔 Sound")
+            </button>
+            <button type="button" class="kds-ctl" @onclick="ToggleFullscreen" title="Full screen">
+                @(_isFullscreen ? "⤢ Exit" : "⤢ Full screen")
+            </button>
+            <button type="button" class="kds-ctl" @onclick="ReloadAsync" title="Refresh">↻</button>
+        </div>
+    </header>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading kitchen display…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else
+    {
+        <div class="kds-metrics">
+            <div class="kds-metric kds-metric--pending"><span class="kds-metric-n">@PendingCount</span><span class="kds-metric-l">Pending</span></div>
+            <div class="kds-metric kds-metric--prep"><span class="kds-metric-n">@PreparingCount</span><span class="kds-metric-l">Preparing</span></div>
+            <div class="kds-metric kds-metric--ready"><span class="kds-metric-n">@ReadyCount</span><span class="kds-metric-l">Ready</span></div>
+            <div class="kds-metric"><span class="kds-metric-n">@(_metrics?.AveragePrepMinutes ?? 0) m</span><span class="kds-metric-l">Avg prep</span></div>
+            <div class="kds-metric @(_metrics?.LongestWaitingMinutes >= 20 ? "kds-metric--alert" : "")">
+                <span class="kds-metric-n">@(_metrics?.LongestWaitingMinutes?.ToString() ?? "–") m</span>
+                <span class="kds-metric-l">Longest wait @(_metrics?.LongestWaitingOrderNumber)</span>
+            </div>
+            <div class="kds-metric"><span class="kds-metric-n">@(_metrics?.CompletedToday ?? 0)</span><span class="kds-metric-l">Done today</span></div>
+        </div>
+
+        <div class="kds-stations">
+            <button type="button" class="kds-tab @(_stationId is null ? "is-on" : "")" @onclick="() => SelectStation(null)">All Stations</button>
+            @foreach (var s in _stations)
+            {
+                <button type="button"
+                        class="kds-tab @(_stationId == s.Id ? "is-on" : "")"
+                        style="@(s.ColorHex is not null ? $"--kds-tab:{s.ColorHex}" : "")"
+                        @onclick="() => SelectStation(s.Id)">@s.Name</button>
+            }
+        </div>
+
+        <div class="kds-filters">
+            <select class="kds-input" @onchange="OnTypeFilter">
+                <option value="">All types</option>
+                @foreach (var t in Enum.GetValues<OrderType>())
+                {
+                    <option value="@t" selected="@(_typeFilter == t)">@t</option>
+                }
+            </select>
+            <input class="kds-input" placeholder="Table #" value="@_tableFilter" @onchange="OnTableFilter" />
+            <input class="kds-input" placeholder="Search order #" value="@_searchOrder" @onchange="OnSearch" />
+            <button type="button" class="kds-ctl" @onclick="ClearFilters">Clear</button>
+        </div>
+
+        <div class="kds-board">
+            @RenderColumn("Pending", _board?.Pending, "pending")
+            @RenderColumn("Preparing", _board?.Preparing, "prep")
+            @RenderColumn("Ready", _board?.Ready, "ready")
+        </div>
+    }
+</div>
+
+@if (_editingCard is not null)
+{
+    <div class="kds-overlay" @onclick="CancelNotes">
+        <div class="kds-notes-editor" @onclick:stopPropagation="true">
+            <h3>Kitchen notes · @_editingCard.OrderNumber</h3>
+            <p class="kds-notes-hint">Internal only — not shown to the customer.</p>
+            <textarea class="kds-input" rows="4" @bind="_editingNotes" placeholder="e.g. Waiting for ingredients, cooking started…"></textarea>
+            <div class="kds-notes-actions">
+                <BoButton Variant="ghost" OnClick="CancelNotes">Cancel</BoButton>
+                <BoButton Variant="primary" OnClick="SaveNotes">Save</BoButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private RenderFragment RenderColumn(string title, IReadOnlyList<KitchenOrderCardDto>? cards, string tone) => __builder =>
+    {
+        <div class="kds-col kds-col--@tone">
+            <div class="kds-col-head">
+                <span>@title</span>
+                <span class="kds-col-count">@(cards?.Count ?? 0)</span>
+            </div>
+            <div class="kds-col-body">
+                @if (cards is null || cards.Count == 0)
+                {
+                    <div class="kds-empty">No orders</div>
+                }
+                else
+                {
+                    <Virtualize Items="cards.ToList()" Context="card" ItemSize="220" OverscanCount="4">
+                        <KdsOrderCard Card="card"
+                                      Now="_nowUtc"
+                                      ShowStationTag="_stationId is null"
+                                      OnAdvance="Advance"
+                                      OnTogglePriority="TogglePriority"
+                                      OnEditNotes="EditNotes" />
+                    </Virtualize>
+                }
+            </div>
+        </div>
+    };
+}

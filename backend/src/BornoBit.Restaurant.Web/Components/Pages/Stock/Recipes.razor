@@ -1,0 +1,57 @@
+@page "/stock/recipes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+
+<PageTitle>Recipes · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Recipes (BOM)"
+                Description="Define which ingredients each menu item consumes. When an order is confirmed, the recipe is exploded and stock is deducted.">
+        <Actions>
+            <BoButton Variant="primary" OnClick="AddAsync">+ Add recipe</BoButton>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_rows.Count == 0)
+    {
+        <EmptyState Description="No recipe-based products yet. Click “Add recipe” to define one." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:8px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Code</th>
+                        <th style="padding:8px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Product</th>
+                        <th style="padding:8px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Yield</th>
+                        <th style="padding:8px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Ingredients</th>
+                        <th style="padding:8px 14px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:8px 14px; color:var(--bo-text-muted);">@r.ProductCode</td>
+                            <td style="padding:8px 14px;"><strong>@r.ProductName</strong></td>
+                            <td style="padding:8px 14px; text-align:right;">@r.Yield.ToString("0.###")</td>
+                            <td style="padding:8px 14px; text-align:right;">@r.ItemCount</td>
+                            <td style="padding:8px 14px; text-align:right; white-space:nowrap;">
+                                <BoButton Variant="ghost" OnClick="@(() => EditAsync(r.ProductId, r.ProductName))">Edit</BoButton>
+                                <BoButton Variant="ghost" OnClick="@(() => DeleteAsync(r))">Delete</BoButton>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

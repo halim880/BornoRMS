@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kitchen Display — BornoBit Manual</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="brand"><span class="logo">🍽</span>BornoBit Manual</div>
+  <input type="search" id="navSearch" placeholder="Search…" autocomplete="off" aria-label="Search manual">
+  <ul class="navlist">
+    <li><a href="index.html">Home</a></li>
+    <li class="group">Operations</li>
+    <li><a href="orders.html">Orders</a></li>
+    <li><a href="pos.html">POS</a></li>
+    <li><a href="kitchen-display.html">Kitchen Display</a></li>
+    <li><a href="dashboard.html">Operations Dashboard</a></li>
+    <li><a href="cash-counter.html">Cash Counter</a></li>
+    <li class="group">Inventory</li>
+    <li><a href="inventory.html">Menu &amp; Tables</a></li>
+    <li><a href="stock.html">Stock (Raw)</a></li>
+    <li><a href="store.html">Store (Finished)</a></li>
+    <li class="group">Finance</li>
+    <li><a href="accounts.html">Accounts</a></li>
+    <li><a href="reports.html">Reports</a></li>
+    <li class="group">Administration</li>
+    <li><a href="users-roles.html">Users &amp; Roles</a></li>
+    <li><a href="menu-permissions.html">Menu &amp; Modules</a></li>
+    <li><a href="numbering.html">Numbering</a></li>
+    <li><a href="settings.html">Settings</a></li>
+  </ul>
+</nav>
+<main class="content">
+  <header class="topbar"><h1>Kitchen Display (KDS)</h1><button id="themeToggle" aria-label="Toggle theme">🌙</button></header>
+  <article>
+    <p><span class="route">/operations/kitchen-display</span></p>
+    <div class="roles"><strong>Who can access:</strong>
+      <span class="role-chip">Chef</span><span class="role-chip">Manager</span>
+      <span class="role-chip">Admin</span><span class="role-chip">SuperAdmin</span></div>
+
+    <h2>Purpose</h2>
+    <p>Full-screen kitchen ticket board. New orders appear live; the kitchen works tickets by station and
+    priority and marks items as they progress.</p>
+
+    <h2>How to use</h2>
+    <ol>
+      <li>Open <code>/operations/kitchen-display</code> on the kitchen screen.</li>
+      <li>Click <strong>Fullscreen</strong> for the wall display; toggle <strong>Sound</strong> for new-order alerts.</li>
+      <li>Each ticket shows table, items, quantities, kitchen notes, and priority.</li>
+      <li>Advance a ticket as it's cooked → ready. Ready tickets clear from the active board.</li>
+    </ol>
+
+    <h2>Screenshot</h2>
+    <div class="shot"><img src="assets/img/kitchen-display.png" alt="Kitchen ticket board" onerror="this.style.display='none';this.parentNode.insertAdjacentText('beforeend','Screenshot placeholder — capture assets/img/kitchen-display.png')"></div>
+    <!-- TODO: capture screenshot assets/img/kitchen-display.png -->
+
+    <div class="callout"><strong>Tip.</strong> The KDS shares the live data bridge with the Operations
+    Dashboard — status changes propagate to both instantly.</div>
+
+    <footer class="updated">Last updated: 2026-06-14</footer>
+  </article>
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>

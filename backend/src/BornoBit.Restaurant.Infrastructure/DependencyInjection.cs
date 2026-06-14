@@ -43,7 +43,9 @@ public static class DependencyInjection
             sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 
         services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();
+        services.AddScoped<ISessionNumberGenerator, SessionNumberGenerator>();
         services.AddScoped<ITransactionNumberGenerator, TransactionNumberGenerator>();
+        services.AddScoped<IDrawerNumberGenerator, DrawerNumberGenerator>();
         services.AddScoped<ISmsSender, StubSmsSender>();
         services.AddScoped<ICustomerTokenService, CustomerTokenService>();
         services.AddScoped<IStaffTokenService, StaffTokenService>();
@@ -52,14 +54,17 @@ public static class DependencyInjection
         services.AddScoped<SuperAdminSeeder>();
         services.AddScoped<MenuSeeder>();
         services.AddScoped<TableSeeder>();
+        services.AddScoped<KitchenStationSeeder>();
         services.AddScoped<CustomerSeeder>();
         services.AddScoped<TenantSeeder>();
         services.AddScoped<AppMenuSeeder>();
         services.AddScoped<InventorySeeder>();
         services.AddScoped<UnitSeeder>();
         services.AddScoped<StockSeeder>();
+        services.AddScoped<RecipeSeeder>();
         services.AddScoped<StoreUnitSeeder>();
         services.AddScoped<AccountingSeeder>();
+        services.AddScoped<BillingSettingsSeeder>();
 
         services
             .AddIdentityCore<ApplicationUser>(options =>
@@ -73,6 +78,12 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddSignInManager()
             .AddDefaultTokenProviders();
+
+        // Payment provider adapter — demo/mock implementation. Swap for a real gateway in production (see README).
+        services.AddSingleton<Application.Ordering.Payments.IPaymentGateway, Payments.MockPaymentGateway>();
+
+        // Instant manager-override authorization (large discounts / voids / refunds at the till).
+        services.AddScoped<Application.Common.Security.IManagerApprovalService, ManagerApprovalService>();
 
         return services;
     }

@@ -1,0 +1,131 @@
+@using System.Globalization
+@using BornoBit.Restaurant.Application.Accounting.Drawers
+@using MediatR
+@inject ISender Sender
+@inject IBoToastService ToastService
+
+<BoDialogBody>
+    @if (_loading)
+    {
+        <LoadingState Message="Loading drawer…" />
+    }
+    else
+    {
+        <div class="drw-grid">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+
+            @if (_drawer is null)
+            {
+                <BoMessageBar Intent="info">No open drawer. Open one to start taking cash payments.</BoMessageBar>
+                <BoInput Value="_openingBalance" ValueChanged="@(v => _openingBalance = v)" Immediate="true" Type="number" Label="Opening float" Placeholder="0" />
+                <BoInput @bind-Value="_openNotes" Label="Notes (optional)" />
+            }
+            else
+            {
+                <div class="drw-summary">
+                    <div class="drw-row"><span>Drawer</span><span class="bo-code bo-code-slate">@_drawer.DrawerNumber</span></div>
+                    <div class="drw-row"><span>Cashier</span><span>@_drawer.CashierName</span></div>
+                    <div class="drw-row"><span>Opening float</span><span>@_drawer.OpeningBalance.ToString("0.##")</span></div>
+                    <div class="drw-row"><span>Cash received</span><span>@_drawer.CashReceived.ToString("0.##")</span></div>
+                    <div class="drw-row"><span>Cash paid out</span><span>@_drawer.CashPaidOut.ToString("0.##")</span></div>
+                    <div class="drw-row drw-strong"><span>Expected in drawer</span><span>@_drawer.ExpectedClosingBalance.ToString("0.##")</span></div>
+                </div>
+                @if (_byMethod is { Count: > 0 })
+                {
+                    <div class="drw-summary">
+                        <div class="drw-row drw-strong"><span>Takings by method</span><span></span></div>
+                        @foreach (var m in _byMethod)
+                        {
+                            <div class="drw-row"><span>@m.Method (@m.Count)</span><span>@m.Amount.ToString("0.##")</span></div>
+                        }
+                    </div>
+                }
+                <BoInput Value="_countedBalance" ValueChanged="@(v => _countedBalance = v)" Immediate="true" Type="number" Label="Counted cash" Placeholder="0" />
+                <div class="drw-row drw-variance"><span>Variance</span><span>@Variance.ToString("0.##")</span></div>
+                <BoInput @bind-Value="_closeNotes" Label="Notes (optional)" />
+            }
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close(_changed))" Disabled="_busy">Close</BoButton>
+    @if (!_loading)
+    {
+        @if (_drawer is null)
+        {
+            <BoButton Variant="primary" OnClick="OpenAsync" Loading="_busy">Open drawer</BoButton>
+        }
+        else
+        {
+            <BoButton Variant="danger" OnClick="CloseDrawerAsync" Loading="_busy">Close drawer</BoButton>
+        }
+    }
+</BoDialogFooter>
+
+@code {
+    [Parameter] public bool Content { get; set; }
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private bool _changed;
+    private DrawerDto? _drawer;
+    private IReadOnlyList<DrawerMethodLineDto>? _byMethod;
+
+    private string? _openingBalance;
+    private string? _openNotes;
+    private string? _countedBalance;
+    private string? _closeNotes;
+
+    private decimal Variance => _drawer is null ? 0m : P(_countedBalance) - _drawer.ExpectedClosingBalance;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _drawer = await Sender.Send(new GetCurrentDrawerQuery());
+        if (_drawer is not null)
+            _byMethod = (await Sender.Send(new GetDrawerSummaryQuery(_drawer.Id))).ByMethod;
+        _loading = false;
+    }
+
+    private async Task OpenAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Sender.Send(new OpenDrawerCommand(P(_openingBalance), null, _openNotes));
+            _changed = true;
+            ToastService.ShowSuccess("Drawer opened.");
+            Dialog.Close(true);
+        }
+        catch (Exception ex) { _error = ex.Message; _busy = false; }
+    }
+
+    private async Task CloseDrawerAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var result = await Sender.Send(new CloseDrawerCommand(_drawer!.Id, P(_countedBalance), _closeNotes));
+            _changed = true;
+            ToastService.ShowSuccess($"Drawer {result.DrawerNumber} closed · variance {result.Variance:0.##}");
+            Dialog.Close(true);
+        }
+        catch (Exception ex) { _error = ex.Message; _busy = false; }
+    }
+
+    private static decimal P(string? s) =>
+        decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : 0m;
+}
+
+<style>
+    .drw-grid { display:flex; flex-direction:column; gap:12px; }
+    .drw-summary { display:flex; flex-direction:column; gap:4px; border:1px solid var(--bo-border,#e3e3e3); border-radius:8px; padding:10px 12px; }
+    .drw-row { display:flex; justify-content:space-between; font-size:13px; }
+    .drw-strong { font-weight:700; border-top:1px solid var(--bo-border,#ddd); padding-top:6px; margin-top:2px; }
+    .drw-variance { font-weight:700; color:var(--bo-warning,#b26a00); }
+</style>

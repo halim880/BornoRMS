@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Domain.Catalog;
+using BornoBit.Restaurant.Domain.Kitchen;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -18,15 +19,22 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Price).HasPrecision(18, 2);
         builder.Property(p => p.Currency).IsRequired().HasMaxLength(8);
         builder.Property(p => p.ImagePath).HasMaxLength(500);
+        builder.Property(p => p.InventoryMethod).HasConversion<int>().HasDefaultValue(InventoryMethod.None);
 
         builder.HasIndex(p => p.Code).IsUnique();
         builder.HasIndex(p => p.ProductCategoryId);
         builder.HasIndex(p => p.DisplayOrder);
+        builder.HasIndex(p => p.KitchenStationId);
 
         builder.HasOne<ProductCategory>()
             .WithMany()
             .HasForeignKey(p => p.ProductCategoryId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<KitchenStation>()
+            .WithMany()
+            .HasForeignKey(p => p.KitchenStationId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasMany(p => p.Variants)
             .WithOne()

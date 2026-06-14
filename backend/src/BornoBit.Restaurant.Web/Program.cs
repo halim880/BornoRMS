@@ -50,13 +50,7 @@ builder.Services.AddSingleton<BornoBit.Restaurant.Web.Services.Dashboard.IDashbo
 builder.Services.AddHostedService<BornoBit.Restaurant.Web.Services.Dashboard.DashboardPollingService>();
 builder.Services.AddHostedService<BornoBit.Restaurant.Web.Services.Stock.StockSyncRetryService>();
 
-// Payment provider adapter — demo/mock implementation. Swap for a real gateway in production (see README).
-builder.Services.AddSingleton<BornoBit.Restaurant.Application.Ordering.Payments.IPaymentGateway,
-    BornoBit.Restaurant.Web.Services.Payments.MockPaymentGateway>();
-
-// Instant manager-override authorization (large discounts / voids / refunds at the till).
-builder.Services.AddScoped<BornoBit.Restaurant.Application.Common.Security.IManagerApprovalService,
-    BornoBit.Restaurant.Infrastructure.Identity.ManagerApprovalService>();
+// IPaymentGateway + IManagerApprovalService are now registered in AddInfrastructure (shared by API + Web).
 
 builder.Services.Configure<BornoBit.Restaurant.Web.Services.CustomerSiteOptions>(
     builder.Configuration.GetSection(BornoBit.Restaurant.Web.Services.CustomerSiteOptions.SectionName));

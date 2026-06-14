@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Behaviors;
+using BornoBit.Restaurant.Application.Inventory.Consumption;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,9 @@ public static class DependencyInjection
 
         foreach (var asm in assemblies)
             services.AddValidatorsFromAssembly(asm);
+
+        // Unified stock pipeline (stateless — shares the caller's IAppDbContext per method call).
+        services.AddScoped<IStockConsumptionService, StockConsumptionService>();
 
         return services;
     }

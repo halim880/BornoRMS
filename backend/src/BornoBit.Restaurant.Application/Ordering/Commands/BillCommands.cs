@@ -1,6 +1,9 @@
+using BornoBit.Restaurant.Application.Accounting.Audit;
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
+using BornoBit.Restaurant.Shared.Identity;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -35,14 +38,20 @@ public class ApplyDiscountCommandValidator : AbstractValidator<ApplyDiscountComm
 public class ApplyDiscountCommandHandler : IRequestHandler<ApplyDiscountCommand, BillSummaryDto>
 {
     private readonly IAppDbContext _db;
-    public ApplyDiscountCommandHandler(IAppDbContext db) => _db = db;
+    private readonly ICurrentUser _currentUser;
+    public ApplyDiscountCommandHandler(IAppDbContext db, ICurrentUser currentUser)
+    {
+        _db = db;
+        _currentUser = currentUser;
+    }
 
     public async Task<BillSummaryDto> Handle(ApplyDiscountCommand request, CancellationToken cancellationToken)
     {
-        var order = await _db.Orders.Include(o => o.Lines)
+        var order = await _db.Orders.Include(o => o.Lines).Include(o => o.Payments)
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken);
         if (order is null) throw new NotFoundException("Order not found.");
 
+        var before = FinancialAudit.Snapshot(order);
         try
         {
             order.ApplyDiscount(request.Percent, request.Amount, request.Reason);
@@ -51,6 +60,9 @@ public class ApplyDiscountCommandHandler : IRequestHandler<ApplyDiscountCommand,
         {
             throw new ConflictException(ex.Message);
         }
+
+        FinancialAudit.Write(_db, FinancialAuditAction.DiscountApplied, _currentUser, nameof(Order), order.Id,
+            order.OrderNumber, order.DiscountAmount, before, FinancialAudit.Snapshot(order), request.Reason);
 
         await _db.SaveChangesAsync(cancellationToken);
         return ToSummary(order);

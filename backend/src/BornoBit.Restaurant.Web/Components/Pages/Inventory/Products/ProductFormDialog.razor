@@ -1,5 +1,9 @@
 @using BornoBit.Restaurant.Application.Products
 @using BornoBit.Restaurant.Application.ProductCategories
+@using BornoBit.Restaurant.Application.Inventory.Items
+@using BornoBit.Restaurant.Application.Kitchen.Commands
+@using BornoBit.Restaurant.Application.Kitchen.Queries
+@using BornoBit.Restaurant.Domain.Catalog
 @using BornoBit.Restaurant.Web.Services
 @using FluentValidation
 @using MediatR
@@ -33,7 +37,43 @@
                   Style="width:100%;" />
 
         <BoNumeric T="decimal" @bind-Value="Content.Price" Label="Price (Tk)" Style="width:100%;" Min="0" Step="0.01" />
+
+        <BoSelect TOption="KitchenStationDto"
+                  Items="@_stations"
+                  OptionValue="@(s => s.Id.ToString())"
+                  OptionText="@(s => s.Name)"
+                  SelectedOption="@_selectedStation"
+                  SelectedOptionChanged="@(s => Content.KitchenStationId = s?.Id)"
+                  Label="Kitchen station"
+                  Placeholder="All stations (unassigned)"
+                  Style="width:100%;" />
+
         <BoInput @bind-Value="Content.Description" Label="Description" Style="width:100%;" Maxlength="1000" />
+
+        <div style="display:flex; gap:12px; align-items:flex-end;">
+            <BoSelect TOption="MethodOption"
+                      Items="@_methods"
+                      OptionValue="@(o => ((int)o.Value).ToString())"
+                      OptionText="@(o => o.Label)"
+                      SelectedOption="@_selectedMethod"
+                      SelectedOptionChanged="@(o => Content.InventoryMethod = o?.Value ?? InventoryMethod.None)"
+                      Label="Stock impact" Style="flex:1;" />
+
+            @if (Content.InventoryMethod == InventoryMethod.DirectStock)
+            {
+                <BoSelect TOption="InventoryItemDto"
+                          Items="@_stockItems"
+                          OptionValue="@(i => i.Id.ToString())"
+                          OptionText="@(i => $"{i.Name} ({i.UnitCode})")"
+                          SelectedOption="@_stockItems.FirstOrDefault(i => i.Id == Content.LinkedInventoryItemId)"
+                          SelectedOptionChanged="@(i => Content.LinkedInventoryItemId = i?.Id)"
+                          Label="Stock item" Placeholder="Select item" Style="flex:1;" />
+            }
+        </div>
+        @if (Content.InventoryMethod == InventoryMethod.RecipeBased)
+        {
+            <div class="bo-cmp-field-hint">Define the ingredient list in Stock → Recipes.</div>
+        }
 
         <div class="bo-cmp-field">
             <label class="bo-cmp-field-label">Variants (optional)</label>
@@ -88,9 +128,24 @@
     private bool _busy;
     private bool _uploading;
     private List<ProductCategoryDto> _categories = new();
+    private List<KitchenStationDto> _stations = new();
+    private List<InventoryItemDto> _stockItems = new();
+
+    public record MethodOption(InventoryMethod Value, string Label);
+    private readonly List<MethodOption> _methods = new()
+    {
+        new(InventoryMethod.None, "None (no stock impact)"),
+        new(InventoryMethod.DirectStock, "Direct stock (deduct a stock item)"),
+        new(InventoryMethod.RecipeBased, "Recipe-based (deduct ingredients)"),
+    };
 
     private ProductCategoryDto? _selectedCategory =>
         _categories.FirstOrDefault(c => c.Id == Content.ProductCategoryId);
+
+    private KitchenStationDto? _selectedStation =>
+        _stations.FirstOrDefault(s => s.Id == Content.KitchenStationId);
+
+    private MethodOption? _selectedMethod => _methods.FirstOrDefault(m => m.Value == Content.InventoryMethod);
 
     protected override async Task OnInitializedAsync()
     {
@@ -98,6 +153,12 @@
         {
             var all = await Mediator.Send(new GetProductCategoriesQuery());
             _categories = all.Where(c => c.IsActive).ToList();
+            _stations = (await Mediator.Send(new GetKitchenStationsQuery())).ToList();
+            _stockItems = (await Mediator.Send(new GetInventoryItemsQuery(PageSize: 500, IncludeInactive: false))).Items.ToList();
+
+            // Preselect the linked item when editing an existing DirectStock product.
+            if (Content.InventoryMethod == InventoryMethod.DirectStock && Content.LinkedInventoryItemId is null && Content.Id is { } pid)
+                Content.LinkedInventoryItemId = _stockItems.FirstOrDefault(i => i.ProductId == pid)?.Id;
         }
         catch (Exception ex) { _error = $"Failed to load categories: {ex.Message}"; }
     }
@@ -161,6 +222,18 @@
                     variants));
                 Content.SavedId = Content.Id;
             }
+
+            if (Content.SavedId is { } productId)
+            {
+                await Mediator.Send(new AssignProductStationCommand(productId, Content.KitchenStationId));
+
+                // RecipeBased keeps whatever the recipe editor set; here we only need to persist
+                // None / DirectStock (DirectStock also links the chosen stock item to this product).
+                if (Content.InventoryMethod != InventoryMethod.RecipeBased)
+                    await Mediator.Send(new SetProductInventoryMethodCommand(
+                        productId, Content.InventoryMethod, Content.LinkedInventoryItemId));
+            }
+
             Dialog.Close(Content);
         }
         catch (ValidationException vex)

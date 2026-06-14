@@ -5,9 +5,11 @@ using BornoBit.Restaurant.Domain.Common;
 using BornoBit.Restaurant.Domain.Customers;
 using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.Inventory;
+using BornoBit.Restaurant.Domain.Kitchen;
 using BornoBit.Restaurant.Domain.Menus;
 using BornoBit.Restaurant.Domain.Numbering;
 using BornoBit.Restaurant.Domain.Ordering;
+using BornoBit.Restaurant.Domain.Settings;
 using BornoBit.Restaurant.Domain.Store;
 using BornoBit.Restaurant.Domain.Tenants;
 using BornoBit.Restaurant.Infrastructure.Identity;
@@ -30,11 +32,18 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+    public DbSet<Recipe> Recipes => Set<Recipe>();
+    public DbSet<RecipeItem> RecipeItems => Set<RecipeItem>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerOtp> CustomerOtps => Set<CustomerOtp>();
     public DbSet<RestaurantTable> RestaurantTables => Set<RestaurantTable>();
+    public DbSet<DiningSession> DiningSessions => Set<DiningSession>();
+    public DbSet<CustomerRequest> CustomerRequests => Set<CustomerRequest>();
+    public DbSet<TableReservation> TableReservations => Set<TableReservation>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<KitchenStation> KitchenStations => Set<KitchenStation>();
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<AppMenu> AppMenus => Set<AppMenu>();
@@ -45,6 +54,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<InventoryCategory> InventoryCategories => Set<InventoryCategory>();
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<StockProjection> StockProjections => Set<StockProjection>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<GoodsReceipt> GoodsReceipts => Set<GoodsReceipt>();
     public DbSet<GoodsReceiptLine> GoodsReceiptLines => Set<GoodsReceiptLine>();
@@ -62,6 +72,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<CashAccount> CashAccounts => Set<CashAccount>();
     public DbSet<FinanceCategory> FinanceCategories => Set<FinanceCategory>();
     public DbSet<FinanceTransaction> FinanceTransactions => Set<FinanceTransaction>();
+    public DbSet<CashDrawerSession> CashDrawerSessions => Set<CashDrawerSession>();
+    public DbSet<FinancialAuditLog> FinancialAuditLogs => Set<FinancialAuditLog>();
+
+    public DbSet<RestaurantBillingSettings> RestaurantBillingSettings => Set<RestaurantBillingSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

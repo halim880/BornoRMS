@@ -1,5 +1,6 @@
 @page "/operations/cash-counter"
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Staff")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "CanSettle")]
+@rendermode InteractiveServer
 @using BornoBit.Restaurant.Application.Ordering.Queries
 @using BornoBit.Restaurant.Domain.Ordering
 
@@ -7,8 +8,25 @@
 
 <div class="bo-page">
     <PageHeader Title="Cash Counter"
-                Description="Settle orders awaiting payment, reprint receipts, and track today's takings.">
+                Description="Daily financial control — settle orders, take split & partial payments, reconcile the drawer.">
         <Actions>
+            @if (_drawer is null)
+            {
+                <BoButton Variant="success" OnClick="OpenDrawerDialogAsync">
+                    <span style="display:inline-flex; align-items:center; gap:6px;"><BoIcon Name="Wallet" Size="16" /> Open drawer</span>
+                </BoButton>
+            }
+            else
+            {
+                <BoButton Variant="outline" OnClick="OpenDrawerDialogAsync">
+                    <span style="display:inline-flex; align-items:center; gap:6px;">
+                        <BoIcon Name="Wallet" Size="16" /> @_drawer.DrawerNumber · @_summary?.CashCollected.ToString("0.##")
+                    </span>
+                </BoButton>
+            }
+            <AuthorizeView Policy="Admin">
+                <BoButton Variant="ghost" OnClick="OpenSettingsAsync"><BoIcon Name="Settings" Size="16" /></BoButton>
+            </AuthorizeView>
             <BoButton Variant="ghost" OnClick="ReloadAsync">
                 <span style="display:inline-flex; align-items:center; gap:6px;"><BoIcon Name="ArrowClockwise" Size="16" /> Refresh</span>
             </BoButton>
@@ -25,93 +43,31 @@
     }
     else
     {
-        @* Shift summary strip *@
-        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:22px;">
-            @foreach (var line in _summary!.ByMethod)
-            {
-                var tint = MethodTint(line.Method);
-                <div class="bo-panel report-stat">
-                    <span class="report-stat-icon" style="background:@tint.Bg; color:@tint.Color;"><BoIcon Name="@MethodIcon(line.Method)" Size="22" /></span>
-                    <span class="report-stat-body">
-                        <span class="report-stat-label">@line.Method</span>
-                        <span class="report-stat-value">@_summary.Currency @line.Amount.ToString("0.##")</span>
-                        <span class="cc-stat-sub">@line.Count order@(line.Count == 1 ? "" : "s")</span>
-                    </span>
-                </div>
-            }
-            <div class="bo-panel report-stat" style="border-color:var(--bo-primary);">
-                <span class="report-stat-icon" style="background:var(--bo-primary-tint); color:var(--bo-primary);"><BoIcon Name="Wallet" Size="22" /></span>
-                <span class="report-stat-body">
-                    <span class="report-stat-label">Collected today</span>
-                    <span class="report-stat-value" style="color:var(--bo-primary);">@_summary.Currency @_summary.TotalCollected.ToString("0.##")</span>
-                    <span class="cc-stat-sub">@_summary.TotalCount order@(_summary.TotalCount == 1 ? "" : "s")</span>
-                </span>
-            </div>
+        @* KPI cards *@
+        <div class="cc-kpis">
+            <div class="cc-kpi"><span class="cc-kpi-l">Total Sales</span><span class="cc-kpi-v">@Money(_summary!.TotalSales)</span></div>
+            <div class="cc-kpi"><span class="cc-kpi-l">Cash Collected</span><span class="cc-kpi-v cc-green">@Money(_summary.CashCollected)</span></div>
+            <div class="cc-kpi"><span class="cc-kpi-l">Digital Payments</span><span class="cc-kpi-v cc-blue">@Money(_summary.DigitalPayments)</span></div>
+            <div class="cc-kpi"><span class="cc-kpi-l">Discounts</span><span class="cc-kpi-v">@Money(_summary.DiscountsGiven)</span></div>
+            <div class="cc-kpi"><span class="cc-kpi-l">Net Revenue</span><span class="cc-kpi-v">@Money(_summary.NetRevenue)</span></div>
+            <div class="cc-kpi"><span class="cc-kpi-l">Pending</span><span class="cc-kpi-v cc-amber">@Money(_summary.PendingPayments)</span><span class="cc-kpi-s">@_summary.PendingOrders order(s)</span></div>
         </div>
 
-        @* Pending-payment queue *@
-        <div class="cc-section">
-            <BoIcon Name="ReceiptMoney" Size="18" />
-            <span>Awaiting payment</span>
-            <BoBadge Tone="@(_pending.Count == 0 ? "neutral" : "warning")">@_pending.Count</BoBadge>
+        @* Filters *@
+        <div class="cc-filters">
+            <BoDatePicker Value="_date" ValueChanged="OnDateChanged" Label="Date" />
+            <BoSelect TOption="string" Items="StatusItems" OptionValue="@(s => s)" OptionText="@(s => s)"
+                      SelectedOption="_statusItem" SelectedOptionChanged="OnStatusChanged" Label="Payment status" />
+            <BoSelect TOption="string" Items="TypeItems" OptionValue="@(s => s)" OptionText="@(s => s)"
+                      SelectedOption="_typeItem" SelectedOptionChanged="OnTypeChanged" Label="Order type" />
+            <BoInput Value="_waiterFilter" ValueChanged="OnWaiterChanged" Immediate="false" Label="Waiter" Placeholder="Any" />
         </div>
-        @if (_pending.Count == 0)
-        {
-            <EmptyState Icon="Checkmark" Description="No orders awaiting payment. All settled!" />
-        }
-        else
-        {
-            <div class="bo-panel" style="padding:0; overflow:hidden; margin-bottom:8px;">
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead>
-                        <tr style="background:var(--bo-bg-soft); text-align:left;">
-                            <th class="cc-th">Order #</th>
-                            <th class="cc-th">Type / Table</th>
-                            <th class="cc-th">Customer</th>
-                            <th class="cc-th" style="text-align:right;">Items</th>
-                            <th class="cc-th" style="text-align:right;">Grand total</th>
-                            <th class="cc-th">Status</th>
-                            <th class="cc-th" style="text-align:right;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var o in _pending)
-                        {
-                            <tr class="cc-row">
-                                <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@o.OrderNumber</span></td>
-                                <td style="padding:10px 14px;">
-                                    @o.OrderType
-                                    @if (!string.IsNullOrEmpty(o.TableNumber))
-                                    {
-                                        <span style="color: var(--bo-text-muted);"> · Table @o.TableNumber</span>
-                                    }
-                                </td>
-                                <td style="padding:10px 14px;">
-                                    <strong>@(string.IsNullOrEmpty(o.CustomerName) ? "Walk-in" : o.CustomerName)</strong>
-                                    <div style="color: var(--bo-text-subtle); font-size: var(--bo-font-xs);">@o.CustomerPhone</div>
-                                </td>
-                                <td style="padding:10px 14px; text-align:right;">@o.ItemCount</td>
-                                <td style="padding:10px 14px; text-align:right;"><strong style="font-size:14px;">@o.Currency @o.Total.ToString("0.##")</strong></td>
-                                <td style="padding:10px 14px;"><BoBadge Tone="@StatusTone(o.Status)">@o.Status</BoBadge></td>
-                                <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
-                                    <BoButton Variant="primary" Size="sm" OnClick="@(() => TakePaymentAsync(o))">Take payment</BoButton>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
 
-        @* Paid today — reprint / view receipt *@
-        <div class="cc-section">
-            <BoIcon Name="DocumentCheckmark" Size="18" />
-            <span>Paid today</span>
-            <BoBadge Tone="@(_paidToday.Count == 0 ? "neutral" : "success")">@_paidToday.Count</BoBadge>
-        </div>
-        @if (_paidToday.Count == 0)
+        @* Board *@
+        <div class="cc-section"><BoIcon Name="ReceiptMoney" Size="18" /><span>Orders</span><BoBadge Tone="neutral">@_board.TotalCount</BoBadge></div>
+        @if (_board.Items.Count == 0)
         {
-            <EmptyState Icon="Wallet" Description="No payments recorded today yet." />
+            <EmptyState Icon="Checkmark" Description="No orders match these filters." />
         }
         else
         {
@@ -119,50 +75,195 @@
                 <table style="width:100%; border-collapse:collapse;">
                     <thead>
                         <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th class="cc-th"></th>
                             <th class="cc-th">Order #</th>
-                            <th class="cc-th">Customer</th>
-                            <th class="cc-th">Method</th>
-                            <th class="cc-th" style="text-align:right;">Total</th>
+                            <th class="cc-th">Type / Table</th>
+                            <th class="cc-th">Waiter</th>
+                            <th class="cc-th" style="text-align:right;">Grand total</th>
+                            <th class="cc-th" style="text-align:right;">Balance</th>
+                            <th class="cc-th">Payment</th>
                             <th class="cc-th" style="text-align:right;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var o in _paidToday)
+                        @foreach (var o in _board.Items)
                         {
                             <tr class="cc-row">
+                                <td style="padding:6px 10px;">
+                                    <button class="cc-expand" @onclick="@(() => ToggleExpandAsync(o.OrderId))" title="Details">
+                                        @(_expanded.ContainsKey(o.OrderId) ? "▾" : "▸")
+                                    </button>
+                                </td>
                                 <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@o.OrderNumber</span></td>
-                                <td style="padding:10px 14px;">@(string.IsNullOrEmpty(o.CustomerName) ? "Walk-in" : o.CustomerName)</td>
                                 <td style="padding:10px 14px;">
-                                    @if (o.PaymentMethod is { } m)
+                                    @o.OrderType
+                                    @if (!string.IsNullOrEmpty(o.TableNumber)) { <span style="color:var(--bo-text-muted);"> · Table @o.TableNumber</span> }
+                                </td>
+                                <td style="padding:10px 14px;">@(o.WaiterName ?? "—")</td>
+                                <td style="padding:10px 14px; text-align:right;"><strong>@Money(o.GrandTotal)</strong></td>
+                                <td style="padding:10px 14px; text-align:right;">@(o.BalanceDue > 0 ? Money(o.BalanceDue) : "—")</td>
+                                <td style="padding:10px 14px;"><BoBadge Tone="@PaymentTone(o.PaymentStatus)">@PaymentLabel(o.PaymentStatus)</BoBadge></td>
+                                <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
+                                    @if (o.PaymentStatus != PaymentStatus.Paid)
                                     {
-                                        <span style="display:inline-flex; align-items:center; gap:6px;">
-                                            <BoIcon Name="@MethodIcon(m)" Size="15" />
-                                            <BoBadge Tone="@MethodTone(m)">@m</BoBadge>
-                                        </span>
+                                        <BoButton Variant="primary" Size="sm" OnClick="@(() => SettleAsync(o))">Settle</BoButton>
                                     }
                                     else
                                     {
-                                        <BoBadge Tone="success">Paid</BoBadge>
+                                        <BoButton Variant="outline" Size="sm" Loading="@(_printingId == o.OrderId)" OnClick="@(() => ReprintAsync(o.OrderId))">Reprint</BoButton>
+                                        <a class="bo-btn bo-btn-ghost" href="/reports/order/@o.OrderId/receipt.pdf" target="_blank">Invoice</a>
                                     }
                                 </td>
-                                <td style="padding:10px 14px; text-align:right;"><strong>@o.Currency @o.Total.ToString("0.##")</strong></td>
-                                <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
-                                    <BoButton Variant="outline" Size="sm" Loading="@(_printingId == o.Id)" OnClick="@(() => ReprintAsync(o))">Reprint</BoButton>
-                                    <a class="bo-btn bo-btn-ghost" href="/reports/order/@o.Id/receipt.pdf" target="_blank">Invoice</a>
+                            </tr>
+                            @if (_expanded.TryGetValue(o.OrderId, out var detail))
+                            {
+                                <tr class="cc-detail-row">
+                                    <td colspan="8" style="padding:0;">
+                                        <div class="cc-detail">
+                                            @if (detail is null)
+                                            {
+                                                <BoSpinner Size="sm" Label="Loading…" />
+                                            }
+                                            else
+                                            {
+                                                <div class="cc-detail-grid">
+                                                    <div>
+                                                        <div class="cc-detail-h">Items</div>
+                                                        @foreach (var l in detail.Lines)
+                                                        {
+                                                            <div class="cc-detail-line">
+                                                                <span>@l.Quantity × @l.Name</span><span>@Money(l.LineTotal)</span>
+                                                            </div>
+                                                            @if (!string.IsNullOrWhiteSpace(l.Notes)) { <div class="cc-detail-mod">↳ @l.Notes</div> }
+                                                        }
+                                                    </div>
+                                                    <div>
+                                                        <div class="cc-detail-h">Bill</div>
+                                                        <div class="cc-detail-line"><span>Subtotal</span><span>@Money(detail.Subtotal)</span></div>
+                                                        @if (detail.DiscountAmount > 0) { <div class="cc-detail-line"><span>Discount</span><span>− @Money(detail.DiscountAmount)</span></div> }
+                                                        @if (detail.TaxAmount > 0) { <div class="cc-detail-line"><span>VAT</span><span>@Money(detail.TaxAmount)</span></div> }
+                                                        @if (detail.ServiceChargeAmount > 0) { <div class="cc-detail-line"><span>Service</span><span>@Money(detail.ServiceChargeAmount)</span></div> }
+                                                        @if (detail.TipAmount > 0) { <div class="cc-detail-line"><span>Tip</span><span>@Money(detail.TipAmount)</span></div> }
+                                                        @if (detail.RoundingAdjustment != 0) { <div class="cc-detail-line"><span>Rounding</span><span>@Money(detail.RoundingAdjustment)</span></div> }
+                                                        <div class="cc-detail-line cc-detail-strong"><span>Grand total</span><span>@Money(detail.GrandTotal)</span></div>
+                                                        <div class="cc-detail-line"><span>Paid</span><span>@Money(detail.AmountPaid)</span></div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="cc-detail-h">Payments</div>
+                                                        @if (detail.Payments.Count == 0)
+                                                        {
+                                                            <span class="cc-detail-mod">No payments yet.</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            @foreach (var p in detail.Payments)
+                                                            {
+                                                                <div class="cc-detail-line @(p.Status != PaymentEntryStatus.Captured ? "cc-void" : "")">
+                                                                    <span>@(p.Kind == PaymentKind.Refund ? "↩ " : "")@p.Method@(p.Provider is { } pr ? $" ({pr})" : "")</span>
+                                                                    <span>@(p.Kind == PaymentKind.Refund ? "−" : "")@Money(p.Amount)</span>
+                                                                </div>
+                                                            }
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="cc-pager">
+                <span>Page @_board.Page of @Math.Max(1, _board.TotalPages) · @_board.TotalCount total</span>
+                <div style="display:flex; gap:8px;">
+                    <BoButton Variant="ghost" Disabled="@(_board.Page <= 1)" OnClick="BoardPrev">Previous</BoButton>
+                    <BoButton Variant="ghost" Disabled="@(_board.Page >= _board.TotalPages)" OnClick="BoardNext">Next</BoButton>
+                </div>
+            </div>
+        }
+
+        @* Payment ledger *@
+        <div class="cc-section"><BoIcon Name="DocumentCheckmark" Size="18" /><span>Payment ledger</span><BoBadge Tone="success">@_ledger.TotalCount</BoBadge></div>
+        @if (_ledger.Items.Count == 0)
+        {
+            <EmptyState Icon="Wallet" Description="No payments recorded for this date." />
+        }
+        else
+        {
+            <div class="bo-panel" style="padding:0; overflow:hidden;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th class="cc-th">Time</th>
+                            <th class="cc-th">Order #</th>
+                            <th class="cc-th">Method</th>
+                            <th class="cc-th">Cashier</th>
+                            <th class="cc-th" style="text-align:right;">Amount</th>
+                            <th class="cc-th">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in _ledger.Items)
+                        {
+                            <tr class="cc-row">
+                                <td style="padding:10px 14px; color:var(--bo-text-muted); white-space:nowrap;">@p.CreatedAtUtc.ToLocalTime().ToString("HH:mm")</td>
+                                <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@p.OrderNumber</span></td>
+                                <td style="padding:10px 14px;">
+                                    <span style="display:inline-flex; align-items:center; gap:6px;">
+                                        <BoIcon Name="@MethodIcon(p.Method)" Size="15" />
+                                        <BoBadge Tone="@MethodTone(p.Method)">@p.Method@(p.Provider is { } pr ? $" · {pr}" : "")</BoBadge>
+                                    </span>
+                                </td>
+                                <td style="padding:10px 14px; color:var(--bo-text-muted);">@(p.CashierName ?? "—")</td>
+                                <td style="padding:10px 14px; text-align:right;"><strong>@(p.Kind == PaymentKind.Refund ? "−" : "")@Money(p.Amount)</strong></td>
+                                <td style="padding:10px 14px;">
+                                    @if (p.Status == PaymentEntryStatus.Captured) { <BoBadge Tone="success">@(p.Kind == PaymentKind.Refund ? "Refund" : "Captured")</BoBadge> }
+                                    else { <BoBadge Tone="neutral">@p.Status</BoBadge> }
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            <div class="cc-pager">
+                <span>Page @_ledger.Page of @Math.Max(1, _ledger.TotalPages) · @_ledger.TotalCount total</span>
+                <div style="display:flex; gap:8px;">
+                    <BoButton Variant="ghost" Disabled="@(_ledger.Page <= 1)" OnClick="LedgerPrev">Previous</BoButton>
+                    <BoButton Variant="ghost" Disabled="@(_ledger.Page >= _ledger.TotalPages)" OnClick="LedgerNext">Next</BoButton>
+                </div>
+            </div>
         }
     }
 </div>
 
+@code {
+    private static string Money(decimal v) => $"Tk {v:0.##}";
+}
+
 <style>
-    .cc-stat-sub { font-size: var(--bo-font-xs); color: var(--bo-text-subtle); }
+    .cc-kpis { display:grid; grid-template-columns:repeat(6, 1fr); gap:12px; margin-bottom:18px; }
+    .cc-kpi { background:var(--bo-bg-card); border:1px solid var(--bo-border-soft); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:2px; box-shadow:var(--bo-shadow-xs); }
+    .cc-kpi-l { font-size:var(--bo-font-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--bo-text-muted); }
+    .cc-kpi-v { font-size:20px; font-weight:700; }
+    .cc-kpi-s { font-size:var(--bo-font-xs); color:var(--bo-text-subtle); }
+    .cc-green { color:var(--bo-success); }
+    .cc-blue { color:var(--bo-info); }
+    .cc-amber { color:var(--bo-warning,#b26a00); }
+    .cc-filters { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:16px; background:var(--bo-bg-card); border:1px solid var(--bo-border-soft); border-radius:10px; padding:12px; box-shadow:var(--bo-shadow-xs); }
     .cc-section { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; margin:22px 0 10px; color:var(--bo-text); }
-    .cc-th { padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted); }
-    .cc-row { border-top:1px solid var(--bo-border-soft); transition: background .1s; }
-    .cc-row:hover { background: var(--bo-bg-soft); }
+    .cc-th { padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color:var(--bo-text-muted); }
+    .cc-row { border-top:1px solid var(--bo-border-soft); }
+    .cc-row:hover { background:var(--bo-bg-soft); }
+    .cc-expand { background:none; border:none; cursor:pointer; font-size:14px; color:var(--bo-text-muted); padding:4px 6px; }
+    .cc-detail-row { background:var(--bo-bg-card); }
+    .cc-detail { padding:12px 18px; }
+    .cc-detail-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:24px; }
+    .cc-detail-h { font-size:var(--bo-font-xs); text-transform:uppercase; letter-spacing:.05em; color:var(--bo-text-muted); margin-bottom:6px; }
+    .cc-detail-line { display:flex; justify-content:space-between; font-size:12px; padding:2px 0; }
+    .cc-detail-mod { font-size:11px; color:var(--bo-text-subtle); padding-left:10px; }
+    .cc-detail-strong { font-weight:700; border-top:1px solid var(--bo-border-soft); padding-top:4px; margin-top:2px; }
+    .cc-void { opacity:.55; text-decoration:line-through; }
+    .cc-pager { display:flex; justify-content:space-between; align-items:center; margin-top:12px; color:var(--bo-text-muted); font-size:var(--bo-font-sm); }
 </style>

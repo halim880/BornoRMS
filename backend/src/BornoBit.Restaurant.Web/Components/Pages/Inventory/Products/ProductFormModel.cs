@@ -1,3 +1,5 @@
+using BornoBit.Restaurant.Domain.Catalog;
+
 namespace BornoBit.Restaurant.Web.Components.Pages.Inventory.Products;
 
 public class ProductFormModel
@@ -11,7 +13,13 @@ public class ProductFormModel
     public string? Description { get; set; }
     public string? ImagePath { get; set; }
     public int DisplayOrder { get; set; }
+    public Guid? KitchenStationId { get; set; }
     public List<VariantFormRow> Variants { get; set; } = new();
+
+    /// <summary>How selling this product impacts stock. RecipeBased is configured in the recipe editor.</summary>
+    public InventoryMethod InventoryMethod { get; set; } = InventoryMethod.None;
+    /// <summary>For DirectStock: the stock item deducted per sale.</summary>
+    public Guid? LinkedInventoryItemId { get; set; }
 
     public Guid? SavedId { get; set; }
 }

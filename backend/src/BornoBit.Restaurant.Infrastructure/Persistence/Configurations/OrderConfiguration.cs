@@ -20,29 +20,55 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.Currency).IsRequired().HasMaxLength(8);
         builder.Property(o => o.Notes).HasMaxLength(2000);
         builder.Property(o => o.CancellationReason).HasMaxLength(1000);
+        builder.Property(o => o.KitchenNotes).HasMaxLength(2000);
+        builder.Property(o => o.IsPriority).HasDefaultValue(false);
 
         builder.Property(o => o.DiscountAmount).HasPrecision(18, 2);
         builder.Property(o => o.DiscountPercent).HasPrecision(5, 2);
         builder.Property(o => o.DiscountReason).HasMaxLength(500);
+        builder.Property(o => o.TaxAmount).HasPrecision(18, 2);
+        builder.Property(o => o.ServiceChargeAmount).HasPrecision(18, 2);
+        builder.Property(o => o.TipAmount).HasPrecision(18, 2);
+        builder.Property(o => o.WaiterName).HasMaxLength(200);
         builder.Property(o => o.PaymentMethod).HasConversion<int>();
+        builder.Property(o => o.PaymentStatus).HasConversion<int>();
         builder.Property(o => o.AmountTendered).HasPrecision(18, 2);
         builder.Property(o => o.ChangeGiven).HasPrecision(18, 2);
         builder.Property(o => o.RoundingAdjustment).HasPrecision(18, 2);
+        builder.Property(o => o.RowVersion).IsRowVersion();
+        builder.Property(o => o.StockSyncStatus).HasConversion<int>().HasDefaultValue(StockSyncStatus.NotApplicable);
 
         builder.Ignore(o => o.Total);
         builder.Ignore(o => o.Subtotal);
         builder.Ignore(o => o.GrandTotal);
+        builder.Ignore(o => o.AmountPaid);
+        builder.Ignore(o => o.BalanceDue);
 
         builder.HasIndex(o => o.OrderNumber).IsUnique();
         builder.HasIndex(o => o.CustomerId);
         builder.HasIndex(o => o.Status);
+        builder.HasIndex(o => o.RestaurantTableId);
+        builder.HasIndex(o => o.DiningSessionId);
+        builder.HasIndex(o => o.OrderedAtUtc);
+        builder.HasIndex(o => new { o.Status, o.OrderedAtUtc });
+        builder.HasIndex(o => new { o.PaymentStatus, o.OrderedAtUtc });
+        builder.HasIndex(o => o.AccountedAtUtc);
+        builder.HasIndex(o => o.StockSyncStatus);
 
         builder.HasMany(o => o.Lines)
             .WithOne()
             .HasForeignKey(l => l.OrderId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasMany(o => o.Payments)
+            .WithOne()
+            .HasForeignKey(p => p.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.Metadata.FindNavigation(nameof(Order.Lines))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.Metadata.FindNavigation(nameof(Order.Payments))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasOne<Customer>()
@@ -53,6 +79,11 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.HasOne<RestaurantTable>()
             .WithMany()
             .HasForeignKey(o => o.RestaurantTableId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<DiningSession>()
+            .WithMany()
+            .HasForeignKey(o => o.DiningSessionId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
@@ -71,9 +102,12 @@ public class OrderLineConfiguration : IEntityTypeConfiguration<OrderLine>
         builder.Property(l => l.UnitPriceSnapshot).HasPrecision(18, 2);
         builder.Property(l => l.Currency).IsRequired().HasMaxLength(8);
         builder.Property(l => l.Quantity).IsRequired();
+        builder.Property(l => l.StationName).HasMaxLength(80);
+        builder.Property(l => l.Notes).HasMaxLength(1000);
 
         builder.Ignore(l => l.LineTotal);
 
         builder.HasIndex(l => l.OrderId);
+        builder.HasIndex(l => l.StationId);
     }
 }

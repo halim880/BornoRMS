@@ -1,0 +1,83 @@
+@using System.Globalization
+@using BornoBit.Restaurant.Application.Settings
+@using MediatR
+@inject ISender Sender
+@inject IBoToastService ToastService
+
+<BoDialogBody>
+    @if (_loading)
+    {
+        <LoadingState Message="Loading settings…" />
+    }
+    else
+    {
+        <div class="bset-grid">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+            <div class="two-col">
+                <BoInput Value="_vat" ValueChanged="@(v => _vat = v)" Immediate="true" Type="number" Label="VAT %" />
+                <BoInput Value="_service" ValueChanged="@(v => _service = v)" Immediate="true" Type="number" Label="Service charge %" />
+            </div>
+            <div class="two-col">
+                <BoInput Value="_threshold" ValueChanged="@(v => _threshold = v)" Immediate="true" Type="number" Label="High-discount threshold %" />
+                <BoInput @bind-Value="_currency" Label="Currency" />
+            </div>
+            <BoCheckbox @bind-Value="_tipEnabled" Label="Enable tip field at settlement" />
+            <span class="bset-hint">VAT and service charge prefill the settlement screen; the cashier can override per order. Discounts at or above the threshold require Manager/Admin approval.</span>
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close(false))" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy" Disabled="_loading">Save</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public bool Content { get; set; }
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private string? _vat;
+    private string? _service;
+    private string? _threshold;
+    private string _currency = "Tk";
+    private bool _tipEnabled = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var s = await Sender.Send(new GetBillingSettingsQuery());
+        _vat = s.VatPercent.ToString(CultureInfo.InvariantCulture);
+        _service = s.ServiceChargePercent.ToString(CultureInfo.InvariantCulture);
+        _threshold = s.HighDiscountThresholdPercent.ToString(CultureInfo.InvariantCulture);
+        _currency = s.Currency;
+        _tipEnabled = s.TipEnabled;
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Sender.Send(new UpdateBillingSettingsCommand(P(_vat), P(_service), _currency, _tipEnabled, P(_threshold)));
+            ToastService.ShowSuccess("Billing settings saved.");
+            Dialog.Close(true);
+        }
+        catch (Exception ex) { _error = ex.Message; _busy = false; }
+    }
+
+    private static decimal P(string? s) =>
+        decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : 0m;
+}
+
+<style>
+    .bset-grid { display:flex; flex-direction:column; gap:12px; }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .bset-hint { font-size:11px; color:var(--bo-text-subtle); }
+</style>

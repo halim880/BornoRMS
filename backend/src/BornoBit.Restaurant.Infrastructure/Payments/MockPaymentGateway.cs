@@ -1,6 +1,6 @@
 using BornoBit.Restaurant.Application.Ordering.Payments;
 
-namespace BornoBit.Restaurant.Web.Services.Payments;
+namespace BornoBit.Restaurant.Infrastructure.Payments;
 
 /// <summary>
 /// Demo payment-provider adapter: approves every card/mobile tender and synthesizes an authorization

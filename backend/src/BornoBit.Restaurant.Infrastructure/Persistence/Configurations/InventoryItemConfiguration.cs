@@ -25,6 +25,8 @@ public class InventoryItemConfiguration : IEntityTypeConfiguration<InventoryItem
         builder.Property(i => i.PackSize).HasPrecision(18, 3);
         builder.Property(i => i.AvgCost).HasPrecision(18, 2);
 
+        builder.Property(i => i.RowVersion).IsRowVersion();
+
         builder.Ignore(i => i.IsLowStock);
         builder.Ignore(i => i.StockValue);
 

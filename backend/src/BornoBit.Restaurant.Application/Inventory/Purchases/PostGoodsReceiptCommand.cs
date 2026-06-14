@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Shared.Common;
 using FluentValidation;
@@ -59,6 +60,8 @@ public class PostGoodsReceiptCommandHandler : IRequestHandler<PostGoodsReceiptCo
                 unitCost: line.UnitCost,
                 referenceType: nameof(GoodsReceipt),
                 referenceId: grn.Id));
+
+            await StockProjectionWriter.BumpAsync(_db, item.Id, item.QtyOnHand, nowUtc, cancellationToken);
         }
 
         grn.MarkPosted(nowUtc);

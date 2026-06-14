@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BornoBit Restaurant — Admin User Manual</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="brand"><span class="logo">🍽</span>BornoBit Manual</div>
+  <input type="search" id="navSearch" placeholder="Search…" autocomplete="off" aria-label="Search manual">
+  <ul class="navlist">
+    <li><a href="index.html">Home</a></li>
+    <li class="group">Operations</li>
+    <li><a href="orders.html">Orders</a></li>
+    <li><a href="pos.html">POS</a></li>
+    <li><a href="kitchen-display.html">Kitchen Display</a></li>
+    <li><a href="dashboard.html">Operations Dashboard</a></li>
+    <li><a href="cash-counter.html">Cash Counter</a></li>
+    <li class="group">Inventory</li>
+    <li><a href="inventory.html">Menu &amp; Tables</a></li>
+    <li><a href="stock.html">Stock (Raw)</a></li>
+    <li><a href="store.html">Store (Finished)</a></li>
+    <li class="group">Finance</li>
+    <li><a href="accounts.html">Accounts</a></li>
+    <li><a href="reports.html">Reports</a></li>
+    <li class="group">Administration</li>
+    <li><a href="users-roles.html">Users &amp; Roles</a></li>
+    <li><a href="menu-permissions.html">Menu &amp; Modules</a></li>
+    <li><a href="numbering.html">Numbering</a></li>
+    <li><a href="settings.html">Settings</a></li>
+  </ul>
+</nav>
+<main class="content">
+  <header class="topbar">
+    <h1>Admin User Manual</h1>
+    <button id="themeToggle" aria-label="Toggle theme">🌙</button>
+  </header>
+  <article>
+    <p>Guide to running the <strong>BornoBit Restaurant</strong> staff console (port 5002). Covers daily
+    operations, inventory, finance, and administration. Sign in at <span class="route">/login</span> with
+    your staff account.</p>
+
+    <div class="callout">
+      <strong>Roles.</strong> Access to each feature depends on your role:
+      <span class="role-chip">SuperAdmin</span><span class="role-chip">Admin</span>
+      <span class="role-chip">Manager</span><span class="role-chip">Waiter</span>
+      <span class="role-chip">Chef</span><span class="role-chip">Cashier</span>.
+      Admin/SuperAdmin reach everything; other roles see only their permitted modules.
+    </div>
+
+    <h2>Operations</h2>
+    <div class="cards">
+      <div class="card"><a href="orders.html">Orders →</a><p>View and manage incoming customer orders; print receipts.</p></div>
+      <div class="card"><a href="pos.html">POS →</a><p>Cash-register billing: build orders, discount, take payment.</p></div>
+      <div class="card"><a href="kitchen-display.html">Kitchen Display →</a><p>Live kitchen tickets, station view, sound alerts.</p></div>
+      <div class="card"><a href="dashboard.html">Operations Dashboard →</a><p>Live sales, open orders, table and kitchen state.</p></div>
+      <div class="card"><a href="cash-counter.html">Cash Counter →</a><p>Count drawer cash and reconcile with transactions.</p></div>
+    </div>
+
+    <h2>Inventory</h2>
+    <div class="cards">
+      <div class="card"><a href="inventory.html">Menu &amp; Tables →</a><p>Categories, products, dining tables, QR codes.</p></div>
+      <div class="card"><a href="stock.html">Stock (Raw) →</a><p>Raw materials: receipts, movements, wastage, suppliers.</p></div>
+      <div class="card"><a href="store.html">Store (Finished) →</a><p>Finished goods: receipts, issues, adjustments.</p></div>
+    </div>
+
+    <h2>Finance</h2>
+    <div class="cards">
+      <div class="card"><a href="accounts.html">Accounts →</a><p>Cash accounts, income/expense, categories, ledger.</p></div>
+      <div class="card"><a href="reports.html">Reports →</a><p>Sales, top sellers, collections, stock valuation PDF.</p></div>
+    </div>
+
+    <h2>Administration</h2>
+    <div class="cards">
+      <div class="card"><a href="users-roles.html">Users &amp; Roles →</a><p>Create staff, assign roles, reset passwords.</p></div>
+      <div class="card"><a href="menu-permissions.html">Menu &amp; Modules →</a><p>Control sidebar visibility per role.</p></div>
+      <div class="card"><a href="numbering.html">Numbering →</a><p>Document number prefixes and sequences.</p></div>
+      <div class="card"><a href="settings.html">Settings →</a><p>Theme/appearance for the console.</p></div>
+    </div>
+
+    <footer class="updated">Last updated: 2026-06-14 · See <a href="CHANGELOG.md">CHANGELOG</a></footer>
+  </article>
+</main>
+<script src="assets/app.js"></script>
+</body>
+</html>

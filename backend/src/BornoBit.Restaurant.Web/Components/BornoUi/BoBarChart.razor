@@ -1,0 +1,66 @@
+@*
+    Horizontal bar chart (CSS bars), generic over TItem. No external dependencies.
+    Optional SecondaryText renders a muted value on the right (e.g. revenue beside quantity).
+
+        <BoBarChart TItem="TopItemRowDto"
+                    Data="@_topItems"
+                    ValueSelector="i => (double)i.QuantitySold"
+                    LabelSelector="i => i.Name"
+                    SecondaryText='i => i.Revenue.ToString("#,##0")' />
+*@
+@typeparam TItem
+@namespace BornoBit.Restaurant.Web.Components.BornoUi
+
+@if (Data is null || Data.Count == 0)
+{
+    <div class="bo-area-empty" style="height:@(Height)px;">@EmptyText</div>
+}
+else
+{
+    <div class="bo-barchart" style="display:flex; flex-direction:column; gap:10px;">
+        @foreach (var row in _rows)
+        {
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="flex:0 0 @(LabelWidth)px; font-size:var(--bo-font-sm); color:var(--bo-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="@row.Label">@row.Label</span>
+                <span style="flex:1 1 auto; background:var(--bo-bg-soft, #f1f5f9); border-radius:6px; height:14px; position:relative; overflow:hidden;">
+                    <span style="position:absolute; inset:0 auto 0 0; width:@(row.Percent.ToString("0.0", Inv))%; background:@Color; border-radius:6px;"></span>
+                </span>
+                <span style="flex:0 0 auto; font-size:var(--bo-font-sm); font-weight:600; width:54px; text-align:right;">@(ValueFormat is null ? row.Value.ToString("#,##0") : ValueFormat(row.Value))</span>
+                @if (SecondaryText is not null)
+                {
+                    <span style="flex:0 0 auto; font-size:var(--bo-font-xs); color:var(--bo-text-subtle); width:70px; text-align:right;">@row.Secondary</span>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TItem>? Data { get; set; }
+    [Parameter, EditorRequired] public Func<TItem, double> ValueSelector { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<TItem, string> LabelSelector { get; set; } = default!;
+    [Parameter] public Func<TItem, string>? SecondaryText { get; set; }
+    [Parameter] public Func<double, string>? ValueFormat { get; set; }
+    [Parameter] public string Color { get; set; } = "var(--bo-primary, #0E7490)";
+    [Parameter] public int Height { get; set; } = 160;
+    [Parameter] public int LabelWidth { get; set; } = 150;
+    [Parameter] public string EmptyText { get; set; } = "No data";
+
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+    private List<(string Label, double Value, double Percent, string? Secondary)> _rows = new();
+
+    protected override void OnParametersSet()
+    {
+        _rows = new();
+        if (Data is null || Data.Count == 0) return;
+
+        var max = Data.Max(d => Math.Max(0, ValueSelector(d)));
+        if (max <= 0) max = 1;
+
+        _rows = Data.Select(d =>
+        {
+            var v = Math.Max(0, ValueSelector(d));
+            return (LabelSelector(d), v, v / max * 100.0, SecondaryText?.Invoke(d));
+        }).ToList();
+    }
+}

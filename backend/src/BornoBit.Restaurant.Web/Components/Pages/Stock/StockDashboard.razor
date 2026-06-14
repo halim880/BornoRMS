@@ -1,0 +1,123 @@
+@page "/stock/dashboard"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@implements IAsyncDisposable
+
+<PageTitle>Stock Dashboard · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Stock Dashboard"
+                Description="Live inventory health — valuation, movement and waste. Updates in real time as orders consume stock." />
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else
+    {
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+            <div class="bo-card" style="padding:16px; min-width:200px;">
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Total stock value</div>
+                <div style="font-size:1.6rem; font-weight:700;">৳ @(_valuation?.TotalValue.ToString("#,##0.00") ?? "0")</div>
+            </div>
+            <div class="bo-card" style="padding:16px; min-width:200px;">
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Out of stock</div>
+                <div style="font-size:1.6rem; font-weight:700; color:@(_outOfStock.Count > 0 ? "var(--bo-danger)" : "inherit");">@_outOfStock.Count</div>
+            </div>
+            <div class="bo-card" style="padding:16px; min-width:200px;">
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Waste (30d)</div>
+                <div style="font-size:1.6rem; font-weight:700;">@(_waste?.OverallPercent.ToString("0.#") ?? "0")%</div>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            <div class="bo-card" style="padding:16px; flex:1; min-width:320px;">
+                <h3 style="margin:0 0 8px;">Most consumed (30d)</h3>
+                @if (_consumption.Count == 0)
+                {
+                    <EmptyState Description="No consumption recorded yet." />
+                }
+                else
+                {
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tbody>
+                            @foreach (var c in _consumption)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:6px 4px;">@c.Name</td>
+                                    <td style="padding:6px 4px; text-align:right;">@c.QtyConsumed.ToString("0.###") @c.UnitCode</td>
+                                    <td style="padding:6px 4px; text-align:right; color:var(--bo-text-muted);">৳ @c.Value.ToString("#,##0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div class="bo-card" style="padding:16px; flex:1; min-width:320px;">
+                <h3 style="margin:0 0 8px;">Out of stock</h3>
+                @if (_outOfStock.Count == 0)
+                {
+                    <EmptyState Description="Everything in stock." />
+                }
+                else
+                {
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tbody>
+                            @foreach (var o in _outOfStock)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:6px 4px;">@o.Name</td>
+                                    <td style="padding:6px 4px; text-align:right; color:var(--bo-danger);">@o.CurrentStock.ToString("0.###") @o.UnitCode</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:16px;">
+            <div class="bo-card" style="padding:16px; flex:1; min-width:320px;">
+                <h3 style="margin:0 0 8px;">Fast movers (30d)</h3>
+                @if (_movers?.Fast.Count > 0)
+                {
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tbody>
+                            @foreach (var m in _movers.Fast)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:6px 4px;">@m.Name</td>
+                                    <td style="padding:6px 4px; text-align:right;">@m.QtyConsumed.ToString("0.###") @m.UnitCode</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else { <EmptyState Description="No movement yet." /> }
+            </div>
+
+            <div class="bo-card" style="padding:16px; flex:1; min-width:320px;">
+                <h3 style="margin:0 0 8px;">Slow movers (30d)</h3>
+                @if (_movers?.Slow.Count > 0)
+                {
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tbody>
+                            @foreach (var m in _movers.Slow)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:6px 4px;">@m.Name</td>
+                                    <td style="padding:6px 4px; text-align:right; color:var(--bo-text-muted);">@m.QtyConsumed.ToString("0.###") @m.UnitCode</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else { <EmptyState Description="No items." /> }
+            </div>
+        </div>
+    }
+</div>

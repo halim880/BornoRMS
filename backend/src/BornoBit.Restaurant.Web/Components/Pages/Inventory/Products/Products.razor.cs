@@ -59,6 +59,8 @@ public partial class Products : ComponentBase
             Description = p.Description,
             ImagePath = p.ImagePath,
             DisplayOrder = p.DisplayOrder,
+            KitchenStationId = p.KitchenStationId,
+            InventoryMethod = p.InventoryMethod,
             Variants = p.Variants
                 .Select(v => new VariantFormRow { Id = v.Id, Name = v.Name, Price = v.Price })
                 .ToList()

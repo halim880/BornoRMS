@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BornoBit.Restaurant.Application.Ordering.Commands;
 
-public record PlaceOrderLineInput(Guid MenuItemId, int Quantity, Guid? VariantId = null);
+public record PlaceOrderLineInput(Guid MenuItemId, int Quantity, Guid? VariantId = null, string? Notes = null);
 
 public record PlaceOrderCommand(
     Guid CustomerId,
@@ -67,6 +67,8 @@ public class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand, Place
             .Where(p => productIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, cancellationToken);
 
+        var stationNames = await _db.KitchenStations.ToDictionaryAsync(s => s.Id, s => s.Name, cancellationToken);
+
         foreach (var lineInput in request.Lines)
             OrderLineResolver.Resolve(products, lineInput.MenuItemId, lineInput.VariantId);
 
@@ -79,9 +81,11 @@ public class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand, Place
         // Merge duplicate product+variant pairs into single lines with summed quantity.
         foreach (var group in request.Lines.GroupBy(l => (l.MenuItemId, l.VariantId)))
         {
-            var (name, price, lineCurrency, code) = OrderLineResolver.Resolve(products, group.Key.MenuItemId, group.Key.VariantId);
+            var (name, price, lineCurrency, code, stationId) = OrderLineResolver.Resolve(products, group.Key.MenuItemId, group.Key.VariantId);
             var qty = group.Sum(l => l.Quantity);
-            order.AddLine(group.Key.MenuItemId, code, name, price, lineCurrency, qty, group.Key.VariantId);
+            var stationName = stationId is { } sid && stationNames.TryGetValue(sid, out var sn) ? sn : null;
+            var notes = group.Select(l => l.Notes).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
+            order.AddLine(group.Key.MenuItemId, code, name, price, lineCurrency, qty, group.Key.VariantId, stationId, stationName, notes);
         }
 
         _db.Orders.Add(order);
