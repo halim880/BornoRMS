@@ -8,6 +8,7 @@ using BornoBit.Restaurant.Domain.Customers;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Web.Components.BornoUi.Dialog;
 using BornoBit.Restaurant.Web.Components.BornoUi.Toast;
+using BornoBit.Restaurant.Web.Components.Pages.Operations.Dialogs;
 using BornoBit.Restaurant.Web.Components.Shared;
 using BornoBit.Restaurant.Web.Hubs;
 using BornoBit.Restaurant.Web.Services.Dashboard;
@@ -387,6 +388,16 @@ public partial class Pos : ComponentBase, IAsyncDisposable
                 await RefreshActiveDetailAsync(id);
             await NotifyPeersAsync(DashboardScopes.All);
         }
+    }
+
+    /// <summary>Open/close the cashier's cash drawer (shift) — the float a POS terminal settles cash into.</summary>
+    private async Task OpenDrawerDialogAsync()
+    {
+        await DialogService.ShowAsync<DrawerDialog, bool>(true, new BoDialogOptions
+        {
+            Title = "Cash drawer",
+            Width = "420px"
+        });
     }
 
     private async Task OpenRunningOrdersAsync()
