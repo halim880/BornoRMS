@@ -252,6 +252,142 @@ production-grade</strong>; a real SQL Server is required.</li>
 <tr><td>Performance / load tested</td><td class="no">❌</td><td>No evidence; LocalDB not prod-grade</td></tr>
 </table>
 
+<div class="pagebreak"></div>
+<h2>Appendix A — Competitive Gap: Waiter Console vs. Petpooja Captain App</h2>
+<p>BornoRMS's Waiter console is <strong>strong on table/session management</strong> — at rough parity with Petpooja's
+Captain app on most floor operations, and ahead on the built-in customer call-bell. It falls behind on
+<strong>kitchen-firing mechanics</strong> (auto-KOT, incremental round-KOTs, per-station tickets), <strong>item-level
+detail</strong> (modifiers/add-ons/per-item notes), and <strong>handheld/offline ergonomics</strong>. Grounded in
+<code>WaiterOrders.razor.cs</code> + <code>GetWaiterDashboardQuery.cs</code>.</p>
+<table>
+<tr><th>Capability</th><th>Petpooja Captain</th><th>BornoRMS Waiter page</th><th>Verdict</th></tr>
+<tr><td>Live floor / table status</td><td>✅ color-coded map</td><td>✅ Floor tab, status filter, "mine only"</td><td class="ok">Parity</td></tr>
+<tr><td>Open table + covers (PAX)</td><td>✅</td><td>✅ <code>OpenSessionCommand</code> + guest dialog, auto-jump to order</td><td class="ok">Parity</td></tr>
+<tr><td>Item search / favorites</td><td>✅ search box, favorites</td><td>⚠ category filter only, no text search</td><td class="warn">Behind</td></tr>
+<tr><td>Variations (full/half)</td><td>✅</td><td>✅ variant picker</td><td class="ok">Parity</td></tr>
+<tr><td>Add-ons / modifiers</td><td>✅ modifier groups</td><td>❌ variants only</td><td class="no">Gap</td></tr>
+<tr><td>Per-item special instructions</td><td>✅ per line</td><td>⚠ domain supports line notes; waiter cart captures order-level notes only</td><td class="warn">Gap (UI)</td></tr>
+<tr><td>Send/Fire KOT to kitchen</td><td>✅ one tap → auto-prints</td><td>❌ "Place" prints nothing; KOT is a manual PDF</td><td class="no">Critical gap</td></tr>
+<tr><td>Running / round KOTs (add more)</td><td>✅ new KOT of only new items</td><td>⚠ <code>UpdateWaiterOrderLinesCommand</code> replaces the line set; no incremental round-KOT</td><td class="warn">Gap</td></tr>
+<tr><td>Per-station / department KOTs</td><td>✅ separate KOT per kitchen</td><td>⚠ lines carry <code>StationId</code>, KDS filters by it, but printed KOT is one combined ticket</td><td class="warn">Partial</td></tr>
+<tr><td>Modify/cancel item + reason + manager auth</td><td>✅</td><td>⚠ <code>VoidOrderLineCommand</code> exists (manager) but not surfaced on the waiter page</td><td class="warn">Gap</td></tr>
+<tr><td>Coursing (fire starters now, mains later)</td><td>✅</td><td>❌ none</td><td class="no">Gap</td></tr>
+<tr><td>Transfer table / shift KOT</td><td>✅</td><td>✅ <code>MoveSessionTableCommand</code></td><td class="ok">Parity</td></tr>
+<tr><td>Merge tables</td><td>✅</td><td>✅ <code>MergeSessionsCommand</code></td><td class="ok">Parity</td></tr>
+<tr><td>Split table / bill</td><td>✅</td><td>✅ <code>SplitSessionCommand</code></td><td class="ok">Parity</td></tr>
+<tr><td>Transfer waiter / captain</td><td>✅</td><td>✅ <code>TransferSessionWaiterCommand</code></td><td class="ok">Parity</td></tr>
+<tr><td>Mark served</td><td>✅</td><td>✅ Ready tab → Serve / Serve-all</td><td class="ok">Parity</td></tr>
+<tr><td>View bill / request bill</td><td>✅ captain can bill if permitted</td><td>✅ view bill + <code>RequestCashierSettlementCommand</code> (waiter requests, cashier settles)</td><td class="ok">Design choice</td></tr>
+<tr><td>Customer call-bell (water/bill/waiter)</td><td>⚠ separate QR product</td><td>✅ Requests tab: Call Waiter / Bill / Water / Tissue</td><td class="ok">Ahead</td></tr>
+<tr><td>Waiter sales attribution</td><td>✅ captain-wise report</td><td>✅ "my tables / my revenue today" widgets</td><td class="ok">Parity</td></tr>
+<tr><td>Real-time sync</td><td>✅ cloud push</td><td>✅ SignalR dashboard hub (best-effort)</td><td class="ok">Parity</td></tr>
+<tr><td>Offline mode</td><td>✅ queues offline, syncs later</td><td>❌ Blazor Server — dies without connection</td><td class="no">Critical gap</td></tr>
+<tr><td>Hardware</td><td>✅ native Android/iOS handheld</td><td>⚠ web (tablet browser; heavier, connection-bound)</td><td class="warn">Behind</td></tr>
+<tr><td>Acceptance + ETA back to customer</td><td>✅ (online orders)</td><td>❌ none</td><td class="no">Gap</td></tr>
+</table>
+<p class="meta"><strong>Summary:</strong> On table &amp; session management BornoRMS is at rough Captain-app parity (and ahead on
+the call-bell). On kitchen firing — auto-KOT, round-KOTs, per-station tickets, modifiers, offline — it is materially behind,
+and the missing auto-KOT is the same go-live blocker Critical #1 and #6 already flag, seen from the waiter's seat.</p>
+
+<div class="pagebreak"></div>
+<h2>Appendix B — Competitive Gap Analysis vs. Petpooja (Whole System)</h2>
+<p>A like-for-like module count would mislead — Petpooja is a 10-year commercial SaaS with a large integration marketplace,
+and <strong>multi-outlet / central-kitchen / franchise are intentionally out of scope</strong> for BornoRMS (tenancy was
+deliberately stripped; single-branch by design). The fair bar is parity on <em>core single-branch restaurant operations</em>,
+which BornoRMS largely reaches. Gaps below are split into genuine functional gaps, market-specific integrations, and the few
+correctness defects that matter more than any missing module.</p>
+
+<h3>B.1 — Whole-system scorecard</h3>
+<table>
+<tr><th>Module</th><th>Petpooja</th><th>BornoRMS</th><th>Gap</th></tr>
+<tr><td>POS billing (split/partial/rounding/numpad)</td><td>✅ mature</td><td>✅ strong</td><td class="ok">Parity</td></tr>
+<tr><td>Cash drawer / shift + variance</td><td>✅</td><td>✅</td><td class="ok">Parity</td></tr>
+<tr><td>Table / session / floor management</td><td>✅</td><td>✅ merge/split/transfer</td><td class="ok">Parity</td></tr>
+<tr><td>Waiter / captain app</td><td>✅ native, offline</td><td>⚠ web, no offline</td><td class="warn">Minor</td></tr>
+<tr><td>Customer QR / own-brand online ordering</td><td>✅ (paid add-on)</td><td>✅ Next.js site (phone-OTP, menu, cart)</td><td class="ok">Parity (strength)</td></tr>
+<tr><td>Menu (categories / variations)</td><td>✅</td><td>✅</td><td class="ok">Parity</td></tr>
+<tr><td>Menu (add-ons / modifiers / combos)</td><td>✅</td><td>❌ variants only</td><td class="warn">Gap</td></tr>
+<tr><td>Recipe / BOM + stock deduction</td><td>✅</td><td>✅ recipe explosion, idempotent</td><td class="ok">Parity</td></tr>
+<tr><td>Inventory ledger / wastage / adjust</td><td>✅</td><td>✅ full ledger</td><td class="ok">Parity</td></tr>
+<tr><td>Purchase Orders + GRN matching</td><td>✅</td><td>⚠ GRN only, no PO</td><td class="warn">Gap</td></tr>
+<tr><td>Purchase returns</td><td>✅</td><td>❌</td><td class="warn">Gap</td></tr>
+<tr><td>Supplier payables / statements</td><td>✅</td><td>❌ entity only</td><td class="warn">Gap</td></tr>
+<tr><td>KDS (real-time board)</td><td>✅</td><td>✅ SignalR + poll</td><td class="ok">Parity</td></tr>
+<tr><td>KOT auto-print / per-station / round-KOT</td><td>✅</td><td>❌ manual, combined</td><td class="no">Critical gap</td></tr>
+<tr><td>Payments — gateway (card / UPI / online link)</td><td>✅ + Petpooja Pay</td><td>❌ mock only</td><td class="no">Critical gap</td></tr>
+<tr><td>Discounts / coupons / happy-hours / loyalty</td><td>✅ rich</td><td>⚠ order-level %/flat only</td><td class="warn">Gap</td></tr>
+<tr><td>CRM / loyalty / feedback / SMS-WhatsApp</td><td>✅</td><td>❌ none</td><td class="warn">Gap</td></tr>
+<tr><td>Tax compliance (multi-slab, e-invoice)</td><td>✅ GST</td><td>⚠ single VAT% + service%</td><td class="warn">Gap</td></tr>
+<tr><td>Accounting (auto-post, double-entry)</td><td>✅ + Tally sync</td><td>❌ single-entry, manual</td><td class="warn">Gap</td></tr>
+<tr><td>Expense management from POS</td><td>✅</td><td>❌</td><td class="warn">Gap</td></tr>
+<tr><td>Reports &amp; analytics</td><td>✅ 200+</td><td>⚠ dashboards; no profit/VAT/COGS</td><td class="warn">Gap</td></tr>
+<tr><td>Delivery logistics (rider / dispatch / fee)</td><td>✅ + logistics</td><td>❌ enum only</td><td class="no">Critical gap</td></tr>
+<tr><td>Aggregator integration (→ Foodpanda / Pathao)</td><td>✅ Zomato/Swiggy</td><td>❌</td><td class="warn">Gap (market)</td></tr>
+<tr><td>Offline mode</td><td>✅</td><td>❌ Blazor Server</td><td class="no">Critical gap</td></tr>
+<tr><td>Multi-outlet / central kitchen / chain</td><td>✅</td><td>❌ single-branch by design</td><td>Out of scope</td></tr>
+<tr><td>Hardware ecosystem (scale, caller-ID, multi-printer)</td><td>✅</td><td>⚠ printer agent only</td><td class="warn">Gap</td></tr>
+<tr><td>Owner mobile app (remote monitoring)</td><td>✅</td><td>❌</td><td class="warn">Gap</td></tr>
+<tr><td>RBAC / roles / permissions</td><td>✅</td><td>✅ policy + handler guards, DB-driven nav</td><td class="ok">Parity</td></tr>
+</table>
+
+<div class="pagebreak"></div>
+<h3>B.2 — Cashier vs. Petpooja Billing (detail)</h3>
+<p>Grounded in <code>Pos.razor.cs</code>, <code>PaymentDialog.razor</code>, <code>CashCounter.razor.cs</code>. Note the cashier
+is split across two screens — the POS terminal (take-order + quick-pay) and the Cash Counter (board / EOD / session settlement);
+Petpooja unifies billing in one screen.</p>
+<table>
+<tr><th>Capability</th><th>Petpooja Billing</th><th>BornoRMS</th><th>Verdict</th></tr>
+<tr><td>Touch numpad billing</td><td>✅</td><td>✅ quick keys (Remaining/50+/100+/500+)</td><td class="ok">Parity</td></tr>
+<tr><td>Split payment (multi-tender)</td><td>✅</td><td>✅ staged tenders</td><td class="ok">Parity</td></tr>
+<tr><td>Partial / part payment</td><td>✅</td><td>✅ "Take Partial"</td><td class="ok">Parity</td></tr>
+<tr><td>Cash change calc</td><td>✅</td><td>✅ overpay → change</td><td class="ok">Parity</td></tr>
+<tr><td>Payment modes</td><td>✅ cash/card/UPI + online links</td><td>⚠ cash/card/mobile, mock gateway, no UPI/link</td><td class="warn">Behind</td></tr>
+<tr><td>Round off</td><td>✅</td><td>✅ Floor/Ceil</td><td class="ok">Parity</td></tr>
+<tr><td>Discounts %/flat</td><td>✅ + item-level + coupons + loyalty</td><td>⚠ order-level + manager threshold</td><td class="warn">Behind</td></tr>
+<tr><td>Tax/GST breakup on bill</td><td>✅ multi-slab, HSN</td><td>⚠ single VAT% + service%</td><td class="warn">Behind</td></tr>
+<tr><td>Reprint bill</td><td>✅</td><td>✅</td><td class="ok">Parity</td></tr>
+<tr><td>Receipt auto-print on settle</td><td>✅</td><td>✅ fire-and-forget</td><td class="ok">Parity</td></tr>
+<tr><td>KOT auto-print</td><td>✅</td><td>❌ manual</td><td class="no">Critical gap</td></tr>
+<tr><td>Void / modify bill + reason + manager</td><td>✅</td><td>✅ manager-gated + audit</td><td class="ok">Parity</td></tr>
+<tr><td>Bill on hold / running orders</td><td>✅</td><td>✅ chips, every edit auto-persisted</td><td class="ok">Parity</td></tr>
+<tr><td>NC / complimentary / staff-meal bill</td><td>✅</td><td>❌</td><td class="warn">Gap</td></tr>
+<tr><td>Cash drawer / shift open-close</td><td>✅</td><td>✅ + variance</td><td class="ok">Parity</td></tr>
+<tr><td>Expense / cash pay-out from POS</td><td>✅</td><td>❌</td><td class="warn">Gap</td></tr>
+<tr><td>Day-end / settlement (Z) report</td><td>✅</td><td>⚠ daily summary + ledger, no Z doc</td><td class="warn">Partial</td></tr>
+<tr><td>Customer / CRM capture</td><td>✅ phone/GST + loyalty</td><td>⚠ phone/name/address only</td><td class="warn">Behind</td></tr>
+<tr><td>Multi-terminal real-time</td><td>✅</td><td>✅ SignalR + busy-guard</td><td class="ok">Parity</td></tr>
+<tr><td>Double-charge concurrency safety</td><td>⚠</td><td>✅ drops staged tenders on conflict; Payment.Id fix</td><td class="ok">Ahead</td></tr>
+<tr><td>Idempotency key on settle</td><td>partial</td><td>❌ recovery only, no key</td><td class="warn">Behind</td></tr>
+<tr><td>Offline billing</td><td>✅</td><td>❌ Blazor Server</td><td class="no">Critical gap</td></tr>
+</table>
+
+<h3>B.3 — Reading the gaps</h3>
+<p><strong>Entire categories missing:</strong> online-payment/gateway · delivery logistics · aggregator integration
+(BD: Foodpanda/Pathao) · CRM/loyalty/marketing · procurement depth (PO/returns/payables) · expense management ·
+double-entry accounting · analytics depth (profit/VAT/Z) · offline resilience · multi-slab tax compliance.</p>
+<p><strong>Present but shallow:</strong> menu add-ons/combos · coupons/happy-hours/item-level discounts · kitchen firing
+(auto-KOT, round-KOTs, per-station) · reporting (no profit/VAT/cashier-Z).</p>
+<p><strong>Genuinely competitive (real parity):</strong> POS billing + double-charge concurrency hygiene · table/session
+management (ahead on the customer call-bell) · inventory + recipe deduction · own-brand QR/web ordering (Petpooja charges
+extra) · RBAC + DB-driven navigation.</p>
+<p class="crit" style="border-left-color:#7c2d12;background:#fff1e6"><strong>Correctness defects (matter more than any missing module):</strong>
+payment force-completes the order and bypasses the kitchen · refund/line-void don't reverse inventory · void/refund post no
+GL reversal and <code>AccountedAtUtc</code> isn't cleared. Fix these before chasing feature parity.</p>
+
+<h3>B.4 — Prioritized gap closure (P0–P3)</h3>
+<table>
+<tr><th>Priority</th><th>Gap cluster</th><th>Roadmap</th></tr>
+<tr><td class="no">P0 — blockers</td><td>Auto-KOT · settlement-bypass · refund inventory/GL reversal · real payment gateway</td><td>Phase 1</td></tr>
+<tr><td class="warn">P1 — channel / money</td><td>Delivery logistics · profit/VAT/EOD reports · online payment for QR</td><td>Phase 2</td></tr>
+<tr><td class="warn">P1 — experience</td><td>Add-ons/modifiers · coupons/loyalty · round-KOT/per-station · offline till + captain</td><td>Phase 2b</td></tr>
+<tr><td>P2 — back-office</td><td>PO/returns/payables · expense mgmt · double-entry/Tally export · multi-slab tax</td><td>Phase 3</td></tr>
+<tr><td>P3 — growth</td><td>Aggregator (Foodpanda/Pathao) · CRM/feedback/WhatsApp · owner app · hardware ecosystem</td><td>Phase 4</td></tr>
+</table>
+<p class="meta"><strong>Bottom line:</strong> BornoRMS reaches operational parity with Petpooja on the core dine-in loop. The gaps
+cluster in money completeness (gateway, accounting, tax, profit), kitchen firing (auto-KOT), growth modules (delivery,
+aggregators, CRM), and resilience (offline) — and under all of it sit three correctness defects to fix first.</p>
+
+<div class="pagebreak"></div>
 <h2>Final Verdict</h2>
 <p><strong>Can this software run a real restaurant today?</strong> Not yet — even for dine-in + takeaway, the
 <strong>payment-bypasses-kitchen</strong> behaviour plus no auto-KOT means a paid order can reach no one in the kitchen,
@@ -272,15 +408,22 @@ served (track "paid" and "served" separately);
 (5) add a server-side idempotency key to payment/settle commands;
 (6) rotate seed super-admin; move off LocalDB to real SQL Server with backups.</div>
 <div class="phase"><strong>Phase 2 — Channel + money completeness (before delivery / card go-live):</strong>
-(6) delivery subsystem (rider, dispatch, delivery fee, tracking, report);
-(7) real payment-gateway integration (card + bKash/Nagad) replacing the mock;
-(8) profit reporting (roll <code>InventoryItem.AvgCost</code> up via recipe → COGS-per-order) plus VAT and cashier/EOD reports.</div>
+(7) delivery subsystem (rider, dispatch, delivery fee, tracking, report);
+(8) real payment-gateway integration (card + bKash/Nagad) replacing the mock;
+(9) profit reporting (roll <code>InventoryItem.AvgCost</code> up via recipe → COGS-per-order) plus VAT and cashier/EOD reports.</div>
+<div class="phase"><strong>Phase 2b — Waiter/captain parity (Petpooja gap closure — see Appendix A):</strong>
+(10) <strong>incremental round-KOTs</strong> — adding to a running order fires a KOT of only the new items, and
+<strong>split the KOT per kitchen station</strong>;
+(11) <strong>per-item modifiers/add-ons + per-line special-instruction notes</strong> in the waiter cart, and surface
+<code>VoidOrderLineCommand</code> (modify/cancel item with reason + manager auth) on the waiter page;
+(12) <strong>offline-capable order capture</strong> (queue + sync) so the floor survives WiFi drops;
+(13) item search/favorites in the take-order grid; optional coursing (hold/fire).</div>
 <div class="phase"><strong>Phase 3 — Procurement + controls:</strong>
-(9) Purchase Orders + PO→GRN matching, purchase returns, supplier payables/statements/payments;
-(10) discount controls (item-level + coupon, per-cashier caps, dual-control + frequency reporting on manager void/refund);
-(11) drawer reconciliation to GL, petty-cash/float in-out, variance escalation.</div>
+(14) Purchase Orders + PO→GRN matching, purchase returns, supplier payables/statements/payments;
+(15) discount controls (item-level + coupon, per-cashier caps, dual-control + frequency reporting on manager void/refund);
+(16) drawer reconciliation to GL, petty-cash/float in-out, variance escalation.</div>
 <div class="phase"><strong>Phase 4 — Hardening / depth:</strong>
-(12) recipe versioning + costing; formal stock-count sessions; multi-level unit conversion; reservation depth;
+(17) recipe versioning + costing; formal stock-count sessions; multi-level unit conversion; reservation depth;
 load/concurrency testing to the 100-user target; dashboard caching.</div>
 
 <div class="footer">BornoBit Restaurant — Production-Readiness Audit. Findings grounded in source review of the
