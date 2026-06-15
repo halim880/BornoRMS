@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -15,14 +16,18 @@ public record GetPendingCashImportQuery(DateOnly Date) : IRequest<CashSummaryDto
 public class GetPendingCashImportQueryHandler : IRequestHandler<GetPendingCashImportQuery, CashSummaryDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetPendingCashImportQueryHandler(IAppDbContext db) => _db = db;
+    public GetPendingCashImportQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<CashSummaryDto> Handle(GetPendingCashImportQuery request, CancellationToken cancellationToken)
     {
         var date = request.Date;
-        var start = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var end = start.AddDays(1);
+        var (start, end) = _clock.DayWindowUtc(date);
 
         // Captured payments on paid, non-cancelled, un-accounted invoices for the day, grouped by method.
         var pending = await (

@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -17,13 +18,17 @@ public record CategorySalesDto(string Category, decimal Revenue, int Quantity);
 public class GetSalesByCategoryQueryHandler : IRequestHandler<GetSalesByCategoryQuery, IReadOnlyList<CategorySalesDto>>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetSalesByCategoryQueryHandler(IAppDbContext db) => _db = db;
+    public GetSalesByCategoryQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<IReadOnlyList<CategorySalesDto>> Handle(GetSalesByCategoryQuery request, CancellationToken cancellationToken)
     {
-        var start = request.From.Date;
-        var end = request.To.Date.AddDays(1);
+        var (start, end) = _clock.RangeUtc(DateOnly.FromDateTime(request.From), DateOnly.FromDateTime(request.To));
 
         var lines = await _db.Orders
             .Where(o => o.IsPaid && o.Status != OrderStatus.Cancelled

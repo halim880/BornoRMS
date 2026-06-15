@@ -2,6 +2,7 @@ using BornoBit.Restaurant.Application.Accounting.Audit;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Common.Security;
 using BornoBit.Restaurant.Application.Inventory.Consumption;
+using BornoBit.Restaurant.Application.Ordering.Common;
 using BornoBit.Restaurant.Application.Ordering.Payments;
 using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Identity;
@@ -43,16 +44,18 @@ public class AddPaymentCommandHandler : IRequestHandler<AddPaymentCommand, Settl
     private readonly ICurrentUser _currentUser;
     private readonly IStockConsumptionService _consumption;
     private readonly IPaymentGateway _gateway;
+    private readonly IDineInSessionResolver _sessions;
     private readonly ILogger<AddPaymentCommandHandler> _logger;
 
     public AddPaymentCommandHandler(
         IAppDbContext db, ICurrentUser currentUser, IStockConsumptionService consumption,
-        IPaymentGateway gateway, ILogger<AddPaymentCommandHandler> logger)
+        IPaymentGateway gateway, IDineInSessionResolver sessions, ILogger<AddPaymentCommandHandler> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _consumption = consumption;
         _gateway = gateway;
+        _sessions = sessions;
         _logger = logger;
     }
 
@@ -97,6 +100,13 @@ public class AddPaymentCommandHandler : IRequestHandler<AddPaymentCommand, Settl
         // Idempotency guard makes this a no-op if the order was already deducted on Confirm/BeginPreparing.
         if (order.IsPaid && order.StockSyncStatus is not (StockSyncStatus.Synced or StockSyncStatus.Reversed))
             await OrderStockSync.TryApplyAsync(_db, _consumption, order, _logger, cancellationToken);
+
+        // Free the table once this was the session's last unpaid order.
+        if (order.IsPaid && order.DiningSessionId is { } sessionId)
+        {
+            await _sessions.CloseIfEmptyAsync(_db, sessionId, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
 
         var change = order.Payments.OrderBy(p => p.CreatedAtUtc).LastOrDefault()?.Change ?? 0m;
         return order.ToSettlementResult(change);

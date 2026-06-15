@@ -1,7 +1,7 @@
 using BornoBit.Restaurant.Application.Common.Numbering;
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Ordering.Common;
 using BornoBit.Restaurant.Domain.Customers;
-using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using BornoBit.Restaurant.Shared.Identity;
@@ -43,15 +43,15 @@ public class PlaceWaiterOrderCommandHandler : IRequestHandler<PlaceWaiterOrderCo
 {
     private readonly IAppDbContext _db;
     private readonly IOrderNumberGenerator _numbers;
-    private readonly ISessionNumberGenerator _sessionNumbers;
+    private readonly IDineInSessionResolver _sessions;
     private readonly TimeProvider _timeProvider;
     private readonly ICurrentUser _currentUser;
 
-    public PlaceWaiterOrderCommandHandler(IAppDbContext db, IOrderNumberGenerator numbers, ISessionNumberGenerator sessionNumbers, TimeProvider timeProvider, ICurrentUser currentUser)
+    public PlaceWaiterOrderCommandHandler(IAppDbContext db, IOrderNumberGenerator numbers, IDineInSessionResolver sessions, TimeProvider timeProvider, ICurrentUser currentUser)
     {
         _db = db;
         _numbers = numbers;
-        _sessionNumbers = sessionNumbers;
+        _sessions = sessions;
         _timeProvider = timeProvider;
         _currentUser = currentUser;
     }
@@ -88,7 +88,7 @@ public class PlaceWaiterOrderCommandHandler : IRequestHandler<PlaceWaiterOrderCo
         // Dine-in orders belong to a dining session: use the one supplied, the table's open one, or open a new one.
         if (request.Type == OrderType.DineIn && request.TableId is { } dineTableId)
         {
-            var sessionId = await ResolveSessionIdAsync(dineTableId, request.DiningSessionId, request.GuestCount, nowUtc, cancellationToken);
+            var sessionId = await _sessions.ResolveAsync(_db, dineTableId, request.DiningSessionId, request.GuestCount, nowUtc, cancellationToken);
             order.AttachToSession(sessionId);
         }
 
@@ -107,31 +107,6 @@ public class PlaceWaiterOrderCommandHandler : IRequestHandler<PlaceWaiterOrderCo
         await _db.SaveChangesAsync(cancellationToken);
 
         return new PlaceOrderResult(order.Id, order.OrderNumber, order.Total, order.Currency);
-    }
-
-    private async Task<Guid> ResolveSessionIdAsync(Guid tableId, Guid? requestedSessionId, int? guestCount, DateTime nowUtc, CancellationToken cancellationToken)
-    {
-        if (requestedSessionId is { } sid)
-        {
-            var ok = await _db.DiningSessions.AnyAsync(
-                s => s.Id == sid && s.RestaurantTableId == tableId
-                     && (s.Status == DiningSessionStatus.Open || s.Status == DiningSessionStatus.Billing),
-                cancellationToken);
-            if (ok) return sid;
-        }
-
-        var existing = await _db.DiningSessions
-            .Where(s => s.RestaurantTableId == tableId
-                        && (s.Status == DiningSessionStatus.Open || s.Status == DiningSessionStatus.Billing))
-            .Select(s => s.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (existing != Guid.Empty) return existing;
-
-        var sessionNumber = await _sessionNumbers.NextAsync(nowUtc, cancellationToken);
-        var session = DiningSession.Open(sessionNumber, tableId, guestCount ?? 0, nowUtc,
-            _currentUser.UserId, _currentUser.UserName);
-        _db.DiningSessions.Add(session);
-        return session.Id;
     }
 
     private async Task<Guid> ResolveCustomerIdAsync(string? phone, string? name, CancellationToken cancellationToken)

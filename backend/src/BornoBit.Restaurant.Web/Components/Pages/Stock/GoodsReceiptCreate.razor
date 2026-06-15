@@ -1,21 +1,24 @@
 @page "/stock/grn/new"
+@page "/stock/grn/{Id:guid}/edit"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
 @using BornoBit.Restaurant.Application.Inventory.Items
 @using BornoBit.Restaurant.Application.Inventory.Purchases
 @using BornoBit.Restaurant.Application.Inventory.Suppliers
 @using BornoBit.Restaurant.Application.Inventory.Units
 @using BornoBit.Restaurant.Domain.Inventory
+@using BornoBit.Restaurant.Web.Components.BornoUi
 @using FluentValidation
 @using MediatR
+@using Microsoft.AspNetCore.Components.Web
 @inject ISender Mediator
 @inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
 @inject NavigationManager Nav
 
-<PageTitle>New Goods Receipt · BornoBit.Restaurant</PageTitle>
+<PageTitle>@(_editMode ? "Edit Goods Receipt" : "New Goods Receipt") · BornoBit.Restaurant</PageTitle>
 
 <div class="bo-page">
-    <PageHeader Title="New Goods Receipt"
-                Description="Record stock received from a supplier. Saved as a draft — post it from the list to raise stock." />
+    <PageHeader Title="@(_editMode ? "Edit Goods Receipt" : "New Goods Receipt")"
+                Description="Record stock received from a supplier. Saved as a draft — post it from the list to raise stock. Tip: type to search, Enter on Unit cost adds the next line, Ctrl+Enter saves." />
 
     @if (_loading)
     {
@@ -27,21 +30,29 @@
     }
     else
     {
-        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;" @onkeydown="OnCardKeyDown">
             @if (!string.IsNullOrEmpty(_error))
             {
                 <BoMessageBar Intent="error">@_error</BoMessageBar>
             }
 
-            <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <BoSelect TOption="SupplierDto"
-                          Items="@_suppliers"
-                          OptionValue="@(s => s.Id.ToString())"
-                          OptionText="@(s => s.Name)"
-                          SelectedOption="@_selectedSupplier"
-                          SelectedOptionChanged="@(s => { _selectedSupplier = s; _supplierId = s?.Id ?? Guid.Empty; })"
-                          Label="Supplier" Placeholder="Select a supplier" Required="true" Style="flex:1; min-width:220px;" />
-                <BoInput @bind-Value="_invoiceNo" Label="Invoice no (optional — cash buying)" Style="flex:1; min-width:220px;" Maxlength="80" />
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+                <div style="flex:1; min-width:240px;">
+                    <BoAutocomplete @ref="_supplierRef" TOption="SupplierDto"
+                                    Items="@_suppliers"
+                                    OptionValue="@(s => s.Id.ToString())"
+                                    OptionText="@(s => s.Name)"
+                                    OptionSearch="@(s => $"{s.Code} {s.Name}")"
+                                    SelectedOption="@_selectedSupplier"
+                                    SelectedOptionChanged="@(s => { _selectedSupplier = s; _supplierId = s?.Id ?? Guid.Empty; })"
+                                    Label="Supplier" Placeholder="Type to search supplier…" Required="true" />
+                </div>
+                <div style="flex:1; min-width:200px;">
+                    <BoInput @bind-Value="_invoiceNo" Label="Invoice no (optional — cash buying)" Maxlength="80" />
+                </div>
+                <div style="min-width:170px;">
+                    <BoDatePicker @bind-Value="_receivedDate" Label="Received date" Required="true" />
+                </div>
             </div>
 
             <BoInput @bind-Value="_notes" Label="Notes" Style="width:100%;" Maxlength="1000" />
@@ -49,7 +60,7 @@
             <div>
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
                     <strong>Lines</strong>
-                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="AddLine">+ Add line</button>
+                    <button type="button" class="bo-btn bo-btn-ghost" accesskey="a" @onclick="AddLine">+ Add line</button>
                 </div>
 
                 <table style="width:100%; border-collapse:collapse;">
@@ -68,13 +79,14 @@
                         {
                             <tr style="border-top:1px solid var(--bo-border-soft);">
                                 <td style="padding:6px 10px;">
-                                    <BoSelect TOption="InventoryItemDto"
-                                              Items="@_items"
-                                              OptionValue="@(i => i.Id.ToString())"
-                                              OptionText="@(i => i.Name)"
-                                              SelectedOption="@_items.FirstOrDefault(i => i.Id == line.ItemId)"
-                                              SelectedOptionChanged="@(i => OnLineItemChanged(line, i))"
-                                              Placeholder="Select item" Style="width:100%;" />
+                                    <BoAutocomplete @ref="line.ItemRef" TOption="InventoryItemDto"
+                                                    Items="@_items"
+                                                    OptionValue="@(i => i.Id.ToString())"
+                                                    OptionText="@(i => i.Name)"
+                                                    OptionSearch="@(i => $"{i.Code} {i.Name}")"
+                                                    SelectedOption="@_items.FirstOrDefault(i => i.Id == line.ItemId)"
+                                                    SelectedOptionChanged="@(i => OnLineItemChanged(line, i))"
+                                                    Placeholder="Type to search item…" />
                                 </td>
                                 <td style="padding:6px 10px;">
                                     <BoNumeric T="decimal" Value="line.Qty" ValueChanged="@(v => line.Qty = v)" Min="0" Step="0.001" Decimals="3" Style="width:100%;" />
@@ -88,7 +100,7 @@
                                               SelectedOptionChanged="@(u => line.UnitId = u?.Id ?? Guid.Empty)"
                                               Placeholder="Unit" Style="width:100%;" />
                                 </td>
-                                <td style="padding:6px 10px;">
+                                <td style="padding:6px 10px;" @onkeydown="@(e => OnCostKeyDown(e, line))">
                                     <BoNumeric T="decimal" Value="line.UnitCost" ValueChanged="@(v => line.UnitCost = v)" Min="0" Step="0.01" Decimals="2" Style="width:100%;" />
                                 </td>
                                 <td style="padding:6px 10px; text-align:right;">@((line.Qty * line.UnitCost).ToString("0.00"))</td>
@@ -101,7 +113,7 @@
                 </table>
                 @if (_lines.Count == 0)
                 {
-                    <div style="padding:12px; color: var(--bo-text-subtle);">No lines yet. Click "+ Add line".</div>
+                    <div style="padding:12px; color: var(--bo-text-subtle);">No lines yet. Click "+ Add line" (Alt+A).</div>
                 }
             </div>
 
@@ -109,7 +121,7 @@
                 <strong>Total: @_lines.Sum(l => l.Qty * l.UnitCost).ToString("0.00") Tk</strong>
                 <div style="display:flex; gap:8px;">
                     <a class="bo-btn bo-btn-ghost" href="/stock/grn">Cancel</a>
-                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Save draft</BoButton>
+                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(_editMode ? "Save changes" : "Save draft")</BoButton>
                 </div>
             </div>
         </div>
@@ -117,6 +129,9 @@
 </div>
 
 @code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool _editMode;
     private bool _loading = true;
     private bool _busy;
     private string? _loadError;
@@ -130,8 +145,13 @@
     private Guid _supplierId;
     private string? _invoiceNo;
     private string? _notes;
+    private DateOnly? _receivedDate = DateOnly.FromDateTime(DateTime.Today);
 
     private readonly List<LineRow> _lines = new();
+
+    private BoAutocomplete<SupplierDto>? _supplierRef;
+    private bool _focusSupplier;
+    private bool _focusNewItem;
 
     private class LineRow
     {
@@ -139,27 +159,71 @@
         public decimal Qty { get; set; }
         public Guid UnitId { get; set; }
         public decimal UnitCost { get; set; }
+        public BoAutocomplete<InventoryItemDto>? ItemRef { get; set; }
     }
 
     protected override async Task OnInitializedAsync()
     {
+        _editMode = Id.HasValue;
         try
         {
             _suppliers = (await Mediator.Send(new GetSuppliersQuery())).Where(s => s.IsActive).ToList();
             _items = (await Mediator.Send(new GetInventoryItemsQuery(PageSize: 200, IncludeInactive: false))).Items.ToList();
             _units = (await Mediator.Send(new GetUnitsQuery())).Where(u => u.IsActive).ToList();
+
+            if (_editMode)
+            {
+                var grn = await Mediator.Send(new GetGoodsReceiptQuery(Id!.Value));
+                if (grn.Status != GoodsReceiptStatus.Draft)
+                {
+                    ToastService.ShowError("Only draft receipts can be edited.");
+                    Nav.NavigateTo($"/stock/grn/{grn.Id}");
+                    return;
+                }
+                _supplierId = grn.SupplierId;
+                _selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == grn.SupplierId);
+                _invoiceNo = grn.InvoiceNo;
+                _notes = grn.Notes;
+                _receivedDate = DateOnly.FromDateTime(grn.ReceivedAtUtc);
+                foreach (var l in grn.Lines)
+                    _lines.Add(new LineRow { ItemId = l.InventoryItemId, Qty = l.Qty, UnitId = l.UnitId, UnitCost = l.UnitCost });
+            }
+            else
+            {
+                _focusSupplier = true;
+            }
         }
         catch (Exception ex) { _loadError = $"Failed to load: {ex.Message}"; }
         finally { _loading = false; }
     }
 
-    private void AddLine() => _lines.Add(new LineRow());
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusSupplier && _supplierRef is not null)
+        {
+            _focusSupplier = false;
+            await _supplierRef.FocusAsync();
+        }
+        if (_focusNewItem)
+        {
+            _focusNewItem = false;
+            var last = _lines.LastOrDefault();
+            if (last?.ItemRef is not null) await last.ItemRef.FocusAsync();
+        }
+    }
+
+    private void AddLine()
+    {
+        _lines.Add(new LineRow());
+        _focusNewItem = true;
+    }
+
     private void RemoveLine(LineRow line) => _lines.Remove(line);
 
     private void OnLineItemChanged(LineRow line, InventoryItemDto? item)
     {
         line.ItemId = item?.Id ?? Guid.Empty;
-        // Default the unit to the item's base unit.
+        // Default the unit to the item's base unit and the cost to its moving average.
         line.UnitId = item?.BaseUnitId ?? Guid.Empty;
         if (item is not null) line.UnitCost = item.AvgCost;
     }
@@ -173,10 +237,22 @@
         return _units.Where(u => u.Dimension == baseUnit.Dimension);
     }
 
+    private void OnCostKeyDown(KeyboardEventArgs e, LineRow line)
+    {
+        // Enter on the last cell of a line jumps straight into a fresh line — fast keyboard entry.
+        if (e.Key == "Enter") AddLine();
+    }
+
+    private async Task OnCardKeyDown(KeyboardEventArgs e)
+    {
+        if (e.CtrlKey && e.Key == "Enter") await SaveAsync();
+    }
+
     private async Task SaveAsync()
     {
         _error = null;
         if (_supplierId == Guid.Empty) { _error = "Select a supplier."; return; }
+        if (_receivedDate is null) { _error = "Select a received date."; return; }
         var valid = _lines.Where(l => l.ItemId != Guid.Empty && l.UnitId != Guid.Empty && l.Qty > 0).ToList();
         if (valid.Count == 0) { _error = "Add at least one line with an item, unit and quantity."; return; }
 
@@ -184,13 +260,20 @@
         try
         {
             var inputs = valid.Select(l => new GoodsReceiptLineInput(l.ItemId, l.Qty, l.UnitId, l.UnitCost)).ToList();
-            await Mediator.Send(new CreateGoodsReceiptCommand(
-                _supplierId,
-                string.IsNullOrWhiteSpace(_invoiceNo) ? null : _invoiceNo.Trim(),
-                null,
-                string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
-                inputs));
-            ToastService.ShowSuccess("Draft goods receipt created. Post it to raise stock.");
+            var receivedAtUtc = _receivedDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var invoice = string.IsNullOrWhiteSpace(_invoiceNo) ? null : _invoiceNo.Trim();
+            var notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim();
+
+            if (_editMode)
+            {
+                await Mediator.Send(new UpdateGoodsReceiptCommand(Id!.Value, _supplierId, invoice, receivedAtUtc, notes, inputs));
+                ToastService.ShowSuccess("Draft goods receipt updated.");
+            }
+            else
+            {
+                await Mediator.Send(new CreateGoodsReceiptCommand(_supplierId, invoice, receivedAtUtc, notes, inputs));
+                ToastService.ShowSuccess("Draft goods receipt created. Post it to raise stock.");
+            }
             Nav.NavigateTo("/stock/grn");
         }
         catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }

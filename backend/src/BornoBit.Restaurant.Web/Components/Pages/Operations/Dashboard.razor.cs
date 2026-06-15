@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Operations.Dashboard;
+using BornoBit.Restaurant.Application.Operations.Sessions;
 using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -43,6 +44,7 @@ public partial class Dashboard : ComponentBase, IAsyncDisposable
     private DateTime _customTo = DateTime.UtcNow.Date;
     private OrderStatus? _orderFilter;
     private TableOverviewRowDto? _selectedTable;
+    private string? _tableMessage;
 
     // Reservation quick form
     private bool _showReservation;
@@ -158,7 +160,28 @@ public partial class Dashboard : ComponentBase, IAsyncDisposable
         await NotifyAsync();
     }
 
-    private void SelectTable(TableOverviewRowDto t) => _selectedTable = _selectedTable?.TableId == t.TableId ? null : t;
+    private void SelectTable(TableOverviewRowDto t)
+    {
+        _tableMessage = null;
+        _selectedTable = _selectedTable?.TableId == t.TableId ? null : t;
+    }
+
+    private async Task ReleaseTableAsync(TableOverviewRowDto t)
+    {
+        _tableMessage = null;
+        if (t.SessionId is not { } sessionId) return;
+        try
+        {
+            await Mediator.Send(new CloseSessionCommand(sessionId, "Released from dashboard"));
+            await LoadLiveAsync();
+            _selectedTable = _tables.FirstOrDefault(x => x.TableId == t.TableId);
+            await NotifyAsync();
+        }
+        catch (Exception ex)
+        {
+            _tableMessage = ex.Message;
+        }
+    }
 
     private void OpenReservation(Guid? tableId = null)
     {
@@ -213,15 +236,6 @@ public partial class Dashboard : ComponentBase, IAsyncDisposable
         OrderStatus.Served => "info",
         OrderStatus.Completed => "success",
         OrderStatus.Cancelled => "danger",
-        _ => "neutral"
-    };
-
-    private static string TableTone(DerivedTableStatus s) => s switch
-    {
-        DerivedTableStatus.Available => "success",
-        DerivedTableStatus.Occupied => "warning",
-        DerivedTableStatus.Reserved => "info",
-        DerivedTableStatus.WaitingPayment => "danger",
         _ => "neutral"
     };
 

@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Identity;
@@ -14,17 +15,18 @@ public class GetWaiterDashboardQueryHandler : IRequestHandler<GetWaiterDashboard
 {
     private readonly IAppDbContext _db;
     private readonly ICurrentUser _currentUser;
+    private readonly IBusinessClock _clock;
 
-    public GetWaiterDashboardQueryHandler(IAppDbContext db, ICurrentUser currentUser)
+    public GetWaiterDashboardQueryHandler(IAppDbContext db, ICurrentUser currentUser, IBusinessClock clock)
     {
         _db = db;
         _currentUser = currentUser;
+        _clock = clock;
     }
 
     public async Task<WaiterDashboardDto> Handle(GetWaiterDashboardQuery request, CancellationToken cancellationToken)
     {
-        var todayStart = DateTime.UtcNow.Date;
-        var tomorrow = todayStart.AddDays(1);
+        var (todayStart, tomorrow) = _clock.DayWindowUtc(_clock.Today);
         var me = _currentUser.UserId;
 
         var activeSessions = await _db.DiningSessions

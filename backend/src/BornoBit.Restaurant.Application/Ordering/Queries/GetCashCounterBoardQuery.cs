@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using MediatR;
@@ -38,7 +39,12 @@ public record CashCounterRowDto(
 public class GetCashCounterBoardQueryHandler : IRequestHandler<GetCashCounterBoardQuery, PagedResult<CashCounterRowDto>>
 {
     private readonly IAppDbContext _db;
-    public GetCashCounterBoardQueryHandler(IAppDbContext db) => _db = db;
+    private readonly IBusinessClock _clock;
+    public GetCashCounterBoardQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<PagedResult<CashCounterRowDto>> Handle(GetCashCounterBoardQuery request, CancellationToken cancellationToken)
     {
@@ -49,8 +55,7 @@ public class GetCashCounterBoardQueryHandler : IRequestHandler<GetCashCounterBoa
 
         if (request.Date is { } date)
         {
-            var from = date.ToDateTime(TimeOnly.MinValue);
-            var to = from.AddDays(1);
+            var (from, to) = _clock.DayWindowUtc(date);
             query = query.Where(o => o.OrderedAtUtc >= from && o.OrderedAtUtc < to);
         }
         if (request.TableId is { } tableId) query = query.Where(o => o.RestaurantTableId == tableId);

@@ -1,5 +1,6 @@
 using BornoBit.Restaurant.Application.Accounting.Audit;
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Identity;
@@ -22,19 +23,20 @@ public class ImportCashCounterCommandHandler : IRequestHandler<ImportCashCounter
     private readonly IAppDbContext _db;
     private readonly TimeProvider _timeProvider;
     private readonly ICurrentUser _currentUser;
+    private readonly IBusinessClock _clock;
 
-    public ImportCashCounterCommandHandler(IAppDbContext db, TimeProvider timeProvider, ICurrentUser currentUser)
+    public ImportCashCounterCommandHandler(IAppDbContext db, TimeProvider timeProvider, ICurrentUser currentUser, IBusinessClock clock)
     {
         _db = db;
         _timeProvider = timeProvider;
         _currentUser = currentUser;
+        _clock = clock;
     }
 
     public async Task<CashImportResultDto> Handle(ImportCashCounterCommand request, CancellationToken cancellationToken)
     {
         var date = request.Date;
-        var start = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var end = start.AddDays(1);
+        var (start, end) = _clock.DayWindowUtc(date);
 
         // Tracked (mutated below) so MarkAccounted persists.
         var orders = await _db.Orders

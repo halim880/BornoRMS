@@ -39,6 +39,11 @@ public static class DependencyInjection
         services.AddScoped<ApplicationDbContext>(sp =>
             sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 
+        // Transient off the factory: each injection gets its own short-lived context so concurrent
+        // operations on a long-lived Blazor circuit never share a DbContext (which would throw
+        // "A second operation was started on this context instance"). Collaborators that must enlist
+        // in a handler's unit of work take IAppDbContext as a METHOD parameter (see IDineInSessionResolver,
+        // IStockConsumptionService) rather than injecting their own — so they share the caller's context.
         services.AddTransient<IAppDbContext>(sp =>
             sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
 
@@ -84,6 +89,11 @@ public static class DependencyInjection
 
         // Instant manager-override authorization (large discounts / voids / refunds at the till).
         services.AddScoped<Application.Common.Security.IManagerApprovalService, ManagerApprovalService>();
+
+        // Business-day boundaries against the configured local timezone (shared "Receipt:TimeZoneId").
+        var businessTimeZoneId = configuration["Receipt:TimeZoneId"] ?? "Asia/Dhaka";
+        services.AddSingleton<Application.Common.Time.IBusinessClock>(sp =>
+            new Time.BusinessClock(sp.GetRequiredService<TimeProvider>(), businessTimeZoneId));
 
         return services;
     }

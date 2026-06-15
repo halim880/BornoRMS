@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -14,13 +15,17 @@ public record TopItemRowDto(string Code, string Name, int QuantitySold, decimal 
 public class GetTopSellingItemsQueryHandler : IRequestHandler<GetTopSellingItemsQuery, IReadOnlyList<TopItemRowDto>>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetTopSellingItemsQueryHandler(IAppDbContext db) => _db = db;
+    public GetTopSellingItemsQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<IReadOnlyList<TopItemRowDto>> Handle(GetTopSellingItemsQuery request, CancellationToken cancellationToken)
     {
-        var start = request.From.Date;
-        var end = request.To.Date.AddDays(1);
+        var (start, end) = _clock.RangeUtc(DateOnly.FromDateTime(request.From), DateOnly.FromDateTime(request.To));
         var top = Math.Clamp(request.Top, 1, 200);
 
         // Lines of paid, non-cancelled orders in range. Name/Code/Currency are snapshotted on the

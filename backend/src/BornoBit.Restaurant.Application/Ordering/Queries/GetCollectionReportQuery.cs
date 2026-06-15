@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -20,13 +21,17 @@ public record CollectionReportDto(
 public class GetCollectionReportQueryHandler : IRequestHandler<GetCollectionReportQuery, CollectionReportDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetCollectionReportQueryHandler(IAppDbContext db) => _db = db;
+    public GetCollectionReportQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<CollectionReportDto> Handle(GetCollectionReportQuery request, CancellationToken cancellationToken)
     {
-        var start = request.From.Date;
-        var end = request.To.Date.AddDays(1);
+        var (start, end) = _clock.RangeUtc(DateOnly.FromDateTime(request.From), DateOnly.FromDateTime(request.To));
 
         // Recompute Order.Total inline — it is a C# computed property EF cannot translate.
         var paid = await _db.Orders

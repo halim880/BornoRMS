@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
@@ -32,13 +33,17 @@ public record DashboardSummaryDto(
 public class GetDashboardSummaryQueryHandler : IRequestHandler<GetDashboardSummaryQuery, DashboardSummaryDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetDashboardSummaryQueryHandler(IAppDbContext db) => _db = db;
+    public GetDashboardSummaryQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<DashboardSummaryDto> Handle(GetDashboardSummaryQuery request, CancellationToken cancellationToken)
     {
-        var todayStart = DateTime.UtcNow.Date;
-        var tomorrow = todayStart.AddDays(1);
+        var (todayStart, tomorrow) = _clock.DayWindowUtc(_clock.Today);
 
         // Today's paid takings (recompute total in memory — Order.GrandTotal is not EF-translatable).
         var todayPaid = await _db.Orders

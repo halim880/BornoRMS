@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -27,13 +28,17 @@ public record DelayedOrderDto(string OrderNumber, double MinutesToReady, DateTim
 public class GetKitchenAnalyticsQueryHandler : IRequestHandler<GetKitchenAnalyticsQuery, KitchenAnalyticsDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetKitchenAnalyticsQueryHandler(IAppDbContext db) => _db = db;
+    public GetKitchenAnalyticsQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<KitchenAnalyticsDto> Handle(GetKitchenAnalyticsQuery request, CancellationToken cancellationToken)
     {
-        var start = request.From.ToDateTime(TimeOnly.MinValue);
-        var end = request.To.ToDateTime(TimeOnly.MinValue).AddDays(1);
+        var (start, end) = _clock.RangeUtc(request.From, request.To);
 
         // Orders that reached Ready in the window, with their lines, for prep-time analytics.
         var prepped = await _db.Orders

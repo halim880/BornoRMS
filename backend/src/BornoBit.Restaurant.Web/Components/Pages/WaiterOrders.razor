@@ -5,7 +5,9 @@
 @using BornoBit.Restaurant.Application.Operations.Dashboard
 @using BornoBit.Restaurant.Application.Operations.Sessions
 @using BornoBit.Restaurant.Application.Ordering.Commands
+@using BornoBit.Restaurant.Application.Ordering.Pos
 @using BornoBit.Restaurant.Application.Ordering.Queries
+@using BornoBit.Restaurant.Web.Components.Pages.POS
 @using BornoBit.Restaurant.Application.ProductCategories
 @using BornoBit.Restaurant.Application.Products
 @using BornoBit.Restaurant.Domain.Dining
@@ -44,7 +46,7 @@ else
     <!-- ============ WIDGET STRIP ============ -->
     @if (_widgets is { } w)
     {
-        <div class="wc-widgets">
+        <div class="wc-widgets wc-section">
             <div class="wc-widget"><span class="wc-w-num">@w.MyTables</span><span class="wc-w-lbl">My tables</span></div>
             <div class="wc-widget wc-widget--ok"><span class="wc-w-num">@w.AvailableTables</span><span class="wc-w-lbl">Available</span></div>
             <div class="wc-widget wc-widget--warn"><span class="wc-w-num">@w.OccupiedTables</span><span class="wc-w-lbl">Occupied</span></div>
@@ -59,7 +61,7 @@ else
     @if (_tab == WaiterTab.Floor)
     {
         <!-- ============ FLOOR ============ -->
-        <div class="wc-filters">
+        <div class="wc-filters wc-section">
             <button class="flt @(_statusFilter is null ? "flt--active" : null)" @onclick="() => SetStatusFilter(null)">All</button>
             <button class="flt @(_statusFilter == DerivedTableStatus.Available ? "flt--active" : null)" @onclick="() => SetStatusFilter(DerivedTableStatus.Available)">Available</button>
             <button class="flt @(_statusFilter == DerivedTableStatus.Occupied ? "flt--active" : null)" @onclick="() => SetStatusFilter(DerivedTableStatus.Occupied)">Occupied</button>
@@ -70,7 +72,7 @@ else
             </label>
         </div>
 
-        <div class="wc-floor-wrap">
+        <div class="wc-floor-wrap wc-section">
             <div class="wc-floor">
                 @foreach (var t in FilteredFloor)
                 {
@@ -228,119 +230,73 @@ else
                     </button>
                 }
             }
-            <button type="button" class="run-refresh" title="Refresh orders" @onclick="LoadRecent">↻</button>
+            <button type="button" class="run-refresh" title="Refresh orders" @onclick="LoadActiveOrdersAsync">↻</button>
         </div>
 
-        <div class="pos">
-            <!-- ============ PRODUCT PICKER ============ -->
-            <div class="pos-menu">
+        <div class="pos-workspace">
+            <!-- ============ CATEGORY RAIL ============ -->
+            <div class="pos-cats">
+                <div class="pos-cats-title">Category</div>
+                <button type="button" class="pos-cat @(_selectedCategoryId is null ? "pos-cat--active" : null)"
+                        @onclick="() => SelectCategory(null)">All</button>
+                @foreach (var cat in VisibleCategories)
+                {
+                    <button type="button" @key="cat.Id"
+                            class="pos-cat @(_selectedCategoryId == cat.Id ? "pos-cat--active" : null)"
+                            @onclick="() => SelectCategory(cat.Id)">
+                        @cat.Name
+                    </button>
+                }
+            </div>
+
+            <!-- ============ PRODUCT GRID ============ -->
+            <div class="pos-products">
                 @if (_products is null || _products.Count == 0)
                 {
-                    <BoCard>
-                        <EmptyState Icon="DocumentBulletList" Title="No products"
-                                    Description="Add products from Inventory → Products first." />
-                    </BoCard>
+                    <EmptyState Icon="DocumentBulletList" Title="No products"
+                                Description="Add products from Inventory → Products first." />
+                }
+                else if (!FilteredProducts.Any())
+                {
+                    <EmptyState Icon="Search" Title="No items"
+                                Description="No products in this category — add some from Inventory → Products." />
                 }
                 else
                 {
-                    <div class="pos-toolbar">
-                        <BoSearch @bind-Value="_search" Placeholder="Search by name, code or বাংলা নাম…" DebounceMs="150" />
-                    </div>
-
-                    <div class="cat-bar">
-                        <button type="button"
-                                class="cat-chip @(_selectedCategoryId is null ? "cat-chip--active" : null)"
-                                @onclick="() => SelectCategory(null)">
-                            All <span class="cat-chip-count">@_products.Count</span>
-                        </button>
-                        @foreach (var cat in VisibleCategories)
+                    <div class="pos-prod-grid">
+                        @foreach (var item in FilteredProducts)
                         {
-                            <button type="button" @key="cat.Id"
-                                    class="cat-chip @(_selectedCategoryId == cat.Id ? "cat-chip--active" : null)"
-                                    @onclick="() => SelectCategory(cat.Id)">
-                                <span class="cat-chip-text">
-                                    @cat.Name
-                                    @if (BanglaOf(cat) is { } bn)
+                            var outOfStock = IsOutOfStock(item);
+                            <div @key="item.Id" class="pos-prod-card @(outOfStock ? "pos-prod-card--out" : "pos-prod-card--tappable")"
+                                 title="@(outOfStock ? $"{item.Name} is out of stock" : item.HasVariants ? $"Pick a size for {item.Name}" : $"Tap to add {item.Name}")"
+                                 @onclick="() => OnProductClickAsync(item)">
+                                <div class="pos-prod-thumb">
+                                    @if (outOfStock)
                                     {
-                                        <span class="cat-chip-bn">@bn</span>
+                                        <span class="pos-stock-badge pos-stock-badge--out">Out</span>
                                     }
-                                </span>
-                                <span class="cat-chip-count">@_products.Count(p => p.ProductCategoryId == cat.Id)</span>
-                            </button>
-                        }
-                    </div>
-
-                    @if (!FilteredProducts.Any())
-                    {
-                        <BoCard>
-                            <EmptyState Icon="Search" Title="No matching items"
-                                        Description="Try a different search or category." />
-                        </BoCard>
-                    }
-                    else
-                    {
-                        @foreach (var cat in VisibleCategories)
-                        {
-                            var items = FilteredProducts.Where(p => p.ProductCategoryId == cat.Id).ToList();
-                            if (items.Count == 0) { continue; }
-                            <div class="prod-section">
-                                <div class="prod-section-title">
-                                    @cat.Name
-                                    @if (BanglaOf(cat) is { } bn)
+                                    else if (IsLowStock(item))
                                     {
-                                        <span class="prod-section-bn">@bn</span>
+                                        <span class="pos-stock-badge pos-stock-badge--low">Low @(AvailableOf(item)?.ToString("0.#"))</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(item.ImagePath))
+                                    {
+                                        <img src="@item.ImagePath" alt="@item.Name" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <BoIcon Name="Cart" Size="22" />
                                     }
                                 </div>
-                                <div class="prod-grid">
-                                    @foreach (var item in items)
-                                    {
-                                        var qty = QtyOf(item.Id);
-                                        <div @key="item.Id"
-                                             class="prod-card @(qty > 0 ? "prod-card--selected" : null) @(item.HasVariants ? null : "prod-card--tappable")"
-                                             title="@(item.HasVariants ? "Pick a size below" : $"Tap to add {item.Name}")"
-                                             @onclick="() => AddBase(item)">
-                                            @if (qty > 0)
-                                            {
-                                                <span class="prod-qty">@qty</span>
-                                            }
-                                            @if (!string.IsNullOrEmpty(item.ImagePath))
-                                            {
-                                                <img class="prod-img" src="@item.ImagePath" alt="@item.Name" loading="lazy" />
-                                            }
-                                            else
-                                            {
-                                                <span class="prod-img prod-img--initial">@char.ToUpperInvariant(item.Name[0])</span>
-                                            }
-                                            <span class="prod-name">@item.Name</span>
-                                            @if (!string.IsNullOrEmpty(item.BanglaName))
-                                            {
-                                                <span class="prod-bn">@item.BanglaName</span>
-                                            }
-                                            @if (item.HasVariants)
-                                            {
-                                                <span class="prod-price">from @item.Currency @item.MinPrice.ToString("0.##")</span>
-                                                <div class="prod-variant-row">
-                                                    @foreach (var v in item.Variants)
-                                                    {
-                                                        <button type="button" @key="v.Id" class="prod-variant"
-                                                                title="Add @item.Name (@v.Name)"
-                                                                @onclick="() => AddVariant(item, v)"
-                                                                @onclick:stopPropagation="true">
-                                                            @v.Name <strong>@v.Price.ToString("0.##")</strong>
-                                                        </button>
-                                                    }
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <span class="prod-price">@item.Currency @item.Price.ToString("0.##")</span>
-                                            }
-                                        </div>
-                                    }
+                                <div class="pos-prod-meta">
+                                    <span class="pos-prod-cat">@item.Name</span>
+                                    <span class="pos-prod-price">
+                                        @(item.HasVariants ? $"from {item.Currency} {item.MinPrice:0.##}" : $"{item.Currency} {item.Price:0.##}")
+                                    </span>
                                 </div>
                             </div>
                         }
-                    }
+                    </div>
                 }
             </div>
 
@@ -469,52 +425,16 @@ else
                 </BoCard>
             </div>
         </div>
-
-        <!-- ============ RECENT ORDERS ============ -->
-        <div style="margin-top:24px;">
-            <BoCard Title="Recent orders">
-                @if (_recent is null || _recent.Items.Count == 0)
-                {
-                    <EmptyState Icon="DocumentBulletList" Title="No orders yet"
-                                Description="Placed orders will appear here." />
-                }
-                else
-                {
-                    <DataGrid TItem="OrderListItemDto" Items="@_recent.Items" PageSize="10"
-                              SearchPlaceholder="Search order #, customer…"
-                              SearchPredicate="@((o, q) => o.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase)
-                                  || (o.CustomerName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-                                  || o.CustomerPhone.Contains(q, StringComparison.OrdinalIgnoreCase))">
-                        <Columns>
-                            <DataGridColumn TItem="OrderListItemDto" Title="Order #" Property="@(o => o.OrderNumber)" Sortable="true">
-                                <strong>@context.OrderNumber</strong>
-                            </DataGridColumn>
-                            <DataGridColumn TItem="OrderListItemDto" Title="Customer">
-                                @(context.CustomerName ?? context.CustomerPhone)
-                            </DataGridColumn>
-                            <DataGridColumn TItem="OrderListItemDto" Title="Type" Property="@(o => o.OrderType)" Sortable="true" />
-                            <DataGridColumn TItem="OrderListItemDto" Title="Table">
-                                @(context.TableNumber ?? "—")
-                            </DataGridColumn>
-                            <DataGridColumn TItem="OrderListItemDto" Title="Items" Align="DataGridAlign.Center" Width="80px">
-                                @context.ItemCount
-                            </DataGridColumn>
-                            <DataGridColumn TItem="OrderListItemDto" Title="Total" Align="DataGridAlign.Right" Width="120px">
-                                <strong>@context.Currency @context.Total.ToString("0.##")</strong>
-                            </DataGridColumn>
-                            <DataGridColumn TItem="OrderListItemDto" Title="Status" Align="DataGridAlign.Center" Width="280px">
-                                <OrderStatusCell Order="context" OnChanged="LoadRecent" />
-                            </DataGridColumn>
-                            <DataGridColumn TItem="OrderListItemDto" Title="Placed" Property="@(o => (object?)o.OrderedAtUtc)" Format="g" Width="150px" />
-                        </Columns>
-                    </DataGrid>
-                }
-            </BoCard>
-        </div>
     }
 }
 
 <style>
+    /* ---------- white card surface for every page section ---------- */
+    .wc-section {
+        background: var(--bo-bg-card); border: 1px solid var(--bo-border-soft);
+        border-radius: var(--bo-radius-lg, 12px); padding: 14px;
+    }
+
     /* ---------- console header / tabs / widgets ---------- */
     .wc-head { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px; }
     .wc-title { display:flex; align-items:center; gap:12px; }
@@ -645,107 +565,96 @@ else
     }
     .append-banner-close:hover { background: var(--bo-danger-soft); color: var(--bo-danger); }
 
-    .pos {
+    /* ---------- POS-style workspace: category rail | product grid | order panel ---------- */
+    .pos-workspace {
         display: grid;
-        grid-template-columns: minmax(0, 1.6fr) minmax(340px, 1fr);
-        gap: 20px;
+        grid-template-columns: 180px minmax(0, 1fr) 360px;
+        gap: 16px;
         align-items: start;
     }
-    @@media (max-width: 1080px) {
-        .pos { grid-template-columns: 1fr; }
+    @@media (max-width: 1200px) {
+        .pos-workspace { grid-template-columns: 150px minmax(0, 1fr) 320px; }
+    }
+    @@media (max-width: 1000px) {
+        .pos-workspace { grid-template-columns: 1fr; }
         .pos-order { position: static; }
     }
 
-    /* ---------- product picker ---------- */
-    .pos-menu { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-    .pos-toolbar { display: flex; gap: 10px; }
-    .pos-toolbar > :first-child { flex: 1; }
+    /* ---------- category rail ---------- */
+    .pos-cats {
+        display: flex; flex-direction: column; gap: 2px;
+        padding: 12px 10px;
+        background: var(--bo-bg-card); border: 1px solid var(--bo-border-soft);
+        border-radius: var(--bo-radius-lg, 12px);
+        max-height: calc(100vh - 180px); overflow-y: auto;
+    }
+    .pos-cats-title {
+        font-size: 15px; font-weight: 800; color: var(--bo-text);
+        padding: 2px 8px 8px; margin-bottom: 4px;
+        border-bottom: 2px solid var(--bo-primary);
+    }
+    .pos-cat {
+        text-align: left; padding: 9px 10px; border: none; cursor: pointer;
+        background: transparent; color: var(--bo-text);
+        font-size: 13.5px; font-weight: 600;
+        border-radius: var(--bo-radius-sm, 6px);
+        border-bottom: 1px solid var(--bo-border-soft);
+        transition: background .12s, color .12s;
+    }
+    .pos-cat:last-child { border-bottom: none; }
+    .pos-cat:hover { color: var(--bo-primary); }
+    .pos-cat--active {
+        background: color-mix(in srgb, var(--bo-primary) 12%, var(--bo-bg-card));
+        color: var(--bo-primary-strong, var(--bo-primary));
+    }
 
-    .cat-bar { display: flex; gap: 8px; flex-wrap: wrap; }
-    .cat-chip {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 7px 14px; border-radius: 999px; cursor: pointer;
-        border: 1px solid var(--bo-border); background: var(--bo-bg-card);
-        color: var(--bo-text); font-size: 13px; font-weight: 600;
-        transition: background .12s, border-color .12s, color .12s;
+    /* ---------- product grid ---------- */
+    .pos-products {
+        padding: 14px;
+        background: var(--bo-bg-card); border: 1px solid var(--bo-border-soft);
+        border-radius: var(--bo-radius-lg, 12px);
+        min-height: 320px;
+        max-height: calc(100vh - 180px); overflow-y: auto;
     }
-    .cat-chip:hover { border-color: var(--bo-primary); color: var(--bo-primary); }
-    .cat-chip--active {
-        background: var(--bo-primary); border-color: var(--bo-primary);
-        color: var(--bo-on-primary, #fff);
-    }
-    .cat-chip-count {
-        font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
-        background: color-mix(in srgb, currentColor 14%, transparent);
-    }
-    .cat-chip-text { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
-    .cat-chip-bn { font-size: 11px; font-weight: 500; opacity: .8; }
-
-    .prod-section-title {
-        font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-        color: var(--bo-text-muted); margin: 4px 0 8px;
-        display: flex; align-items: baseline; gap: 8px;
-    }
-    .prod-section-bn {
-        font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0;
-        color: var(--bo-text-subtle);
-    }
-    .prod-grid {
+    .pos-prod-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-        gap: 10px;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
     }
-    .prod-card {
-        position: relative;
-        display: flex; flex-direction: column; align-items: center; gap: 6px;
-        padding: 14px 10px 12px; text-align: center;
-        border: 1px solid var(--bo-border); border-radius: var(--bo-radius-md, 10px);
+    .pos-prod-card {
+        display: flex; flex-direction: column; gap: 10px;
+        padding: 0 0 10px; min-height: 96px; overflow: hidden;
+        border: 1px solid var(--bo-border); border-radius: var(--bo-radius-md, 8px);
         background: var(--bo-bg-card); color: var(--bo-text);
         transition: transform .08s, border-color .12s, box-shadow .12s;
     }
-    .prod-card--tappable { cursor: pointer; }
-    .prod-card:hover {
+    .pos-prod-thumb {
+        position: relative;
+        display: flex; align-items: center; justify-content: center;
+        height: 128px; background: var(--bo-bg-subtle, var(--bo-border-soft));
+        color: var(--bo-text-subtle); overflow: hidden;
+    }
+    .pos-prod-card--out { cursor: not-allowed; opacity: .55; filter: grayscale(.5); }
+    .pos-stock-badge {
+        position: absolute; top: 6px; left: 6px; z-index: 1;
+        padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; color: #fff;
+    }
+    .pos-stock-badge--out { background: var(--bo-danger); }
+    .pos-stock-badge--low { background: var(--bo-warning); }
+    .pos-prod-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .pos-prod-card--tappable { cursor: pointer; }
+    .pos-prod-card:hover {
         border-color: var(--bo-primary);
         box-shadow: 0 2px 10px color-mix(in srgb, var(--bo-primary) 18%, transparent);
     }
-    .prod-card--tappable:hover { transform: translateY(-1px); }
-    .prod-card--tappable:active { transform: scale(.97); }
-    .prod-card--selected { border-color: var(--bo-primary); background: var(--bo-primary-tint, var(--bo-bg-tinted)); }
-    .prod-img {
-        width: 56px; height: 56px; border-radius: 50%; object-fit: cover;
-        border: 1px solid var(--bo-border-soft);
+    .pos-prod-card--tappable:active { transform: scale(.97); }
+    .pos-prod-meta {
+        display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+        margin: auto 12px 0; padding-top: 6px;
+        border-top: 1px solid var(--bo-border-soft);
     }
-    .prod-img--initial {
-        display: inline-flex; align-items: center; justify-content: center;
-        font-size: 22px; font-weight: 700;
-        background: var(--bo-primary-soft); color: var(--bo-primary-strong, var(--bo-primary));
-    }
-    .prod-name { font-weight: 600; font-size: 13.5px; line-height: 1.25; }
-    .prod-bn { font-size: 12px; color: var(--bo-text-muted); line-height: 1.2; }
-    .prod-price { font-size: 13px; font-weight: 700; color: var(--bo-primary); margin-top: 2px; }
-    .prod-qty {
-        position: absolute; top: -7px; right: -7px; z-index: 1;
-        min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
-        display: inline-flex; align-items: center; justify-content: center;
-        background: var(--bo-primary); color: var(--bo-on-primary, #fff);
-        font-size: 12px; font-weight: 700;
-        box-shadow: 0 1px 4px rgb(0 0 0 / .25);
-    }
-    .prod-variant-row {
-        display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-top: 4px;
-    }
-    .prod-variant {
-        display: inline-flex; align-items: center; gap: 4px;
-        padding: 4px 9px; border-radius: 999px; cursor: pointer;
-        border: 1px solid var(--bo-border); background: var(--bo-bg-soft);
-        color: var(--bo-text); font-size: 11.5px; font-weight: 600;
-        transition: background .12s, border-color .12s, color .12s;
-    }
-    .prod-variant:hover {
-        border-color: var(--bo-primary); color: var(--bo-primary);
-        background: color-mix(in srgb, var(--bo-primary) 8%, transparent);
-    }
-    .prod-variant strong { font-weight: 800; }
+    .pos-prod-cat { font-size: 14px; font-weight: 700; color: var(--bo-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pos-prod-price { font-size: 12.5px; font-weight: 700; color: var(--bo-danger); white-space: nowrap; }
 
     /* ---------- order panel ---------- */
     .pos-order { position: sticky; top: 16px; }

@@ -1,0 +1,132 @@
+@page "/stock/grn/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@using BornoBit.Restaurant.Application.Inventory.Purchases
+@using BornoBit.Restaurant.Domain.Inventory
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+@inject NavigationManager Nav
+
+<PageTitle>@(_grn?.GrnNumber ?? "Goods Receipt") · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="@(_grn?.GrnNumber ?? "Goods Receipt")"
+                Description="Goods receipt details.">
+        <Actions>
+            <a class="bo-btn bo-btn-ghost" href="/stock/grn">← Back</a>
+            @if (_grn is not null)
+            {
+                <a class="bo-btn bo-btn-ghost" href="@($"/reports/grn/{_grn.Id}/receipt.pdf")" target="_blank">Print</a>
+                @if (_grn.Status == GoodsReceiptStatus.Draft)
+                {
+                    <a class="bo-btn bo-btn-ghost" href="@($"/stock/grn/{_grn.Id}/edit")">Edit</a>
+                    <button type="button" class="bo-btn bo-btn-primary" @onclick="PostAsync" disabled="@_busy">Post</button>
+                }
+            }
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading goods receipt…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_grn is not null)
+    {
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; gap:32px; flex-wrap:wrap;">
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Supplier</div>
+                    <strong>@_grn.SupplierName</strong>
+                </div>
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Invoice</div>
+                    <span>@(string.IsNullOrEmpty(_grn.InvoiceNo) ? "— (cash)" : _grn.InvoiceNo)</span>
+                </div>
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Received</div>
+                    <span>@_grn.ReceivedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                </div>
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Status</div>
+                    <BoBadge Tone="@(_grn.Status == GoodsReceiptStatus.Posted ? "success" : "warning")">@_grn.Status</BoBadge>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_grn.Notes))
+            {
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Notes</div>
+                    <span style="color: var(--bo-text-muted);">@_grn.Notes</span>
+                </div>
+            }
+
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Qty</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Unit cost</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Line total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in _grn.Lines)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:8px 10px;">@l.ItemName</td>
+                            <td style="padding:8px 10px; text-align:right;">@l.Qty.ToString("0.###") @l.UnitCode</td>
+                            <td style="padding:8px 10px; text-align:right;">@l.UnitCost.ToString("0.00")</td>
+                            <td style="padding:8px 10px; text-align:right;">@l.LineTotal.ToString("0.00")</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr style="border-top:2px solid var(--bo-border-soft);">
+                        <td colspan="3" style="padding:8px 10px; text-align:right;"><strong>Subtotal</strong></td>
+                        <td style="padding:8px 10px; text-align:right;"><strong>@_grn.Subtotal.ToString("0.00") @_grn.Currency</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private GoodsReceiptDetailDto? _grn;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            _grn = await Mediator.Send(new GetGoodsReceiptQuery(Id));
+        }
+        catch (Exception ex) { _error = $"Failed to load goods receipt: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task PostAsync()
+    {
+        if (_grn is null) return;
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new PostGoodsReceiptCommand(_grn.Id));
+            ToastService.ShowSuccess($"{_grn.GrnNumber} posted — stock updated.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _busy = false; }
+    }
+}

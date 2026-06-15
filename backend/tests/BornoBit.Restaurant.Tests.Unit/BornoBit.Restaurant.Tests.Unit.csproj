@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BornoBit.Restaurant.Domain\BornoBit.Restaurant.Domain.csproj" />
+    <ProjectReference Include="..\..\src\BornoBit.Restaurant.Application\BornoBit.Restaurant.Application.csproj" />
+    <ProjectReference Include="..\..\src\BornoBit.Restaurant.Infrastructure\BornoBit.Restaurant.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

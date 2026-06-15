@@ -50,6 +50,25 @@ public class GoodsReceipt : AuditableEntity
         };
     }
 
+    /// <summary>Edit the header of a draft. Posted receipts are immutable.</summary>
+    public void UpdateHeader(Guid supplierId, DateTime receivedAtUtc, string? invoiceNo, string? notes)
+    {
+        if (Status != GoodsReceiptStatus.Draft) throw new InvalidOperationException("Cannot modify a posted goods receipt.");
+        if (supplierId == Guid.Empty) throw new ArgumentException("Supplier is required.", nameof(supplierId));
+
+        SupplierId = supplierId;
+        ReceivedAtUtc = receivedAtUtc;
+        InvoiceNo = Trim(invoiceNo);
+        Notes = Trim(notes);
+    }
+
+    /// <summary>Drop every line on a draft so the caller can re-add them. Posted receipts are immutable.</summary>
+    public void ClearLines()
+    {
+        if (Status != GoodsReceiptStatus.Draft) throw new InvalidOperationException("Cannot modify a posted goods receipt.");
+        _lines.Clear();
+    }
+
     public GoodsReceiptLine AddLine(Guid inventoryItemId, string itemName, decimal qty, Guid unitId, decimal qtyBase, decimal unitCost)
     {
         if (Status != GoodsReceiptStatus.Draft) throw new InvalidOperationException("Cannot modify a posted goods receipt.");

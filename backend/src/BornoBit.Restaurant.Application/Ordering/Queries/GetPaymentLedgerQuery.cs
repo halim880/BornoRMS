@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using MediatR;
@@ -35,7 +36,12 @@ public record PaymentLedgerRowDto(
 public class GetPaymentLedgerQueryHandler : IRequestHandler<GetPaymentLedgerQuery, PagedResult<PaymentLedgerRowDto>>
 {
     private readonly IAppDbContext _db;
-    public GetPaymentLedgerQueryHandler(IAppDbContext db) => _db = db;
+    private readonly IBusinessClock _clock;
+    public GetPaymentLedgerQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<PagedResult<PaymentLedgerRowDto>> Handle(GetPaymentLedgerQuery request, CancellationToken cancellationToken)
     {
@@ -48,8 +54,7 @@ public class GetPaymentLedgerQueryHandler : IRequestHandler<GetPaymentLedgerQuer
 
         if (request.Date is { } date)
         {
-            var from = date.ToDateTime(TimeOnly.MinValue);
-            var to = from.AddDays(1);
+            var (from, to) = _clock.DayWindowUtc(date);
             query = query.Where(x => x.p.CreatedAtUtc >= from && x.p.CreatedAtUtc < to);
         }
         if (request.Method is { } method) query = query.Where(x => x.p.Method == method);

@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Inventory.Items;
+using BornoBit.Restaurant.Application.Inventory.Purchases;
 using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Reporting;
 using BornoBit.Restaurant.Reporting.Models;
@@ -91,6 +92,37 @@ public static class ReportEndpoints
 
             var pdf = await renderer.RenderStockValuationAsync(data, ct);
             return Results.File(pdf, "application/pdf", "stock-valuation.pdf");
+        }).RequireAuthorization("Inventory");
+
+        app.MapGet("/reports/grn/{id:guid}/receipt.pdf", async (
+            Guid id, ISender sender, IReportRenderer renderer,
+            IOptions<ReceiptBranding> branding, CancellationToken ct) =>
+        {
+            try
+            {
+                var grn = await sender.Send(new GetGoodsReceiptQuery(id), ct);
+                var data = new GoodsReceiptReportData(
+                    RestaurantName: branding.Value.Name,
+                    GrnNumber: grn.GrnNumber,
+                    SupplierName: grn.SupplierName,
+                    InvoiceNo: grn.InvoiceNo,
+                    ReceivedAtUtc: grn.ReceivedAtUtc,
+                    Status: grn.Status.ToString(),
+                    Currency: grn.Currency,
+                    Notes: grn.Notes,
+                    Subtotal: grn.Subtotal,
+                    GeneratedAtUtc: DateTime.UtcNow,
+                    Lines: grn.Lines
+                        .Select(l => new GoodsReceiptReportLine(l.ItemName, l.Qty, l.UnitCode, l.UnitCost, l.LineTotal))
+                        .ToList());
+
+                var pdf = await renderer.RenderGoodsReceiptAsync(data, ct);
+                return Results.File(pdf, "application/pdf", $"{grn.GrnNumber}.pdf");
+            }
+            catch (NotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
         }).RequireAuthorization("Inventory");
 
         return app;

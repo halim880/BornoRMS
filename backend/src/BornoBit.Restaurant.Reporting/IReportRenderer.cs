@@ -8,4 +8,5 @@ public interface IReportRenderer
     Task<byte[]> RenderPosReceiptAsync(OrderReceiptReportData data, CancellationToken cancellationToken = default);
     Task<byte[]> RenderKitchenTicketAsync(KitchenTicketReportData data, CancellationToken cancellationToken = default);
     Task<byte[]> RenderStockValuationAsync(StockValuationReportData data, CancellationToken cancellationToken = default);
+    Task<byte[]> RenderGoodsReceiptAsync(GoodsReceiptReportData data, CancellationToken cancellationToken = default);
 }

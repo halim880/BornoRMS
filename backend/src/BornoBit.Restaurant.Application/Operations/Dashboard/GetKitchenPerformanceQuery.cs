@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -22,14 +23,18 @@ public class GetKitchenPerformanceQueryHandler : IRequestHandler<GetKitchenPerfo
 {
     private const int DelayThresholdMinutes = 10;
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetKitchenPerformanceQueryHandler(IAppDbContext db) => _db = db;
+    public GetKitchenPerformanceQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<KitchenPerformanceDto> Handle(GetKitchenPerformanceQuery request, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
-        var todayStart = now.Date;
-        var tomorrow = todayStart.AddDays(1);
+        var (todayStart, tomorrow) = _clock.DayWindowUtc(_clock.Today);
 
         // Average prep time = Ready - Preparing, over orders that reached Ready today.
         var prepped = await _db.Orders

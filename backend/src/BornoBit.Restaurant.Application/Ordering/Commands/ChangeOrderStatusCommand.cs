@@ -1,5 +1,6 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Inventory.Consumption;
+using BornoBit.Restaurant.Application.Ordering.Common;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using FluentValidation;
@@ -24,13 +25,16 @@ public class ChangeOrderStatusCommandHandler : IRequestHandler<ChangeOrderStatus
 {
     private readonly IAppDbContext _db;
     private readonly IStockConsumptionService _consumption;
+    private readonly IDineInSessionResolver _sessions;
     private readonly ILogger<ChangeOrderStatusCommandHandler> _logger;
 
     public ChangeOrderStatusCommandHandler(
-        IAppDbContext db, IStockConsumptionService consumption, ILogger<ChangeOrderStatusCommandHandler> logger)
+        IAppDbContext db, IStockConsumptionService consumption, IDineInSessionResolver sessions,
+        ILogger<ChangeOrderStatusCommandHandler> logger)
     {
         _db = db;
         _consumption = consumption;
+        _sessions = sessions;
         _logger = logger;
     }
 
@@ -68,6 +72,13 @@ public class ChangeOrderStatusCommandHandler : IRequestHandler<ChangeOrderStatus
             await OrderStockSync.TryApplyAsync(_db, _consumption, order, _logger, cancellationToken);
         else if (request.Target == OrderStatus.Cancelled && wasSynced)
             await OrderStockSync.TryReverseAsync(_db, _consumption, order, _logger, cancellationToken);
+
+        // Cancelling the last active order on a table frees it (closes the now-empty session).
+        if (request.Target == OrderStatus.Cancelled && order.DiningSessionId is { } sessionId)
+        {
+            await _sessions.CloseIfEmptyAsync(_db, sessionId, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
 
         return Unit.Value;
     }

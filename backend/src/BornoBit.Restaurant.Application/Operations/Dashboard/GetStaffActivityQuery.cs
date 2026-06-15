@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -17,13 +18,17 @@ public record StaffActivityRowDto(
 public class GetStaffActivityQueryHandler : IRequestHandler<GetStaffActivityQuery, IReadOnlyList<StaffActivityRowDto>>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetStaffActivityQueryHandler(IAppDbContext db) => _db = db;
+    public GetStaffActivityQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<IReadOnlyList<StaffActivityRowDto>> Handle(GetStaffActivityQuery request, CancellationToken cancellationToken)
     {
-        var todayStart = DateTime.UtcNow.Date;
-        var tomorrow = todayStart.AddDays(1);
+        var (todayStart, tomorrow) = _clock.DayWindowUtc(_clock.Today);
 
         var orders = await _db.Orders
             .Where(o => o.WaiterName != null && o.Status != OrderStatus.Cancelled

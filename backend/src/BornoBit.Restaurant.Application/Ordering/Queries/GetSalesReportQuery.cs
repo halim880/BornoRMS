@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -21,13 +22,17 @@ public record SalesReportDto(
 public class GetSalesReportQueryHandler : IRequestHandler<GetSalesReportQuery, SalesReportDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetSalesReportQueryHandler(IAppDbContext db) => _db = db;
+    public GetSalesReportQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<SalesReportDto> Handle(GetSalesReportQuery request, CancellationToken cancellationToken)
     {
-        var start = request.From.Date;
-        var end = request.To.Date.AddDays(1);
+        var (start, end) = _clock.RangeUtc(DateOnly.FromDateTime(request.From), DateOnly.FromDateTime(request.To));
 
         // Order.Total is a C# computed property over the lines navigation, which EF cannot
         // translate, so recompute subtotal/total inline (mirrors GetCashSummaryQuery/GetOrdersQuery).
@@ -48,7 +53,7 @@ public class GetSalesReportQueryHandler : IRequestHandler<GetSalesReportQuery, S
             .ToListAsync(cancellationToken);
 
         var rows = paid
-            .GroupBy(p => DateOnly.FromDateTime(p.PaidAtUtc!.Value))
+            .GroupBy(p => _clock.ToBusinessDate(p.PaidAtUtc!.Value))
             .Select(g => new SalesReportRowDto(
                 g.Key,
                 g.Count(),

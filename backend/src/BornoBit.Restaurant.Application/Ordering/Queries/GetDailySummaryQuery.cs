@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -24,12 +25,16 @@ public record DailySummaryDto(
 public class GetDailySummaryQueryHandler : IRequestHandler<GetDailySummaryQuery, DailySummaryDto>
 {
     private readonly IAppDbContext _db;
-    public GetDailySummaryQueryHandler(IAppDbContext db) => _db = db;
+    private readonly IBusinessClock _clock;
+    public GetDailySummaryQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<DailySummaryDto> Handle(GetDailySummaryQuery request, CancellationToken cancellationToken)
     {
-        var from = request.Date.ToDateTime(TimeOnly.MinValue);
-        var to = from.AddDays(1);
+        var (from, to) = _clock.DayWindowUtc(request.Date);
 
         // Captured payments today, split charge/refund and cash/digital.
         var payments = await _db.Payments

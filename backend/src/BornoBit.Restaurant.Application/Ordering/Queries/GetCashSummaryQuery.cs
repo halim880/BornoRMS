@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -20,14 +21,18 @@ public record CashSummaryDto(
 public class GetCashSummaryQueryHandler : IRequestHandler<GetCashSummaryQuery, CashSummaryDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetCashSummaryQueryHandler(IAppDbContext db) => _db = db;
+    public GetCashSummaryQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<CashSummaryDto> Handle(GetCashSummaryQuery request, CancellationToken cancellationToken)
     {
-        var date = request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var start = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var end = start.AddDays(1);
+        var date = request.Date ?? _clock.Today;
+        var (start, end) = _clock.DayWindowUtc(date);
 
         // Sourced from the payment ledger: captured tenders for the day, netting refunds, grouped by method.
         // Naturally reflects partial/split payments and the full grand total (incl. tax/service/tip).

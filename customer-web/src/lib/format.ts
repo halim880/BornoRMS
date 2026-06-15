@@ -10,3 +10,15 @@ export function formatDateTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("en-GB", { timeZone: "Asia/Dhaka" });
 }
+
+// Date-only display, pinned to dd/MM/yyyy (project convention).
+export function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Dhaka",
+  });
+}

@@ -1,6 +1,11 @@
 @namespace BornoBit.Restaurant.Web.Components.BornoUi
+@using System.Globalization
 
-<div class="bo-cmp-field @(string.IsNullOrEmpty(Error) ? "" : "is-invalid") @CssClass">
+@* Date input: displays and parses dd/MM/yyyy (project convention). A text field carries the
+   dd/MM/yyyy value; a transparent native date picker overlays the calendar icon so users can
+   still pick from the OS calendar. Dual binding (DateOnly? Value / DateTime? DateTimeValue) and
+   the public API are preserved so existing call sites need no changes. *@
+<div class="bo-cmp-field @(_invalid ? "is-invalid" : "") @CssClass">
     @if (!string.IsNullOrEmpty(Label))
     {
         <label class="bo-cmp-field-label" for="@_id">
@@ -11,15 +16,39 @@
             }
         </label>
     }
-    <input id="@_id"
-           type="date"
-           class="bo-cmp-field-input"
-           value="@FormatValue()"
-           min="@Min"
-           max="@Max"
-           disabled="@Disabled"
-           readonly="@ReadOnly"
-           @onchange="OnDateChange" />
+    <div class="bo-date-wrap">
+        <input id="@_id"
+               type="text"
+               class="bo-cmp-field-input bo-date-text"
+               placeholder="dd/MM/yyyy"
+               value="@_text"
+               disabled="@Disabled"
+               readonly="@ReadOnly"
+               maxlength="10"
+               autocomplete="off"
+               spellcheck="false"
+               inputmode="numeric"
+               @oninput="OnTextInput"
+               @onblur="OnTextBlurAsync"
+               @onkeydown="OnTextKeyDownAsync" />
+        <span class="bo-date-suffix" title="Open calendar">
+            <svg class="bo-date-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="12" height="11" rx="1.5" />
+                <path d="M2 6.5h12M5 2v3M11 2v3" />
+            </svg>
+            @if (!Disabled && !ReadOnly)
+            {
+                <input type="date"
+                       class="bo-date-picker"
+                       value="@PickerValue"
+                       min="@Min"
+                       max="@Max"
+                       tabindex="-1"
+                       aria-hidden="true"
+                       @onchange="OnPickerChangeAsync" />
+            }
+        </span>
+    </div>
     @if (!string.IsNullOrEmpty(Error))
     {
         <div class="bo-cmp-field-error">@Error</div>
@@ -52,27 +81,131 @@
     private string CssClass => AdditionalAttributes is { } a && a.TryGetValue("class", out var c) ? c?.ToString() ?? "" : "";
     private readonly string _id = $"bo-date-{Guid.NewGuid():N}";
 
-    private string? FormatValue()
+    private string _text = string.Empty;
+    private bool _invalid;
+    private DateOnly? _lastSyncedDate;
+    private DateTime? _lastSyncedDateTime;
+    private bool _syncedOnce;
+
+    private static readonly string[] _acceptedFormats =
     {
-        if (Value.HasValue) return Value.Value.ToString("yyyy-MM-dd");
-        if (DateTimeValue.HasValue) return DateTimeValue.Value.ToString("yyyy-MM-dd");
-        return null;
+        "dd/MM/yyyy", "d/M/yyyy", "dd/M/yyyy", "d/MM/yyyy",
+        "dd-MM-yyyy", "d-M-yyyy",
+        "ddMMyyyy"
+    };
+
+    // The effective DateOnly the field currently represents (from whichever binding the caller uses).
+    private DateOnly? CurrentDate =>
+        Value ?? (DateTimeValue.HasValue ? DateOnly.FromDateTime(DateTimeValue.Value) : null);
+
+    private string PickerValue => CurrentDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        // Re-sync the text only when the bound value actually changed (or on first render),
+        // so we don't clobber what the user is typing.
+        if (!_syncedOnce
+            || !EqualityComparer<DateOnly?>.Default.Equals(Value, _lastSyncedDate)
+            || !EqualityComparer<DateTime?>.Default.Equals(DateTimeValue, _lastSyncedDateTime))
+        {
+            _lastSyncedDate = Value;
+            _lastSyncedDateTime = DateTimeValue;
+            _text = CurrentDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? string.Empty;
+            _invalid = false;
+            _syncedOnce = true;
+        }
     }
 
-    private async Task OnDateChange(ChangeEventArgs e)
+    private void OnTextInput(ChangeEventArgs e)
     {
-        var raw = e.Value?.ToString();
-        if (string.IsNullOrWhiteSpace(raw))
+        _text = e.Value?.ToString() ?? string.Empty;
+        if (_invalid) _invalid = false;
+    }
+
+    private Task OnTextBlurAsync(FocusEventArgs e) => TryCommitTextAsync();
+
+    private async Task OnTextKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await TryCommitTextAsync();
+    }
+
+    private async Task TryCommitTextAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_text))
         {
-            if (ValueChanged.HasDelegate) await ValueChanged.InvokeAsync(null);
-            if (DateTimeValueChanged.HasDelegate) await DateTimeValueChanged.InvokeAsync(null);
+            _invalid = false;
+            await CommitAsync(null);
             return;
         }
-        if (DateOnly.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture, out var parsedDate))
+
+        if (DateTime.TryParseExact(_text.Trim(), _acceptedFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
         {
-            if (ValueChanged.HasDelegate) await ValueChanged.InvokeAsync(parsedDate);
-            if (DateTimeValueChanged.HasDelegate)
-                await DateTimeValueChanged.InvokeAsync(parsedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            _invalid = false;
+            _text = dt.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            await CommitAsync(DateOnly.FromDateTime(dt));
+        }
+        else
+        {
+            _invalid = true;
         }
     }
+
+    private async Task OnPickerChangeAsync(ChangeEventArgs e)
+    {
+        var s = e.Value?.ToString();
+        if (string.IsNullOrEmpty(s))
+        {
+            _invalid = false;
+            await CommitAsync(null);
+            return;
+        }
+        if (DateOnly.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            _invalid = false;
+            _text = date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+            await CommitAsync(date);
+        }
+    }
+
+    // Pushes the value out through both bindings (mirrors the original dual-callback behaviour).
+    private async Task CommitAsync(DateOnly? date)
+    {
+        _lastSyncedDate = date;
+        _lastSyncedDateTime = date.HasValue ? date.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) : null;
+
+        if (ValueChanged.HasDelegate)
+            await ValueChanged.InvokeAsync(date);
+        if (DateTimeValueChanged.HasDelegate)
+            await DateTimeValueChanged.InvokeAsync(_lastSyncedDateTime);
+    }
 }
+
+<style>
+    .bo-date-wrap { position: relative; display: flex; align-items: center; }
+    .bo-date-text { width: 100%; padding-right: 40px; font-variant-numeric: tabular-nums; }
+
+    .bo-date-suffix {
+        position: absolute; right: 4px; top: 4px; bottom: 4px;
+        width: 32px;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--bo-text-muted, #9CA3AF);
+        border-radius: 6px;
+        cursor: pointer;
+    }
+    .bo-date-suffix .bo-date-icon { width: 16px; height: 16px; pointer-events: none; }
+
+    .bo-date-picker {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        opacity: 0; cursor: pointer;
+        border: 0; padding: 0; margin: 0;
+        background: transparent; color: transparent;
+    }
+    .bo-date-picker::-webkit-calendar-picker-indicator {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        margin: 0; padding: 0;
+        background: transparent; cursor: pointer;
+    }
+</style>

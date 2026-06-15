@@ -197,13 +197,13 @@ public class AppMenuSeeder
             new("Menu", Url: "/operations/menu", Icon: "Receipt"),
             new("App Settings", Url: "/settings/app", Icon: "PaintBrush"),
         }),
-        new("Inventory", Icon: "BoxMultiple", RequiredRole: Roles.Admin, Children: new()
+        new("Catalog", Icon: "BoxMultiple", RequiredRole: Roles.Admin, Children: new()
         {
             new("Products", Url: "/inventory/products", Icon: "Box", RequiredRole: Roles.Admin),
             new("Product Categories", Url: "/inventory/categories", Icon: "FolderList", RequiredRole: Roles.Admin),
             new("Tables", Url: "/inventory/tables", Icon: "Table", RequiredRole: Roles.Admin),
         }),
-        new("Stock", Icon: "Box", RequiredRole: Roles.Manager, Children: new()
+        new("Inventory", Icon: "Box", RequiredRole: Roles.Manager, Children: new()
         {
             new("Stock Dashboard", Url: "/stock/dashboard", Icon: "DataPie", RequiredRole: Roles.Manager),
             new("Low Stock", Url: "/stock/low", Icon: "Alert", RequiredRole: Roles.Manager),

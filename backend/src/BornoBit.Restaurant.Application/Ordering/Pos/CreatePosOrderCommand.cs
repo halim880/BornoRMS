@@ -1,7 +1,9 @@
 using BornoBit.Restaurant.Application.Common.Numbering;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Ordering.Commands;
+using BornoBit.Restaurant.Application.Ordering.Common;
 using BornoBit.Restaurant.Domain.Ordering;
+using BornoBit.Restaurant.Shared.Identity;
 using FluentValidation;
 using MediatR;
 
@@ -39,12 +41,16 @@ public class CreatePosOrderCommandHandler : IRequestHandler<CreatePosOrderComman
 {
     private readonly IAppDbContext _db;
     private readonly IOrderNumberGenerator _numbers;
+    private readonly IDineInSessionResolver _sessions;
+    private readonly ICurrentUser _currentUser;
     private readonly TimeProvider _timeProvider;
 
-    public CreatePosOrderCommandHandler(IAppDbContext db, IOrderNumberGenerator numbers, TimeProvider timeProvider)
+    public CreatePosOrderCommandHandler(IAppDbContext db, IOrderNumberGenerator numbers, IDineInSessionResolver sessions, ICurrentUser currentUser, TimeProvider timeProvider)
     {
         _db = db;
         _numbers = numbers;
+        _sessions = sessions;
+        _currentUser = currentUser;
         _timeProvider = timeProvider;
     }
 
@@ -65,6 +71,14 @@ public class CreatePosOrderCommandHandler : IRequestHandler<CreatePosOrderComman
             : null;
 
         var order = Order.Create(orderNumber, customerId, request.TableId, request.Type, nowUtc, notes: notes);
+
+        // Dine-in orders join a dining session so the table reads as occupied on the Waiter/Dashboard floor too.
+        if (request.Type == OrderType.DineIn && request.TableId is { } dineTableId)
+        {
+            order.AssignWaiter(_currentUser.UserId, _currentUser.UserName);
+            var sessionId = await _sessions.ResolveAsync(_db, dineTableId, null, null, nowUtc, cancellationToken);
+            order.AttachToSession(sessionId);
+        }
 
         _db.Orders.Add(order);
         await _db.SaveChangesAsync(cancellationToken);

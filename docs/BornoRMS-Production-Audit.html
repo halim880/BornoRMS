@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BornoRMS — Production-Readiness Audit</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2933; font-size: 10.5pt; line-height: 1.5; margin: 0;
+  }
+  h1 { font-size: 22pt; margin: 0 0 2px; color: #0f172a; }
+  h2 { font-size: 14pt; margin: 22px 0 6px; padding-bottom: 4px;
+       border-bottom: 2px solid #e2630a; color: #b1490a; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 14px 0 4px; color: #0f172a; page-break-after: avoid; }
+  .sub { color: #64748b; font-size: 10pt; margin: 0 0 4px; }
+  .scorebox { display: flex; gap: 12px; margin: 14px 0 4px; }
+  .score, .reco {
+    flex: 1; border-radius: 8px; padding: 12px 14px; color: #fff;
+  }
+  .score { background: #b45309; }
+  .reco  { background: #0f766e; }
+  .score .big { font-size: 26pt; font-weight: 700; line-height: 1; }
+  .reco .big  { font-size: 16pt; font-weight: 700; line-height: 1.1; }
+  .score .lbl, .reco .lbl { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; opacity: .85; }
+  p { margin: 6px 0; }
+  ol, ul { margin: 6px 0 6px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  code { font-family: "Cascadia Code", Consolas, monospace; font-size: 9pt;
+         background: #f1f5f9; padding: 1px 4px; border-radius: 3px; color: #b1490a; }
+  strong { color: #0f172a; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 9pt; }
+  th, td { border: 1px solid #d8dee6; padding: 4px 7px; text-align: left; vertical-align: top; }
+  th { background: #0f172a; color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .ok { color: #15803d; font-weight: 700; }
+  .warn { color: #b45309; font-weight: 700; }
+  .no { color: #b91c1c; font-weight: 700; }
+  .crit { background: #fef2f2; border-left: 4px solid #b91c1c; padding: 8px 12px; margin: 8px 0; border-radius: 0 6px 6px 0; }
+  .footer { margin-top: 8px; color: #64748b; font-size: 8.5pt; border-top: 1px solid #e2e8f0; padding-top: 6px; }
+  .meta { color: #64748b; font-size: 9pt; }
+  .pagebreak { page-break-before: always; }
+  .phase { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; margin: 6px 0; }
+</style>
+</head>
+<body>
+
+<h1>BornoRMS — Restaurant ERP/POS</h1>
+<p class="sub">Complete End-to-End Business-Workflow &amp; Production-Readiness Audit</p>
+<p class="meta">Single-branch restaurant · Dine-in · Takeaway · Delivery · Cash / Card / Mobile Banking &nbsp;|&nbsp; Audit date: 15 June 2026</p>
+
+<div class="scorebox">
+  <div class="score"><div class="lbl">Production-Ready Score</div><div class="big">58 / 100</div></div>
+  <div class="reco"><div class="lbl">Recommendation</div><div class="big">Ready with Major Fixes</div></div>
+</div>
+
+<h2>Executive Summary</h2>
+<p>BornoRMS is a genuinely mature build for its core — not demo-ware. The order lifecycle, POS billing math,
+split/partial payments, optimistic-concurrency protection, recipe-based inventory deduction (verified wired),
+the kitchen board, table/session management, role-based security, and an immutable financial audit log are all
+<strong>really implemented and wired</strong>. This is well above what these audits typically find.</p>
+<p>It is <strong>not</strong> safe to run a full multi-channel restaurant today because of a cluster of
+money- and stock-integrity gaps: <strong>payment force-completes an order and bypasses the kitchen workflow entirely</strong>
+(a paid order jumps straight to <em>Completed</em> and disappears from the kitchen board — combined with no auto-printed
+ticket, the kitchen can be told nothing about food that was paid for); refunds and line-voids never reverse inventory;
+refunds/voids never post a ledger reversal (and an already-imported sale is not corrected); accounting is single-entry with
+<strong>manual</strong> posting; kitchen tickets (KOT) are <strong>not auto-printed</strong>; and
+<strong>delivery has no logistics at all</strong>. For a <strong>dine-in + takeaway, cash/card</strong> operation with
+disciplined staff it is workable, but the kitchen-bypass and KOT gaps must be fixed first. For delivery, accurate
+food-cost/profit, or hands-off accounting, it is not ready.</p>
+
+<h2>Critical Issues — revenue / stock / accounting / kitchen</h2>
+<div class="crit" style="border-left-color:#7c2d12;background:#fff1e6"><strong>1. Payment bypasses the kitchen workflow — an order can be fully processed without ever being confirmed.</strong>
+<code>Order.RecomputePaymentState()</code> (<code>Order.cs:451-456</code>) force-sets <code>Status = Completed</code> the
+moment an order is fully paid, jumping over the entire guarded state machine
+(<code>Placed → Confirmed → Preparing → Ready → Served</code>). The settle/quick-pay handlers
+(<code>SettleOrderCommand.cs</code>, <code>AddPaymentCommand.cs</code> — whose own comment says "completes an order
+without a separate Confirm step") never check kitchen status before taking money. The kitchen board
+(<code>GetKitchenBoardQuery.cs</code>) shows only <em>Placed/Confirmed/Preparing/Ready</em>, so a paid order
+<strong>instantly vanishes from the KDS</strong>. In the normal counter/takeaway "pay-first" flow the kitchen can
+therefore be told <strong>nothing</strong> — especially since KOT is not auto-printed (see #6). Secondary damage:
+prep-time analytics are skewed (kitchen timestamps stay null), "Completed" means <em>paid</em> not <em>served</em>, and a
+paid order is locked (only a refund can undo it). → <strong>Customer pays, food never cooked.</strong></div>
+<div class="crit"><strong>2. Refund does not restore inventory.</strong> <code>RefundPaymentCommand</code> bumps the drawer
+cash-out and records the refund but performs <strong>no stock restoration</strong>. Stock reverses only on order
+<em>Cancel</em> (<code>ChangeOrderStatusCommand.cs:73-74</code>). Refunding a confirmed/served order permanently
+under-counts inventory. → Stock loss.</div>
+<div class="crit"><strong>3. Post-confirm line-void leaves stock deducted.</strong> <code>VoidOrderLineCommand</code>
+deletes the line and writes a note only. Stock is deducted at <code>Confirmed</code>
+(<code>ChangeOrderStatusCommand.cs:71-72</code>), so a later line-void leaks ingredients. → Stock loss.</div>
+<div class="crit"><strong>4. No GL reversal on void/refund.</strong> Only the drawer's <code>CashPaidOut</code> is adjusted; no
+<code>FinanceTransaction</code> reversal posts. If takings were already imported, <code>AccountedAtUtc</code> is never
+cleared, so prior-day books overstate income with no auto-correction. → Accounting mismatch.</div>
+<div class="crit"><strong>5. Accounting is single-entry, manual posting.</strong> <code>FinanceTransaction</code> has no
+balancing counter-account and there is no automatic journal entry on order payment — cash takings are imported/keyed by a
+human. → Reconciliation depends on human accuracy.</div>
+<div class="crit"><strong>6. Kitchen tickets are not auto-printed.</strong> <code>KitchenTicketDocument</code> exists, but no
+handler fires a KOT print on place/confirm; printing is manual from the Cash Counter UI. → Kitchen will miss orders in a rush.</div>
+<div class="crit"><strong>7. Delivery is an enum, not a workflow.</strong> No Rider/Driver entity, no dispatch/assignment,
+no delivery-fee field, no tracking, no delivery reports. → Cannot operate delivery.</div>
+<div class="crit"><strong>8. No real payment gateway.</strong> Only <code>MockPaymentGateway</code>; card/MFS auth is simulated.
+Combined with no request idempotency key, retried settles can double-record a tender.</div>
+<div class="crit"><strong>9. Negative stock allowed silently.</strong> Consumption permits negative on-hand with no hard
+stop and no oversell alert; the availability check is advisory only. → Stock can drift deeply negative unnoticed.</div>
+
+<h2>Missing Features — prioritized</h2>
+<p><strong>Critical:</strong> delivery logistics; auto-print KOT; inventory reversal on refund &amp; post-confirm line-void;
+automatic/reversible accounting posting (or at least GL reversal on void/refund); real payment-gateway integration with idempotency.</p>
+<p><strong>High:</strong> Purchase Orders + PO→GRN matching; supplier payables/aging/statements; purchase returns;
+profit report (needs product COGS mapping — <code>Product</code> has no cost field); VAT/Tax report; cashier/shift &amp; EOD-close reports.</p>
+<p><strong>Medium:</strong> coupon/promo system; item-level discounts; advance payments/deposits; recipe versioning;
+drawer reconciliation + petty-cash/float; barcode/SKU scan &amp; fast POS product search.</p>
+<p><strong>Low:</strong> multi-level &amp; cross-dimension unit conversion; formal stock-count sessions / cycle counts /
+bin tracking; reservation depth (time windows, waitlist, overbooking).</p>
+
+<h2>Workflow Gaps</h2>
+<ul>
+<li><strong>Refund flow</strong> stops at money; doesn't touch inventory or GL — staff must separately cancel the order to fix stock.</li>
+<li><strong>Delivery flow</strong> ends at order creation; no dispatch → deliver → settle loop.</li>
+<li><strong>Kitchen flow</strong> has no automatic ticket emission.</li>
+<li><strong>No order-acceptance step on any channel.</strong> POS/Waiter/QR all create the order as <code>Placed</code>; nothing
+confirms it. The only <code>Confirm()</code> is a side-effect of kitchen staff hitting "Start" on the KDS
+(<code>AdvanceKitchenOrderCommand</code> → <code>BeginPreparing</code>). So the kitchen is the <em>implicit</em> confirmer, and
+QR/online orders get no acknowledgement back to the customer. See the design section below.</li>
+<li><strong>Purchase flow</strong> is GRN-only: no PO, no return, no payable — "Pay Supplier" has nothing to settle against.</li>
+<li><strong>Accounting close</strong> is import-driven and one-directional; refunds after import are not back-corrected.</li>
+</ul>
+<p class="meta"><strong>Verified working:</strong> dine-in loop (table → session → order → confirm → kitchen board → serve →
+settle → table freed), takeaway, order state machine with illegal-transition rejection, split/partial payment,
+manager-approved void/refund with audit snapshots, recipe explosion + idempotent stock deduction on confirm, stock reversal on cancel.</p>
+
+<div class="pagebreak"></div>
+<h2>Order Confirmation &amp; the Real-World Workflow Model</h2>
+<p>The single root cause behind Critical #1 and the confirmation gap is that BornoRMS collapses two lifecycles into one. Every
+production restaurant POS (Toast, Square for Restaurants, Lightspeed, Petpooja) keeps them <strong>independent</strong>:</p>
+<ul>
+<li><strong>Order / kitchen status:</strong> <code>Open → Fired/In-Kitchen → Ready → Served → Closed</code></li>
+<li><strong>Payment status:</strong> <code>Unpaid → Partially paid → Paid</code></li>
+</ul>
+<p>An order is <strong>Closed/Completed only when BOTH are done — food delivered <em>and</em> paid</strong>. Payment never
+force-completes an order; firing to the kitchen never marks it paid. BornoRMS instead lets payment drive
+<code>Order.Status = Completed</code>, which is why a paid order vanishes from the kitchen board.</p>
+
+<h3>Who "confirms," per service model (real world)</h3>
+<table>
+<tr><th>Channel</th><th>Who confirms / fires</th><th>What confirmation means</th></tr>
+<tr><td>Full-service dine-in (waiter)</td><td>Waiter hits <strong>"Send / Fire"</strong></td><td>The fire action <em>is</em> the
+confirmation — an accepted, committed kitchen ticket; KOT auto-prints instantly. Bill &amp; payment come last, separately.</td></tr>
+<tr><td>Quick-service / takeaway (pay-first)</td><td>The <strong>payment event auto-fires</strong> the ticket</td><td>Paying
+does <em>not</em> close the order — it moves to <em>In-Kitchen</em> and stays on the KDS until the food is handed over (kitchen
+bumps "Complete"). "Paid" ≠ "fulfilled".</td></tr>
+<tr><td>Online / QR / delivery</td><td>Manager/cashier taps <strong>"Accept"</strong> (or auto-accept rule)</td><td>Accept sends a
+confirmation + prep-ETA <em>back to the customer</em>, then fires to the kitchen. Never silently dropped into the queue.</td></tr>
+</table>
+<p class="meta"><strong>The one-line model:</strong> Front-of-house <em>accepts/fires</em> the order (that is the confirm) ·
+the kitchen <em>cooks</em> it · the cashier <em>collects payment</em> independently · the order closes only when served <strong>and</strong> paid.</p>
+
+<h3>Real practice vs. BornoRMS today</h3>
+<table>
+<tr><th>Real-restaurant practice</th><th>BornoRMS today</th></tr>
+<tr><td>Order acceptance is explicit at point of entry (fire/accept)</td><td>No acceptance step — order sits <code>Placed</code>; kitchen implicitly "confirms" by starting to cook</td></tr>
+<tr><td>KOT auto-prints/displays the instant the order is fired</td><td>KOT not auto-printed; KDS only, manual print</td></tr>
+<tr><td>Payment and fulfilment are independent axes</td><td>Conflated — payment force-sets <code>Completed</code></td></tr>
+<tr><td>A paid order stays in the kitchen until food is handed over</td><td>Paid order <strong>vanishes</strong> from the KDS</td></tr>
+<tr><td>Online/QR sends an acceptance + ETA back to the customer</td><td>No acknowledgement loop</td></tr>
+<tr><td>Order closes only when served <strong>and</strong> paid</td><td>Closes on payment alone, regardless of whether it was cooked</td></tr>
+</table>
+
+<h3>Correct design for BornoRMS</h3>
+<ol>
+<li><strong>Auto-<code>Confirmed</code> on placement for QR &amp; Waiter</strong> (an accepted ticket immediately), or an explicit
+<strong>"Accept"</strong> action on the KDS for online orders, distinct from "Start cooking".</li>
+<li><strong>Keep kitchen status orthogonal to <code>IsPaid</code>.</strong> Payment sets <code>PaymentStatus = Paid</code> and nothing
+else — it must <strong>not</strong> touch <code>Order.Status</code>.</li>
+<li><strong><code>Completed</code> requires <code>Served</code> AND <code>Paid</code></strong>, not payment alone.</li>
+<li><strong>Auto-fire the KOT</strong> to the kitchen printer/station the moment an order is accepted/fired.</li>
+<li>For QR, send an <strong>acceptance + prep-ETA</strong> back to the customer.</li>
+</ol>
+<p class="meta">This reframes Phase 1 of the roadmap: the fix is not "add a confirm button" — it is to <strong>separate the payment
+axis from the fulfilment axis</strong>, the model every production restaurant POS uses.</p>
+
+<div class="pagebreak"></div>
+<h2>Security Issues</h2>
+<ul>
+<li><strong>Overall: solid.</strong> Consistent policy-based authorization (<code>Staff</code>, <code>Admin</code>,
+<code>Kitchen</code>, <code>WaiterFloor</code>, <code>CanDiscount</code>, <code>CanVoid</code>, <code>CanSettle</code>) on
+Blazor pages <em>and</em> server-side <code>PermissionGuard.Require(...)</code> backstops in handlers — not just UI hiding.
+Three auth mechanisms correctly segregated (customer OTP, staff JWT, staff cookie).</li>
+<li><strong>Manager approval is self-approvable</strong> — a manager voiding/refunding their own transaction needs no second
+person. Fraud opportunity; consider dual-control + per-user void/refund reporting.</li>
+<li><strong>No per-cashier discount cap / abuse tracking</strong> — only a single global high-discount threshold (default 20%).</li>
+<li><strong>No payment idempotency key</strong> — retried settle could double-record; concurrency guarded by <code>RowVersion</code> but not request-level dedup.</li>
+<li><code>/tables</code> API intentionally public (customer QR seating), read-only — acceptable.</li>
+<li>Rotate the seeded super-admin <code>admin@bornobit.local / ChangeMe!2026</code> before go-live.</li>
+</ul>
+
+<h2>Performance Issues</h2>
+<ul>
+<li>Kitchen/dashboard real-time is hybrid: SignalR push + a 5-second polling safety-net (to catch API-process events) —
+functional, but a latency floor and constant query load that grows with volume.</li>
+<li><strong>No load-test evidence</strong> for 20/50/100 concurrent users. <strong>LocalDB is a dev database — not
+production-grade</strong>; a real SQL Server is required.</li>
+<li>Cash-counter/board queries join on Payments in SQL — index-review before high volume. No caching layer.</li>
+</ul>
+
+<h2>Data Integrity Risks</h2>
+<ul>
+<li><code>AccountedAtUtc</code> not cleared on refund → double-count / overstated income across the import boundary.</li>
+<li>Stock under-count from refund / post-confirm line-void without reversal.</li>
+<li>No request idempotency → double payment/transaction on retry or double-click.</li>
+<li>Single-entry accounting → no structural debit=credit guarantee; manual-entry errors uncaught.</li>
+<li>LocalDB + Windows auth → single machine, no real HA/backup; both API and Web auto-migrate on boot (race).</li>
+</ul>
+
+<h2>Production Readiness Checklist</h2>
+<table>
+<tr><th>Module</th><th>Status</th><th>Note</th></tr>
+<tr><td>Restaurant / billing settings (VAT, service, currency, rounding)</td><td class="ok">✅</td><td>Defaults applied at settle</td></tr>
+<tr><td>Users / roles / permissions / authorization</td><td class="ok">✅</td><td>Policy + handler guards; rotate seed admin</td></tr>
+<tr><td>Menu (categories, products, variants)</td><td class="ok">✅</td><td>No barcode/SKU</td></tr>
+<tr><td>Combos / add-ons</td><td class="warn">⚠</td><td>Variants yes; combo/add-on depth unverified</td></tr>
+<tr><td>Recipe management</td><td class="warn">⚠</td><td>Works; no versioning/costing</td></tr>
+<tr><td>Inventory ledger + deduction on sale</td><td class="ok">✅</td><td>Recipe + direct-stock, idempotent, reverses on cancel</td></tr>
+<tr><td>Inventory reversal on refund / line-void</td><td class="no">❌</td><td>Stock leak</td></tr>
+<tr><td>Negative-stock control</td><td class="warn">⚠</td><td>Allowed silently; alerts only</td></tr>
+<tr><td>Suppliers</td><td class="warn">⚠</td><td>Entity only; no payables/statements</td></tr>
+<tr><td>Purchase Orders</td><td class="no">❌</td><td>GRN-only</td></tr>
+<tr><td>Goods receiving (GRN)</td><td class="ok">✅</td><td>Posts stock with unit conversion</td></tr>
+<tr><td>Purchase returns</td><td class="no">❌</td><td>Missing</td></tr>
+<tr><td>Supplier payments / payables</td><td class="no">❌</td><td>Missing</td></tr>
+<tr><td>Tables + states + sessions + reservations</td><td class="ok">✅</td><td>Reservations lightweight</td></tr>
+<tr><td>Dine-in workflow</td><td class="ok">✅</td><td>Full loop verified</td></tr>
+<tr><td>Takeaway workflow</td><td class="ok">✅</td><td></td></tr>
+<tr><td>Delivery workflow</td><td class="no">❌</td><td>Enum only; no logistics</td></tr>
+<tr><td>POS counter (calc, discount, tax, service, split)</td><td class="ok">✅</td><td>No barcode/coupon</td></tr>
+<tr><td>Order lifecycle / state machine</td><td class="no">❌</td><td>Forward transitions guarded, but <strong>payment force-jumps to Completed, bypassing all kitchen states</strong></td></tr>
+<tr><td>KDS (real-time board)</td><td class="ok">✅</td><td>Hybrid SignalR + 5s poll</td></tr>
+<tr><td>Printing — receipts</td><td class="ok">✅</td><td>QuestPDF + SignalR print agent</td></tr>
+<tr><td>Printing — KOT auto-emit</td><td class="no">❌</td><td>Manual only</td></tr>
+<tr><td>Payments (cash/card/mobile, split, partial)</td><td class="ok">✅</td><td>Mock gateway; no advance/idempotency</td></tr>
+<tr><td>Refund / void</td><td class="warn">⚠</td><td>Money correct; no stock/GL reversal</td></tr>
+<tr><td>Discounts</td><td class="warn">⚠</td><td>Order-level only; no coupon; self-approvable</td></tr>
+<tr><td>Cash drawer open/close + variance</td><td class="warn">⚠</td><td>Variance computed, not reconciled to GL</td></tr>
+<tr><td>Reporting — sales/category/hour/revenue/staff</td><td class="ok">✅</td><td></td></tr>
+<tr><td>Reporting — profit</td><td class="no">❌</td><td>No COGS→order mapping</td></tr>
+<tr><td>Reporting — VAT / cashier / EOD close</td><td class="no">❌</td><td>Missing</td></tr>
+<tr><td>Accounting — auto-posting / double-entry</td><td class="no">❌</td><td>Single-entry, manual</td></tr>
+<tr><td>Financial audit trail</td><td class="ok">✅</td><td>Immutable, before/after snapshots</td></tr>
+<tr><td>Concurrency protection</td><td class="ok">✅</td><td>RowVersion + retries; Payment.Id fix landed</td></tr>
+<tr><td>Request idempotency</td><td class="no">❌</td><td>No server-side key</td></tr>
+<tr><td>Performance / load tested</td><td class="no">❌</td><td>No evidence; LocalDB not prod-grade</td></tr>
+</table>
+
+<h2>Final Verdict</h2>
+<p><strong>Can this software run a real restaurant today?</strong> Not yet — even for dine-in + takeaway, the
+<strong>payment-bypasses-kitchen</strong> behaviour plus no auto-KOT means a paid order can reach no one in the kitchen,
+which is a go-live blocker on its own. The POS billing math and the manual kitchen loop are individually trustworthy, but
+they are not wired together safely. The blockers are: decouple "paid" from "fulfilled" (stop payment from force-completing
+an order), auto-print the KOT, stock-reversal correctness on refund/void, accounting automation/reversal, delivery
+logistics, and a real payment gateway. With those fixed, dine-in + takeaway on cash/card is viable; delivery and hands-off
+accounting need more.</p>
+
+<h3>Go-live roadmap (priority order)</h3>
+<div class="phase"><strong>Phase 1 — Integrity blockers (before any go-live):</strong>
+(1) <strong>decouple payment from fulfilment</strong> — stop <code>RecomputePaymentState()</code> force-completing the
+order; keep kitchen status independent of <code>IsPaid</code> so a paid order stays visible to the kitchen until actually
+served (track "paid" and "served" separately);
+(2) auto-emit KOT on confirm/place via the existing <code>PrintHub</code> with job dedup;
+(3) reverse inventory on refund &amp; post-confirm line-void (mirror <code>OrderStockSync.TryReverseAsync</code>);
+(4) post a <code>FinanceTransaction</code> reversal on void/refund &amp; clear/re-evaluate <code>AccountedAtUtc</code>;
+(5) add a server-side idempotency key to payment/settle commands;
+(6) rotate seed super-admin; move off LocalDB to real SQL Server with backups.</div>
+<div class="phase"><strong>Phase 2 — Channel + money completeness (before delivery / card go-live):</strong>
+(6) delivery subsystem (rider, dispatch, delivery fee, tracking, report);
+(7) real payment-gateway integration (card + bKash/Nagad) replacing the mock;
+(8) profit reporting (roll <code>InventoryItem.AvgCost</code> up via recipe → COGS-per-order) plus VAT and cashier/EOD reports.</div>
+<div class="phase"><strong>Phase 3 — Procurement + controls:</strong>
+(9) Purchase Orders + PO→GRN matching, purchase returns, supplier payables/statements/payments;
+(10) discount controls (item-level + coupon, per-cashier caps, dual-control + frequency reporting on manager void/refund);
+(11) drawer reconciliation to GL, petty-cash/float in-out, variance escalation.</div>
+<div class="phase"><strong>Phase 4 — Hardening / depth:</strong>
+(12) recipe versioning + costing; formal stock-count sessions; multi-level unit conversion; reservation depth;
+load/concurrency testing to the 100-user target; dashboard caching.</div>
+
+<div class="footer">BornoBit Restaurant — Production-Readiness Audit. Findings grounded in source review of the
+<code>backend/src/BornoBit.Restaurant.*</code> projects. Generated 15 June 2026.</div>
+
+</body>
+</html>

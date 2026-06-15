@@ -1,0 +1,112 @@
+@using BornoBit.Restaurant.Application.Operations.Sessions
+@using MediatR
+@inject ISender Sender
+@inject IBoToastService ToastService
+@inject IBoDialogService DialogService
+
+<BoDialogBody>
+    @if (_bill is null)
+    {
+        <LoadingState Message="Loading bill…" />
+    }
+    else
+    {
+        <div class="ss">
+            <div class="ss-head">
+                <div><span class="ss-k">Session</span><strong>@_bill.SessionNumber</strong></div>
+                <div><span class="ss-k">Table</span><strong>@_bill.TableNumber</strong></div>
+                <div><span class="ss-k">Guests</span><strong>@_bill.GuestCount</strong></div>
+            </div>
+
+            @foreach (var o in _bill.Orders)
+            {
+                <div class="ss-order">
+                    <div class="ss-order-head">
+                        <strong>@o.OrderNumber</strong>
+                        <span class="ss-order-status">@o.Status@(o.IsPaid ? " · Paid" : "")</span>
+                        <span class="ss-order-amt">@_bill.Currency @o.OrderTotal.ToString("0.##")</span>
+                        @if (!o.IsPaid)
+                        {
+                            <BoButton Variant="primary" Size="sm" Loading="_busy" OnClick="@(() => SettleOrderAsync(o.OrderId, o.OrderNumber))">Settle</BoButton>
+                        }
+                        else
+                        {
+                            <a class="bo-link" href="/reports/order/@o.OrderId/receipt.pdf" target="_blank">Invoice</a>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="ss-totals">
+                <div class="ss-row"><span>Grand total</span><span>@_bill.Currency @_bill.GrandTotal.ToString("0.##")</span></div>
+                <div class="ss-row"><span>Paid</span><span>@_bill.Currency @_bill.PaidAmount.ToString("0.##")</span></div>
+                <div class="ss-row ss-due"><span>Balance due</span><span>@_bill.Currency @_bill.BalanceDue.ToString("0.##")</span></div>
+            </div>
+        </div>
+    }
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Close(_changed))">Close</BoButton>
+    @if (_bill is not null && _bill.BalanceDue <= 0m)
+    {
+        <BoButton Variant="success" Loading="_busy" OnClick="CloseSessionAsync">Close session</BoButton>
+    }
+</BoDialogFooter>
+
+@code {
+    [Parameter] public Guid Content { get; set; }
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private SessionBillDto? _bill;
+    private bool _busy;
+    private bool _changed;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync() => _bill = await Sender.Send(new GetSessionBillQuery(Content));
+
+    private async Task SettleOrderAsync(Guid orderId, string orderNumber)
+    {
+        var result = await DialogService.ShowAsync<SettlementDialog, Guid>(
+            orderId,
+            new BoDialogOptions { Title = $"Settle · {orderNumber}", Width = "640px" });
+
+        if (!result.Cancelled && result.Data is true)
+        {
+            _changed = true;
+            await ReloadAsync();
+            // SettleOrderCommand auto-closes the session once its last order is paid — if the balance
+            // is cleared the request is already resolved, so dismiss this dialog.
+            if (_bill is null || _bill.BalanceDue <= 0m)
+                Dialog.Close(true);
+        }
+    }
+
+    private async Task CloseSessionAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Sender.Send(new CloseSessionCommand(Content, "Settled at cash counter"));
+            ToastService.ShowSuccess("Session closed.");
+            Dialog.Close(true);
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _busy = false; }
+    }
+}
+
+<style>
+    .ss { display:flex; flex-direction:column; gap:14px; }
+    .ss-head { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .ss-head > div { display:flex; flex-direction:column; gap:2px; font-size:13px; }
+    .ss-k { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--bo-text-muted); }
+    .ss-order { border-top:1px solid var(--bo-border-soft,#eee); padding-top:8px; }
+    .ss-order-head { display:flex; align-items:center; gap:10px; }
+    .ss-order-status { font-size:11px; text-transform:uppercase; color:var(--bo-text-muted); }
+    .ss-order-amt { margin-left:auto; font-size:13px; font-weight:600; }
+    .ss-totals { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--bo-border,#ddd); padding-top:8px; }
+    .ss-row { display:flex; justify-content:space-between; font-size:13px; }
+    .ss-due { font-weight:700; color:var(--bo-danger); }
+</style>

@@ -63,6 +63,49 @@
             <BoInput Value="_waiterFilter" ValueChanged="OnWaiterChanged" Immediate="false" Label="Waiter" Placeholder="Any" />
         </div>
 
+        @* Bill requests — sessions a waiter flagged for settlement *@
+        <div class="cc-section"><BoIcon Name="Alert" Size="18" /><span>Bill requests</span><BoBadge Tone="@(_billingRequests.Count > 0 ? "warning" : "neutral")">@_billingRequests.Count</BoBadge></div>
+        @if (_billingRequests.Count == 0)
+        {
+            <EmptyState Icon="Checkmark" Description="No tables are waiting for the bill." />
+        }
+        else
+        {
+            <div class="bo-panel" style="padding:0; overflow:hidden;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th class="cc-th">Table</th>
+                            <th class="cc-th">Waiter</th>
+                            <th class="cc-th" style="text-align:right;">Guests</th>
+                            <th class="cc-th" style="text-align:right;">Orders</th>
+                            <th class="cc-th" style="text-align:right;">Running bill</th>
+                            <th class="cc-th" style="text-align:right;">Balance</th>
+                            <th class="cc-th">Waiting</th>
+                            <th class="cc-th" style="text-align:right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _billingRequests)
+                        {
+                            <tr class="cc-row">
+                                <td style="padding:10px 14px;"><strong>@(r.TableNumber ?? "—")</strong> <span style="color:var(--bo-text-muted);">· @r.SessionNumber</span></td>
+                                <td style="padding:10px 14px;">@(r.WaiterName ?? "—")</td>
+                                <td style="padding:10px 14px; text-align:right;">@r.GuestCount</td>
+                                <td style="padding:10px 14px; text-align:right;">@r.OrderCount</td>
+                                <td style="padding:10px 14px; text-align:right;"><strong>@Money(r.RunningBill)</strong></td>
+                                <td style="padding:10px 14px; text-align:right;">@(r.BalanceDue > 0 ? Money(r.BalanceDue) : "—")</td>
+                                <td style="padding:10px 14px; color:var(--bo-text-muted); white-space:nowrap;">@WaitingFor(r.RequestedAtUtc)</td>
+                                <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
+                                    <BoButton Variant="primary" Size="sm" OnClick="@(() => SettleRequestAsync(r))">Settle</BoButton>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
         @* Board *@
         <div class="cc-section"><BoIcon Name="ReceiptMoney" Size="18" /><span>Orders</span><BoBadge Tone="neutral">@_board.TotalCount</BoBadge></div>
         @if (_board.Items.Count == 0)

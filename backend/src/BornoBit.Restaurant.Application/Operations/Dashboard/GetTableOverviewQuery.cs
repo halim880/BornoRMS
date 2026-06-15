@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
@@ -28,14 +29,18 @@ public record TableOverviewRowDto(
 public class GetTableOverviewQueryHandler : IRequestHandler<GetTableOverviewQuery, IReadOnlyList<TableOverviewRowDto>>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetTableOverviewQueryHandler(IAppDbContext db) => _db = db;
+    public GetTableOverviewQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<IReadOnlyList<TableOverviewRowDto>> Handle(GetTableOverviewQuery request, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
-        var todayStart = now.Date;
-        var tomorrow = todayStart.AddDays(1);
+        var (todayStart, tomorrow) = _clock.DayWindowUtc(_clock.Today);
 
         var tables = await _db.RestaurantTables
             .Where(t => t.IsActive)

@@ -1,5 +1,6 @@
 using BornoBit.Restaurant.Application.Common.Behaviors;
 using BornoBit.Restaurant.Application.Inventory.Consumption;
+using BornoBit.Restaurant.Application.Ordering.Common;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +27,9 @@ public static class DependencyInjection
 
         // Unified stock pipeline (stateless — shares the caller's IAppDbContext per method call).
         services.AddScoped<IStockConsumptionService, StockConsumptionService>();
+
+        // Single source of truth for dine-in table occupancy (shared by waiter + POS order flows).
+        services.AddScoped<IDineInSessionResolver, DineInSessionResolver>();
 
         return services;
     }

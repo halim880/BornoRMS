@@ -113,7 +113,7 @@
                     <button @onclick="@(() => SelectTable(t))" style="text-align:left; cursor:pointer; padding:12px; border-radius:10px; border:1px solid var(--bo-border-soft); background:var(--bo-bg-card); @(_selectedTable?.TableId == t.TableId ? "outline:2px solid var(--bo-primary);" : "")">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <strong>@t.TableNumber</strong>
-                            <BoBadge Tone="@TableTone(t.Status)">@t.Status</BoBadge>
+                            <BoBadge Tone="@TableStatusDisplay.Tone(t.Status)">@TableStatusDisplay.Label(t.Status)</BoBadge>
                         </div>
                         <div style="font-size:var(--bo-font-xs); color:var(--bo-text-subtle); margin-top:6px;">Seats @t.Capacity@(t.GuestCount is { } g ? $" · {g} guests" : "")</div>
                         @if (t.SessionMinutes is { } m)
@@ -126,18 +126,28 @@
             @if (_selectedTable is { } sel)
             {
                 <div style="margin-top:12px; padding:12px; border-radius:10px; background:var(--bo-bg-soft);">
-                    <strong>Table @sel.TableNumber</strong> — @sel.Status
+                    <strong>Table @sel.TableNumber</strong> — @TableStatusDisplay.Label(sel.Status)
                     <div style="font-size:var(--bo-font-sm); color:var(--bo-text-muted); margin-top:4px;">
                         Capacity @sel.Capacity@(sel.GuestCount is { } g ? $" · {g} guests" : "")
                         @if (sel.OrderNumber is not null) { <text> · Order @sel.OrderNumber · @sel.SessionMinutes min · Bill @Money(sel.CurrentBill)</text> }
                     </div>
-                    @if (sel.OrderId is { } oid)
+                    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                        @if (sel.OrderId is not null)
+                        {
+                            <BoButton Variant="outline" Size="sm" OnClick="@(() => Go($"/pos"))">Open in POS</BoButton>
+                        }
+                        @if (sel.Status == DerivedTableStatus.Available)
+                        {
+                            <BoButton Variant="outline" Size="sm" OnClick="@(() => OpenReservation(sel.TableId))">Reserve</BoButton>
+                        }
+                        @if (sel.SessionId is not null && sel.Status is DerivedTableStatus.Occupied or DerivedTableStatus.WaitingPayment)
+                        {
+                            <BoButton Variant="danger" Size="sm" OnClick="@(() => ReleaseTableAsync(sel))">Release table</BoButton>
+                        }
+                    </div>
+                    @if (_tableMessage is { } tm)
                     {
-                        <div style="margin-top:8px;"><BoButton Variant="outline" Size="sm" OnClick="@(() => Go($"/pos"))">Open in POS</BoButton></div>
-                    }
-                    else if (sel.Status == DerivedTableStatus.Available)
-                    {
-                        <div style="margin-top:8px;"><BoButton Variant="outline" Size="sm" OnClick="@(() => OpenReservation(sel.TableId))">Reserve</BoButton></div>
+                        <div style="margin-top:6px; font-size:var(--bo-font-sm); color:var(--bo-danger);">@tm</div>
                     }
                 </div>
             }

@@ -15,6 +15,7 @@
     <div class="bo-cmp-ac" @onfocusout="OnFocusOut">
         <div class="bo-cmp-ac-shell @(_open ? "is-open" : "") @(Disabled ? "is-disabled" : "")">
             <input id="@_id"
+                   @ref="_input"
                    type="text"
                    class="bo-cmp-ac-input @(ShowSelectedOverlay ? "is-hidden-text" : "")"
                    value="@_displayText"
@@ -124,6 +125,10 @@
 
     private string CssClass => AdditionalAttributes is { } a && a.TryGetValue("class", out var c) ? c?.ToString() ?? "" : "";
     private readonly string _id = $"bo-ac-{Guid.NewGuid():N}";
+    private ElementReference _input;
+
+    /// <summary>Move keyboard focus into the search input. Used for keyboard-first data entry.</summary>
+    public ValueTask FocusAsync() => _input.FocusAsync();
 
     private bool _open;
     private string _query = "";

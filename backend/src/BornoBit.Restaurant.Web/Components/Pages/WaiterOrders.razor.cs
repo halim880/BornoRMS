@@ -2,6 +2,7 @@ using BornoBit.Restaurant.Application.Dining.Queries;
 using BornoBit.Restaurant.Application.Operations.Dashboard;
 using BornoBit.Restaurant.Application.Operations.Sessions;
 using BornoBit.Restaurant.Application.Ordering.Commands;
+using BornoBit.Restaurant.Application.Ordering.Pos;
 using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Application.ProductCategories;
 using BornoBit.Restaurant.Application.Products;
@@ -12,7 +13,9 @@ using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using BornoBit.Restaurant.Web.Components.BornoUi.Dialog;
 using BornoBit.Restaurant.Web.Components.BornoUi.Toast;
+using BornoBit.Restaurant.Web.Components.Pages.POS;
 using BornoBit.Restaurant.Web.Components.Pages.Waiter.Dialogs;
+using BornoBit.Restaurant.Web.Components.Shared;
 using BornoBit.Restaurant.Web.Hubs;
 using BornoBit.Restaurant.Web.Services.Dashboard;
 using MediatR;
@@ -63,7 +66,8 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
     private IReadOnlyList<ProductDto>? _products;
     private IReadOnlyList<ProductCategoryDto> _categories = Array.Empty<ProductCategoryDto>();
     private IReadOnlyList<TableDto> _tables = Array.Empty<TableDto>();
-    private PagedResult<OrderListItemDto>? _recent;
+    private List<ActiveOrderDto> _activeOrders = new();
+    private Dictionary<Guid, ProductAvailabilityDto> _availability = new();
 
     private readonly List<CartLine> _cart = new();
     private OrderType _type = OrderType.DineIn;
@@ -73,9 +77,8 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
     private string? _name;
     private string? _notes;
 
-    private string? _search;
     private Guid? _selectedCategoryId;
-    private OrderListItemDto? _activeOrder;
+    private ActiveOrderDto? _activeOrder;
 
     private bool _loading = true;
     private bool _placing;
@@ -91,21 +94,15 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
     private IEnumerable<ProductCategoryDto> VisibleCategories =>
         _categories.Where(c => _products?.Any(p => p.ProductCategoryId == c.Id) == true);
 
-    private IEnumerable<OrderListItemDto> RunningOrders =>
-        _recent?.Items.Where(o => o.Status is not (OrderStatus.Completed or OrderStatus.Cancelled))
-        ?? Enumerable.Empty<OrderListItemDto>();
+    private IReadOnlyList<ActiveOrderDto> RunningOrders => _activeOrders;
 
     private IEnumerable<TableOverviewRowDto> FilteredFloor =>
         _floor.Where(t => (_statusFilter is null || t.Status == _statusFilter)
                           && (!_mineOnly || (t.WaiterName is { } w && w == _myName)));
 
     private IEnumerable<ProductDto> FilteredProducts =>
-        (_products ?? Array.Empty<ProductDto>()).Where(p =>
-            (_selectedCategoryId is null || p.ProductCategoryId == _selectedCategoryId)
-            && (string.IsNullOrWhiteSpace(_search)
-                || p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
-                || p.Code.Contains(_search, StringComparison.OrdinalIgnoreCase)
-                || (p.BanglaName?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)));
+        (_products ?? Array.Empty<ProductDto>())
+            .Where(p => _selectedCategoryId is null || p.ProductCategoryId == _selectedCategoryId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -115,8 +112,9 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
         _products = (await Sender.Send(new GetProductsQuery())).Where(p => p.IsActive).ToList();
         _categories = await Sender.Send(new GetProductCategoriesQuery());
         _tables = await Sender.Send(new GetTablesQuery());
+        await LoadAvailabilityAsync();
         await LoadConsoleAsync();
-        await LoadRecent();
+        await LoadActiveOrdersAsync();
         _loading = false;
     }
 
@@ -138,7 +136,8 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
                 InvokeAsync(async () =>
                 {
                     await LoadConsoleAsync();
-                    await LoadRecent();
+                    await LoadAvailabilityAsync();
+                    await LoadActiveOrdersAsync();
                     StateHasChanged();
                 }));
 
@@ -163,23 +162,23 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
             _selectedFloorTable = _floor.FirstOrDefault(t => t.TableId == sel.TableId);
     }
 
-    private async Task LoadRecent()
-    {
-        _recent = await Sender.Send(new GetOrdersQuery(Page: 1, PageSize: 50));
+    private async Task LoadAvailabilityAsync() =>
+        _availability = (await Sender.Send(new GetProductAvailabilityQuery())).ToDictionary(a => a.ProductId);
 
-        if (_activeOrder is not null)
+    private async Task LoadActiveOrdersAsync()
+    {
+        _activeOrders = (await Sender.Send(new GetActiveOrdersQuery())).ToList();
+
+        // Drop the edit selection if the order was settled/cancelled elsewhere meanwhile.
+        if (_activeOrder is { } active && _activeOrders.All(o => o.Id != active.Id))
         {
-            var fresh = _recent.Items.FirstOrDefault(o => o.Id == _activeOrder.Id);
-            if (fresh is null || fresh.Status is OrderStatus.Completed or OrderStatus.Cancelled || fresh.IsPaid)
-            {
-                ToastService.ShowInfo($"Order {_activeOrder.OrderNumber} is no longer open — back to new order.");
-                _activeOrder = null;
-                _cart.Clear();
-            }
-            else
-            {
-                _activeOrder = fresh;
-            }
+            ToastService.ShowInfo($"Order {active.OrderNumber} is no longer open — back to new order.");
+            _activeOrder = null;
+            _cart.Clear();
+        }
+        else if (_activeOrder is { } sel)
+        {
+            _activeOrder = _activeOrders.First(o => o.Id == sel.Id);
         }
 
         StateHasChanged();
@@ -188,7 +187,8 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
     private async Task RefreshAllAsync()
     {
         await LoadConsoleAsync();
-        await LoadRecent();
+        await LoadAvailabilityAsync();
+        await LoadActiveOrdersAsync();
     }
 
     private async Task NotifyAsync(string scope) => await Notifier.NotifyAsync(scope);
@@ -451,7 +451,35 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
         if (type == OrderType.Takeaway) { _selectedTable = null; _currentSessionId = null; }
     }
 
-    private async Task SelectRunningOrderAsync(OrderListItemDto order)
+    // ----- stock availability helpers (DirectStock products only; others are unconstrained) -----
+    private bool IsOutOfStock(ProductDto p) => _availability.TryGetValue(p.Id, out var a) && a.IsOutOfStock;
+    private bool IsLowStock(ProductDto p) => _availability.TryGetValue(p.Id, out var a) && a.IsLowStock && !a.IsOutOfStock;
+    private decimal? AvailableOf(ProductDto p) => _availability.TryGetValue(p.Id, out var a) ? a.AvailableStock : null;
+
+    private async Task OnProductClickAsync(ProductDto item)
+    {
+        if (IsOutOfStock(item))
+        {
+            ToastService.ShowWarning($"{item.Name} is out of stock.");
+            return;
+        }
+
+        if (!item.HasVariants)
+        {
+            AddToCart(item.Id, null, item.Name, item.Price, item.Currency);
+            return;
+        }
+
+        var result = await DialogService.ShowAsync<VariantPickerDialog, ProductDto>(item, new BoDialogOptions
+        {
+            Title = item.Name,
+            Width = "360px"
+        });
+        if (!result.Cancelled && result.Data is ProductVariantDto variant)
+            AddToCart(item.Id, variant.Id, $"{item.Name} ({variant.Name})", variant.Price, item.Currency);
+    }
+
+    private async Task SelectRunningOrderAsync(ActiveOrderDto order)
     {
         _error = null;
         if (_activeOrder?.Id == order.Id) { DeselectOrder(); return; }
@@ -486,17 +514,6 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
         _activeOrder = null;
         _cart.Clear();
     }
-
-    private int QtyOf(Guid productId) => _cart.Where(l => l.ProductId == productId).Sum(l => l.Qty);
-
-    private void AddBase(ProductDto item)
-    {
-        if (item.HasVariants) return;
-        AddToCart(item.Id, null, item.Name, item.Price, item.Currency);
-    }
-
-    private void AddVariant(ProductDto item, ProductVariantDto variant) =>
-        AddToCart(item.Id, variant.Id, $"{item.Name} ({variant.Name})", variant.Price, item.Currency);
 
     private void AddToCart(Guid productId, Guid? variantId, string name, decimal price, string currency)
     {
@@ -564,13 +581,7 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
     }
 
     // ---- view helpers ----
-    private static string? BanglaOf(ProductCategoryDto cat)
-    {
-        var bn = cat.Description?.Split('—')[0].Trim();
-        return string.IsNullOrEmpty(bn) ? null : bn;
-    }
-
-    private static string ChipTitle(OrderListItemDto o) =>
+    private static string ChipTitle(ActiveOrderDto o) =>
         $"{(o.OrderType == OrderType.DineIn ? o.TableNumber ?? "T?" : "TW")}#{ShortNo(o.OrderNumber)}";
 
     private static string ShortNo(string orderNumber) => orderNumber[(orderNumber.LastIndexOf('-') + 1)..];
@@ -586,23 +597,9 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
         _ => "neutral"
     };
 
-    private static string TableTone(DerivedTableStatus s) => s switch
-    {
-        DerivedTableStatus.Available => "success",
-        DerivedTableStatus.Occupied => "warning",
-        DerivedTableStatus.Reserved => "info",
-        DerivedTableStatus.WaitingPayment => "danger",
-        _ => "neutral"
-    };
+    private static string TableTone(DerivedTableStatus s) => TableStatusDisplay.Tone(s);
 
-    private static string TableStatusLabel(DerivedTableStatus s) => s switch
-    {
-        DerivedTableStatus.Available => "Available",
-        DerivedTableStatus.Occupied => "Occupied",
-        DerivedTableStatus.Reserved => "Reserved",
-        DerivedTableStatus.WaitingPayment => "Waiting payment",
-        _ => s.ToString()
-    };
+    private static string TableStatusLabel(DerivedTableStatus s) => TableStatusDisplay.Label(s);
 
     private static string RequestLabel(CustomerRequestType t) => t switch
     {

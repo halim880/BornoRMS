@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Accounting.Drawers;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
@@ -6,6 +7,7 @@ using BornoBit.Restaurant.Web.Components.BornoUi.Dialog;
 using BornoBit.Restaurant.Web.Components.BornoUi.Toast;
 using BornoBit.Restaurant.Web.Components.Pages.Operations.Dialogs;
 using BornoBit.Restaurant.Web.Hubs;
+using BornoBit.Restaurant.Web.Services.Dashboard;
 using BornoBit.Restaurant.Web.Services.Printing;
 using MediatR;
 using Microsoft.AspNetCore.Components;
@@ -20,6 +22,8 @@ public partial class CashCounter : ComponentBase, IAsyncDisposable
     [Inject] private IBoToastService ToastService { get; set; } = default!;
     [Inject] private IReceiptPrintService PrintService { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private IBusinessClock Clock { get; set; } = default!;
+    [Inject] private IDashboardNotifier Notifier { get; set; } = default!;
 
     private bool _loading = true;
     private string? _error;
@@ -28,12 +32,13 @@ public partial class CashCounter : ComponentBase, IAsyncDisposable
     private DrawerDto? _drawer;
     private PagedResult<CashCounterRowDto> _board = new(Array.Empty<CashCounterRowDto>(), 1, BoardPageSize, 0);
     private PagedResult<PaymentLedgerRowDto> _ledger = new(Array.Empty<PaymentLedgerRowDto>(), 1, LedgerPageSize, 0);
+    private IReadOnlyList<BillingRequestRowDto> _billingRequests = Array.Empty<BillingRequestRowDto>();
 
     private readonly Dictionary<Guid, OrderDetailDto?> _expanded = new();
     private Guid? _printingId;
 
-    // Filters
-    private DateOnly _date = DateOnly.FromDateTime(DateTime.Now);
+    // Filters — seeded to the business "today" in OnInitializedAsync (Clock isn't injected yet at field-init time).
+    private DateOnly _date;
     private PaymentStatus? _statusFilter;
     private OrderType? _typeFilter;
     private string? _waiterFilter;
@@ -47,6 +52,7 @@ public partial class CashCounter : ComponentBase, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        _date = Clock.Today;
         await ReloadAsync();
         await ConnectHubAsync();
     }
@@ -76,6 +82,7 @@ public partial class CashCounter : ComponentBase, IAsyncDisposable
         {
             _summary = await Mediator.Send(new GetDailySummaryQuery(_date));
             _drawer = await Mediator.Send(new GetCurrentDrawerQuery());
+            _billingRequests = await Mediator.Send(new GetBillingRequestsQuery());
             await LoadBoardAsync();
             await LoadLedgerAsync();
         }
@@ -142,7 +149,7 @@ public partial class CashCounter : ComponentBase, IAsyncDisposable
 
     private Task OnDateChanged(DateOnly? d)
     {
-        _date = d ?? DateOnly.FromDateTime(DateTime.Now);
+        _date = d ?? Clock.Today;
         _boardPage = 1; _ledgerPage = 1;
         return ReloadAsync();
     }
@@ -168,6 +175,25 @@ public partial class CashCounter : ComponentBase, IAsyncDisposable
 
         if (!result.Cancelled && result.Data is true)
             await ReloadAsync();
+    }
+
+    private async Task SettleRequestAsync(BillingRequestRowDto row)
+    {
+        var result = await DialogService.ShowAsync<Dialogs.SessionSettleDialog, Guid>(
+            row.SessionId,
+            new BoDialogOptions { Title = $"Settle · Table {row.TableNumber}", Width = "560px" });
+
+        if (!result.Cancelled && result.Data is true)
+        {
+            await Notifier.NotifyAsync(DashboardScopes.Sessions);
+            await ReloadAsync();
+        }
+    }
+
+    private string WaitingFor(DateTime requestedAtUtc)
+    {
+        var mins = (int)Math.Max(0, (DateTime.UtcNow - requestedAtUtc).TotalMinutes);
+        return mins < 60 ? $"{mins} min" : $"{mins / 60}h {mins % 60}m";
     }
 
     private async Task OpenDrawerDialogAsync()

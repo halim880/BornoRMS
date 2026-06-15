@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -48,14 +49,18 @@ public class GetKitchenBoardQueryHandler : IRequestHandler<GetKitchenBoardQuery,
         { OrderStatus.Placed, OrderStatus.Confirmed, OrderStatus.Preparing, OrderStatus.Ready };
 
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetKitchenBoardQueryHandler(IAppDbContext db) => _db = db;
+    public GetKitchenBoardQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<KitchenBoardDto> Handle(GetKitchenBoardQuery request, CancellationToken cancellationToken)
     {
-        var date = request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var dayStart = date.ToDateTime(TimeOnly.MinValue);
-        var dayEnd = dayStart.AddDays(1);
+        var date = request.Date ?? _clock.Today;
+        var (dayStart, dayEnd) = _clock.DayWindowUtc(date);
 
         var query =
             from o in _db.Orders
