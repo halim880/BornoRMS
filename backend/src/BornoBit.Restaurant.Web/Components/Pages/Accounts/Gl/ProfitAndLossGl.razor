@@ -1,0 +1,75 @@
+@page "/accounts/gl/profit-loss"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.Reports
+
+<PageTitle>Profit & Loss (GL) · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Profit & Loss (GL)" Description="Income less expenses from the general ledger (auto + manual journals).">
+        <Actions>
+            <BoButton Variant="ghost" OnClick="PrintAsync">
+                <span style="display:inline-flex; align-items:center; gap:6px;"><BoIcon Name="Print" Size="16" /> Print</span>
+            </BoButton>
+        </Actions>
+    </PageHeader>
+
+    <div class="bo-card no-print" style="padding:12px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <BoDatePicker DateTimeValue="_from" DateTimeValueChanged="OnFromChanged" Label="From" />
+        <BoDatePicker DateTimeValue="_to" DateTimeValueChanged="OnToChanged" Label="To" />
+        <div style="margin-left:auto; text-align:right;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Net profit</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:800; color:@(_report.NetProfit >= 0m ? "var(--bo-success, #16a34a)" : "var(--bo-danger, #dc2626)");">@_report.NetProfit.ToString("#,##0.00")</div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading P&L…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <tbody>
+                    @Section("Income", _report.Income, _report.TotalIncome, true)
+                    @Section("Expenses", _report.Expense, _report.TotalExpense, false)
+                    <tr style="border-top:2px solid var(--bo-border); background:var(--bo-bg-soft);">
+                        <td style="padding:12px 14px; font-weight:800;">Net profit</td>
+                        <td style="padding:12px 14px; text-align:right; font-weight:800; color:@(_report.NetProfit >= 0m ? "var(--bo-success, #16a34a)" : "var(--bo-danger, #dc2626)");">@_report.NetProfit.ToString("#,##0.00")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private RenderFragment Section(string title, IReadOnlyList<GlAccountLineDto> lines, decimal total, bool credit) => __builder =>
+    {
+        <tr style="background:var(--bo-bg-soft);">
+            <th colspan="2" style="padding:10px 14px; text-align:left; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">@title</th>
+        </tr>
+        @if (lines.Count == 0)
+        {
+            <tr style="border-top:1px solid var(--bo-border-soft);"><td colspan="2" style="padding:10px 14px; color:var(--bo-text-muted);"><em>None</em></td></tr>
+        }
+        else
+        {
+            @foreach (var l in lines)
+            {
+                <tr style="border-top:1px solid var(--bo-border-soft);">
+                    <td style="padding:8px 14px;"><span class="bo-code bo-code-slate">@l.Code</span> @l.Name</td>
+                    <td style="padding:8px 14px; text-align:right; color:@(credit ? "var(--bo-success, #16a34a)" : "var(--bo-danger, #dc2626)");">@l.Amount.ToString("#,##0.00")</td>
+                </tr>
+            }
+        }
+        <tr style="border-top:1px solid var(--bo-border);">
+            <td style="padding:10px 14px; font-weight:700;">Total @title.ToLowerInvariant()</td>
+            <td style="padding:10px 14px; text-align:right; font-weight:700;">@total.ToString("#,##0.00")</td>
+        </tr>
+    };
+}

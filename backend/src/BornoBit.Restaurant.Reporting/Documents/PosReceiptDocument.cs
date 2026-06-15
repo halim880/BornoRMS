@@ -141,6 +141,15 @@ public class PosReceiptDocument : IDocument
                     table.Cell().PaddingRight(2).Text(line.Name);
                     table.Cell().AlignRight().Text(Money(line.LineTotal));
 
+                    foreach (var modifier in line.Modifiers ?? Array.Empty<OrderReceiptModifier>())
+                    {
+                        var label = modifier.PriceDelta > 0
+                            ? $"+ {modifier.Name} (+{Money(modifier.PriceDelta)})"
+                            : $"+ {modifier.Name}";
+                        table.Cell().Text(string.Empty);
+                        table.Cell().ColumnSpan(2).Text(label).FontSize(SmallFontSize);
+                    }
+
                     if (line.Quantity > 1)
                     {
                         table.Cell().Text(string.Empty);

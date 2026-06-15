@@ -19,7 +19,16 @@ public interface IStockConsumptionService
 
     /// <summary>
     /// Reverses a prior deduction (order cancellation): restores quantity and writes <c>AdjustmentIn</c>
-    /// rows. No-op if nothing was deducted. Sets <see cref="Order.StockSyncStatus"/> to Reversed.
+    /// rows. Restores only the still-outstanding amount (nets any earlier line-void <c>AdjustmentIn</c>
+    /// for this order). No-op if nothing was deducted. Sets <see cref="Order.StockSyncStatus"/> to Reversed.
     /// </summary>
     Task ReverseConsumptionAsync(IAppDbContext db, Order order, CancellationToken ct);
+
+    /// <summary>
+    /// Reverses just one line's deduction (item void on a stock-synced order): restores the line's
+    /// exploded quantity and writes <c>AdjustmentIn</c> rows referencing the order. Leaves the order's
+    /// <see cref="Order.StockSyncStatus"/> unchanged (other lines stay deducted). No-op if the line has
+    /// no stock impact. Requires <c>order.Lines</c> loaded.
+    /// </summary>
+    Task ReverseLineAsync(IAppDbContext db, Order order, OrderLine line, CancellationToken ct);
 }

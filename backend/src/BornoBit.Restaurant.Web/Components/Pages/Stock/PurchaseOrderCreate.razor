@@ -1,0 +1,281 @@
+@page "/stock/po/new"
+@page "/stock/po/{Id:guid}/edit"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@using BornoBit.Restaurant.Application.Inventory.Items
+@using BornoBit.Restaurant.Application.Inventory.PurchaseOrders
+@using BornoBit.Restaurant.Application.Inventory.Suppliers
+@using BornoBit.Restaurant.Application.Inventory.Units
+@using BornoBit.Restaurant.Domain.Inventory
+@using BornoBit.Restaurant.Web.Components.BornoUi
+@using FluentValidation
+@using MediatR
+@using Microsoft.AspNetCore.Components.Web
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+@inject NavigationManager Nav
+
+<PageTitle>@(_editMode ? "Edit Purchase Order" : "New Purchase Order") · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="@(_editMode ? "Edit Purchase Order" : "New Purchase Order")"
+                Description="Order stock from a supplier. Saved as a draft — approve it from the list to start receiving against it. Tip: Enter on Unit cost adds the next line, Ctrl+Enter saves." />
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading…" />
+    }
+    else if (_loadError is not null)
+    {
+        <BoMessageBar Intent="error">@_loadError</BoMessageBar>
+    }
+    else
+    {
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;" @onkeydown="OnCardKeyDown">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+                <div style="flex:1; min-width:240px;">
+                    <BoAutocomplete @ref="_supplierRef" TOption="SupplierDto"
+                                    Items="@_suppliers"
+                                    OptionValue="@(s => s.Id.ToString())"
+                                    OptionText="@(s => s.Name)"
+                                    OptionSearch="@(s => $"{s.Code} {s.Name}")"
+                                    SelectedOption="@_selectedSupplier"
+                                    SelectedOptionChanged="@(s => { _selectedSupplier = s; _supplierId = s?.Id ?? Guid.Empty; })"
+                                    Label="Supplier" Placeholder="Type to search supplier…" Required="true" />
+                </div>
+                <div style="min-width:170px;">
+                    <BoDatePicker @bind-Value="_orderedDate" Label="Order date" Required="true" />
+                </div>
+                <div style="min-width:170px;">
+                    <BoDatePicker @bind-Value="_expectedDate" Label="Expected date (optional)" />
+                </div>
+            </div>
+
+            <BoInput @bind-Value="_notes" Label="Notes" Style="width:100%;" Maxlength="1000" />
+
+            <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                    <strong>Lines</strong>
+                    <button type="button" class="bo-btn bo-btn-ghost" accesskey="a" @onclick="AddLine">+ Add line</button>
+                </div>
+
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:120px;">Qty</th>
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:150px;">Unit</th>
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:140px;">Unit cost</th>
+                            <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:120px; text-align:right;">Line total</th>
+                            <th style="width:40px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr style="border-top:1px solid var(--bo-border-soft);">
+                                <td style="padding:6px 10px;">
+                                    <BoAutocomplete @ref="line.ItemRef" TOption="InventoryItemDto"
+                                                    Items="@_items"
+                                                    OptionValue="@(i => i.Id.ToString())"
+                                                    OptionText="@(i => i.Name)"
+                                                    OptionSearch="@(i => $"{i.Code} {i.Name}")"
+                                                    SelectedOption="@_items.FirstOrDefault(i => i.Id == line.ItemId)"
+                                                    SelectedOptionChanged="@(i => OnLineItemChanged(line, i))"
+                                                    Placeholder="Type to search item…" />
+                                </td>
+                                <td style="padding:6px 10px;">
+                                    <BoNumeric T="decimal" Value="line.Qty" ValueChanged="@(v => line.Qty = v)" Min="0" Step="0.001" Decimals="3" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px;">
+                                    <BoSelect TOption="UnitDto"
+                                              Items="@CompatibleUnits(line)"
+                                              OptionValue="@(u => u.Id.ToString())"
+                                              OptionText="@(u => u.Code)"
+                                              SelectedOption="@_units.FirstOrDefault(u => u.Id == line.UnitId)"
+                                              SelectedOptionChanged="@(u => line.UnitId = u?.Id ?? Guid.Empty)"
+                                              Placeholder="Unit" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px;" @onkeydown="@(e => OnCostKeyDown(e, line))">
+                                    <BoNumeric T="decimal" Value="line.UnitCost" ValueChanged="@(v => line.UnitCost = v)" Min="0" Step="0.01" Decimals="2" Style="width:100%;" />
+                                </td>
+                                <td style="padding:6px 10px; text-align:right;">@((line.Qty * line.UnitCost).ToString("0.00"))</td>
+                                <td style="padding:6px 10px; text-align:center;">
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => RemoveLine(line))">✕</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_lines.Count == 0)
+                {
+                    <div style="padding:12px; color: var(--bo-text-subtle);">No lines yet. Click "+ Add line" (Alt+A).</div>
+                }
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong>Total: @_lines.Sum(l => l.Qty * l.UnitCost).ToString("0.00") Tk</strong>
+                <div style="display:flex; gap:8px;">
+                    <a class="bo-btn bo-btn-ghost" href="/stock/po">Cancel</a>
+                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(_editMode ? "Save changes" : "Save draft")</BoButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private bool _editMode;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _loadError;
+    private string? _error;
+
+    private List<SupplierDto> _suppliers = new();
+    private List<InventoryItemDto> _items = new();
+    private List<UnitDto> _units = new();
+
+    private SupplierDto? _selectedSupplier;
+    private Guid _supplierId;
+    private string? _notes;
+    private DateOnly? _orderedDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _expectedDate;
+
+    private readonly List<LineRow> _lines = new();
+
+    private BoAutocomplete<SupplierDto>? _supplierRef;
+    private bool _focusSupplier;
+    private bool _focusNewItem;
+
+    private class LineRow
+    {
+        public Guid ItemId { get; set; }
+        public decimal Qty { get; set; }
+        public Guid UnitId { get; set; }
+        public decimal UnitCost { get; set; }
+        public BoAutocomplete<InventoryItemDto>? ItemRef { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _editMode = Id.HasValue;
+        try
+        {
+            _suppliers = (await Mediator.Send(new GetSuppliersQuery())).Where(s => s.IsActive).ToList();
+            _items = (await Mediator.Send(new GetInventoryItemsQuery(PageSize: 200, IncludeInactive: false))).Items.ToList();
+            _units = (await Mediator.Send(new GetUnitsQuery())).Where(u => u.IsActive).ToList();
+
+            if (_editMode)
+            {
+                var po = await Mediator.Send(new GetPurchaseOrderQuery(Id!.Value));
+                if (po.Status != PurchaseOrderStatus.Draft)
+                {
+                    ToastService.ShowError("Only draft purchase orders can be edited.");
+                    Nav.NavigateTo($"/stock/po/{po.Id}");
+                    return;
+                }
+                _supplierId = po.SupplierId;
+                _selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == po.SupplierId);
+                _notes = po.Notes;
+                _orderedDate = DateOnly.FromDateTime(po.OrderedAtUtc);
+                _expectedDate = po.ExpectedAtUtc is { } e ? DateOnly.FromDateTime(e) : null;
+                foreach (var l in po.Lines)
+                    _lines.Add(new LineRow { ItemId = l.InventoryItemId, Qty = l.QtyOrdered, UnitId = l.UnitId, UnitCost = l.UnitCost });
+            }
+            else
+            {
+                _focusSupplier = true;
+            }
+        }
+        catch (Exception ex) { _loadError = $"Failed to load: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusSupplier && _supplierRef is not null)
+        {
+            _focusSupplier = false;
+            await _supplierRef.FocusAsync();
+        }
+        if (_focusNewItem)
+        {
+            _focusNewItem = false;
+            var last = _lines.LastOrDefault();
+            if (last?.ItemRef is not null) await last.ItemRef.FocusAsync();
+        }
+    }
+
+    private void AddLine()
+    {
+        _lines.Add(new LineRow());
+        _focusNewItem = true;
+    }
+
+    private void RemoveLine(LineRow line) => _lines.Remove(line);
+
+    private void OnLineItemChanged(LineRow line, InventoryItemDto? item)
+    {
+        line.ItemId = item?.Id ?? Guid.Empty;
+        line.UnitId = item?.BaseUnitId ?? Guid.Empty;
+        if (item is not null) line.UnitCost = item.AvgCost;
+    }
+
+    private IEnumerable<UnitDto> CompatibleUnits(LineRow line)
+    {
+        var item = _items.FirstOrDefault(i => i.Id == line.ItemId);
+        if (item is null) return _units;
+        var baseUnit = _units.FirstOrDefault(u => u.Id == item.BaseUnitId);
+        if (baseUnit is null) return _units;
+        return _units.Where(u => u.Dimension == baseUnit.Dimension);
+    }
+
+    private void OnCostKeyDown(KeyboardEventArgs e, LineRow line)
+    {
+        if (e.Key == "Enter") AddLine();
+    }
+
+    private async Task OnCardKeyDown(KeyboardEventArgs e)
+    {
+        if (e.CtrlKey && e.Key == "Enter") await SaveAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (_supplierId == Guid.Empty) { _error = "Select a supplier."; return; }
+        if (_orderedDate is null) { _error = "Select an order date."; return; }
+        var valid = _lines.Where(l => l.ItemId != Guid.Empty && l.UnitId != Guid.Empty && l.Qty > 0).ToList();
+        if (valid.Count == 0) { _error = "Add at least one line with an item, unit and quantity."; return; }
+
+        _busy = true;
+        try
+        {
+            var inputs = valid.Select(l => new PurchaseOrderLineInput(l.ItemId, l.Qty, l.UnitId, l.UnitCost)).ToList();
+            var orderedAtUtc = _orderedDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            DateTime? expectedAtUtc = _expectedDate?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim();
+
+            if (_editMode)
+            {
+                await Mediator.Send(new UpdatePurchaseOrderCommand(Id!.Value, _supplierId, orderedAtUtc, expectedAtUtc, notes, inputs));
+                ToastService.ShowSuccess("Draft purchase order updated.");
+            }
+            else
+            {
+                await Mediator.Send(new CreatePurchaseOrderCommand(_supplierId, orderedAtUtc, expectedAtUtc, notes, inputs));
+                ToastService.ShowSuccess("Draft purchase order created. Approve it to start receiving.");
+            }
+            Nav.NavigateTo("/stock/po");
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

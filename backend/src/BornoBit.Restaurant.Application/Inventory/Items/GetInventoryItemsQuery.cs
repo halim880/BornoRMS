@@ -13,6 +13,8 @@ public record GetInventoryItemsQuery(
     InventoryItemType? ItemType = null,
     bool LowStockOnly = false,
     bool IncludeInactive = true,
+    string? SortBy = null,
+    bool SortDesc = false,
     int Page = 1,
     int PageSize = 50
 ) : IRequest<PagedResult<InventoryItemDto>>;
@@ -57,8 +59,24 @@ public class GetInventoryItemsQueryHandler : IRequestHandler<GetInventoryItemsQu
 
         var total = await query.LongCountAsync(cancellationToken);
 
-        var items = await query
-            .OrderBy(x => x.Category.DisplayOrder).ThenBy(x => x.Item.Name)
+        var desc = request.SortDesc;
+        var ordered = (request.SortBy?.Trim().ToLowerInvariant()) switch
+        {
+            "name" => desc ? query.OrderByDescending(x => x.Item.Name) : query.OrderBy(x => x.Item.Name),
+            "code" => desc ? query.OrderByDescending(x => x.Item.Code) : query.OrderBy(x => x.Item.Code),
+            "category" => desc
+                ? query.OrderByDescending(x => x.Category.Name).ThenBy(x => x.Item.Name)
+                : query.OrderBy(x => x.Category.Name).ThenBy(x => x.Item.Name),
+            "qty" => desc ? query.OrderByDescending(x => x.Item.QtyOnHand) : query.OrderBy(x => x.Item.QtyOnHand),
+            "reorder" => desc ? query.OrderByDescending(x => x.Item.ReorderLevel) : query.OrderBy(x => x.Item.ReorderLevel),
+            "avgcost" => desc ? query.OrderByDescending(x => x.Item.AvgCost) : query.OrderBy(x => x.Item.AvgCost),
+            "value" => desc
+                ? query.OrderByDescending(x => x.Item.QtyOnHand * x.Item.AvgCost)
+                : query.OrderBy(x => x.Item.QtyOnHand * x.Item.AvgCost),
+            _ => query.OrderBy(x => x.Category.DisplayOrder).ThenBy(x => x.Item.Name),
+        };
+
+        var items = await ordered
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new InventoryItemDto(
@@ -79,6 +97,7 @@ public class GetInventoryItemsQueryHandler : IRequestHandler<GetInventoryItemsQu
                 x.Item.IsPerishable,
                 x.Item.IsActive,
                 x.Item.ProductId,
+                x.Item.VariantId,
                 x.Item.PackSize,
                 x.Item.PackNote,
                 x.Item.ReorderLevel > 0 && x.Item.QtyOnHand <= x.Item.ReorderLevel,

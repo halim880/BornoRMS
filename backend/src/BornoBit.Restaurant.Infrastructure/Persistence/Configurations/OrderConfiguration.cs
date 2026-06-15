@@ -104,10 +104,44 @@ public class OrderLineConfiguration : IEntityTypeConfiguration<OrderLine>
         builder.Property(l => l.Quantity).IsRequired();
         builder.Property(l => l.StationName).HasMaxLength(80);
         builder.Property(l => l.Notes).HasMaxLength(1000);
+        builder.Property(l => l.TaxRatePercentSnapshot).HasPrecision(5, 2);
+        builder.Property(l => l.TaxableAmountSnapshot).HasPrecision(18, 2);
+        builder.Property(l => l.TaxAmountSnapshot).HasPrecision(18, 2);
 
         builder.Ignore(l => l.LineTotal);
+        builder.Ignore(l => l.ModifiersTotal);
+        builder.Ignore(l => l.EffectiveUnitPrice);
 
         builder.HasIndex(l => l.OrderId);
         builder.HasIndex(l => l.StationId);
+
+        builder.HasMany(l => l.Modifiers)
+            .WithOne()
+            .HasForeignKey(m => m.OrderLineId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata.FindNavigation(nameof(OrderLine.Modifiers))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        // Money math everywhere reads OrderLine.LineTotal (= (unit + modifier deltas) × qty). Auto-include the
+        // modifiers so every tracking load of a line carries its add-on prices — settlement, VAT, balance-due,
+        // and receipts all stay correct without each query remembering to .ThenInclude them.
+        builder.Navigation(l => l.Modifiers).AutoInclude();
+    }
+}
+
+public class OrderLineModifierConfiguration : IEntityTypeConfiguration<OrderLineModifier>
+{
+    public void Configure(EntityTypeBuilder<OrderLineModifier> builder)
+    {
+        builder.ToTable("OrderLineModifiers");
+        builder.HasKey(m => m.Id);
+
+        builder.Property(m => m.OrderLineId).IsRequired();
+        builder.Property(m => m.GroupName).IsRequired().HasMaxLength(100);
+        builder.Property(m => m.OptionName).IsRequired().HasMaxLength(100);
+        builder.Property(m => m.PriceDelta).HasPrecision(18, 2);
+
+        builder.HasIndex(m => m.OrderLineId);
     }
 }

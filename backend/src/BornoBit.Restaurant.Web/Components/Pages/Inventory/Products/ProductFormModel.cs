@@ -18,7 +18,7 @@ public class ProductFormModel
 
     /// <summary>How selling this product impacts stock. RecipeBased is configured in the recipe editor.</summary>
     public InventoryMethod InventoryMethod { get; set; } = InventoryMethod.None;
-    /// <summary>For DirectStock: the stock item deducted per sale.</summary>
+    /// <summary>For DirectStock on a product with NO variants: the stock item deducted per sale.</summary>
     public Guid? LinkedInventoryItemId { get; set; }
 
     public Guid? SavedId { get; set; }
@@ -29,4 +29,7 @@ public class VariantFormRow
     public Guid? Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public decimal Price { get; set; }
+
+    /// <summary>For DirectStock on a product WITH variants: the stock item this variant deducts (its own SKU).</summary>
+    public Guid? LinkedInventoryItemId { get; set; }
 }

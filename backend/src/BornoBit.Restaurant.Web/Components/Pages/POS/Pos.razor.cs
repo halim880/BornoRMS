@@ -254,31 +254,53 @@ public partial class Pos : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (!item.HasVariants)
+        Guid? variantId = null;
+        if (item.HasVariants)
         {
-            await AddProductAsync(item.Id, null);
-            return;
+            var result = await DialogService.ShowAsync<VariantPickerDialog, ProductDto>(item, new BoDialogOptions
+            {
+                Title = item.Name,
+                Width = "360px"
+            });
+            if (result.Cancelled || result.Data is not ProductVariantDto variant) return;
+            variantId = variant.Id;
         }
 
-        var result = await DialogService.ShowAsync<VariantPickerDialog, ProductDto>(item, new BoDialogOptions
+        List<Guid>? optionIds = null;
+        if (item.HasOptions)
         {
-            Title = item.Name,
-            Width = "360px"
-        });
-        if (!result.Cancelled && result.Data is ProductVariantDto variant)
-            await AddProductAsync(item.Id, variant.Id);
+            var groups = await Sender.Send(new GetProductOptionGroupsQuery(item.Id));
+            var model = new OptionPickerModel
+            {
+                ProductName = item.Name,
+                Currency = item.Currency,
+                Groups = groups.Select(OptionGroupChoice.From).ToList()
+            };
+            var picked = await DialogService.ShowAsync<OptionPickerDialog, OptionPickerModel>(model, new BoDialogOptions
+            {
+                Title = $"{item.Name} · options",
+                Width = "420px",
+                DismissOnOverlayClick = false
+            });
+            if (picked.Cancelled || picked.Data is not OptionPickerModel chosen) return;
+            var chosenIds = chosen.Selected().Select(s => s.OptionId).ToList();
+            optionIds = chosenIds.Count == 0 ? null : chosenIds;
+        }
+
+        await AddProductAsync(item.Id, variantId, optionIds);
     }
 
-    private async Task AddProductAsync(Guid productId, Guid? variantId)
+    private async Task AddProductAsync(Guid productId, Guid? variantId, List<Guid>? optionIds = null)
     {
         if (_activeDetail is null) return;
 
+        var optKey = OptKey(optionIds);
         var desired = ToLineInputs(_activeDetail.Lines);
-        var existing = desired.FindIndex(l => l.MenuItemId == productId && l.VariantId == variantId);
+        var existing = desired.FindIndex(l => l.MenuItemId == productId && l.VariantId == variantId && OptKey(l.OptionIds) == optKey);
         if (existing >= 0)
             desired[existing] = desired[existing] with { Quantity = desired[existing].Quantity + 1 };
         else
-            desired.Add(new PlaceOrderLineInput(productId, 1, variantId));
+            desired.Add(new PlaceOrderLineInput(productId, 1, variantId, null, optionIds));
 
         await SaveLinesAsync(desired);
     }
@@ -287,8 +309,9 @@ public partial class Pos : ComponentBase, IAsyncDisposable
     {
         if (_activeDetail is null) return;
 
+        var key = OptKey(LineOptionIds(line));
         var desired = ToLineInputs(_activeDetail.Lines);
-        var idx = desired.FindIndex(l => l.MenuItemId == line.MenuItemId && l.VariantId == line.VariantId);
+        var idx = desired.FindIndex(l => l.MenuItemId == line.MenuItemId && l.VariantId == line.VariantId && OptKey(l.OptionIds) == key);
         if (idx < 0) return;
 
         var qty = desired[idx].Quantity + delta;
@@ -302,15 +325,26 @@ public partial class Pos : ComponentBase, IAsyncDisposable
     {
         if (_activeDetail is null) return;
 
+        var key = OptKey(LineOptionIds(line));
         var desired = ToLineInputs(_activeDetail.Lines)
-            .Where(l => !(l.MenuItemId == line.MenuItemId && l.VariantId == line.VariantId))
+            .Where(l => !(l.MenuItemId == line.MenuItemId && l.VariantId == line.VariantId && OptKey(l.OptionIds) == key))
             .ToList();
 
         await SaveLinesAsync(desired);
     }
 
     private static List<PlaceOrderLineInput> ToLineInputs(IReadOnlyList<OrderLineDto> lines) =>
-        lines.Select(l => new PlaceOrderLineInput(l.MenuItemId, l.Quantity, l.VariantId)).ToList();
+        lines.Select(l => new PlaceOrderLineInput(l.MenuItemId, l.Quantity, l.VariantId, null, LineOptionIds(l))).ToList();
+
+    private static List<Guid>? LineOptionIds(OrderLineDto l)
+    {
+        var ids = (l.Modifiers ?? Array.Empty<OrderLineModifierDto>())
+            .Where(m => m.OptionId.HasValue).Select(m => m.OptionId!.Value).ToList();
+        return ids.Count == 0 ? null : ids;
+    }
+
+    private static string OptKey(IReadOnlyList<Guid>? ids) =>
+        ids is { Count: > 0 } ? string.Join(",", ids.Distinct().OrderBy(x => x)) : "";
 
     private async Task SaveLinesAsync(List<PlaceOrderLineInput> desired)
     {

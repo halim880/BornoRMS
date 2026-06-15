@@ -57,6 +57,13 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy("Staff", policy =>
         policy.RequireAuthenticatedUser().RequireRole(Roles.StaffOrderManagers.ToArray()));
+
+    // Waiter mobile app: floor access for service staff; closing a session is a billing-sensitive action.
+    options.AddPolicy("WaiterFloor", policy =>
+        policy.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Waiter));
+
+    options.AddPolicy("CanCloseSession", policy =>
+        policy.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Cashier));
 });
 
 var customerOrigins = builder.Configuration.GetSection("Cors:CustomerOrigins").Get<string[]>() ?? Array.Empty<string>();
@@ -99,6 +106,7 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<RecipeSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AccountingSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<GeneralLedgerSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<BillingSettingsSeeder>().SeedAsync();
     }
     catch (Exception ex)
@@ -108,6 +116,9 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseSerilogRequestLogging();
+
+// Serve product images (wwwroot/img/products) so the mobile waiter app can load them.
+app.UseStaticFiles();
 
 if (app.Environment.IsDevelopment())
 {
@@ -128,6 +139,7 @@ app.MapOrderEndpoints();
 app.MapAdminOrderEndpoints();
 app.MapCustomerRequestEndpoints();
 app.MapReceiptEndpoints();
+app.MapWaiterEndpoints();
 
 app.MapGet("/", () => Results.Ok(new { app = "BornoBit.Restaurant.Api", version = "0.1.0" }));
 

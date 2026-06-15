@@ -1,0 +1,72 @@
+@using BornoBit.Restaurant.Web.Components.BornoUi
+
+<BoDialogBody>
+    <div class="op-wrap">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        @foreach (var group in Content.Groups)
+        {
+            <div class="op-group" @key="group.Id">
+                <div class="op-group-head">
+                    <span class="op-group-name">@group.Name</span>
+                    <span class="op-group-rule">
+                        @(group.IsSingle ? "Choose one" : "Choose any")@(group.IsRequired ? " · required" : "")
+                    </span>
+                </div>
+                @foreach (var option in group.Options)
+                {
+                    <label class="op-row @(option.Selected ? "is-on" : "")">
+                        <input type="@(group.IsSingle ? "radio" : "checkbox")"
+                               name="@group.Id"
+                               checked="@option.Selected"
+                               @onchange="e => group.Pick(option, (e.Value is bool b && b) || group.IsSingle)" />
+                        <span class="op-name">@option.Name</span>
+                        @if (option.PriceDelta > 0)
+                        {
+                            <span class="op-price">+@Content.Currency @option.PriceDelta.ToString("0.##")</span>
+                        }
+                    </label>
+                }
+            </div>
+        }
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="@(() => Dialog.Cancel())">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="Confirm">Add @(_extra > 0 ? $"(+{Content.Currency} {_extra:0.##})" : "")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public OptionPickerModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private decimal _extra => Content.Selected().Sum(s => s.PriceDelta);
+
+    private void Confirm()
+    {
+        _error = Content.Validate();
+        if (_error is not null) return;
+        Dialog.Close(Content);
+    }
+}
+
+<style>
+    .op-wrap { display: flex; flex-direction: column; gap: 14px; }
+    .op-group { display: flex; flex-direction: column; gap: 6px; }
+    .op-group-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .op-group-name { font-weight: 700; font-size: 14px; }
+    .op-group-rule { font-size: 11.5px; color: var(--bo-text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .op-row {
+        display: flex; align-items: center; gap: 10px; cursor: pointer;
+        padding: 9px 12px; border: 1px solid var(--bo-border); border-radius: var(--bo-radius-md, 8px);
+        background: var(--bo-bg-card);
+    }
+    .op-row.is-on { border-color: var(--bo-primary); background: color-mix(in srgb, var(--bo-primary) 6%, var(--bo-bg-card)); }
+    .op-name { flex: 1; font-size: 13.5px; font-weight: 600; }
+    .op-price { font-weight: 700; font-size: 13px; color: var(--bo-primary); }
+</style>

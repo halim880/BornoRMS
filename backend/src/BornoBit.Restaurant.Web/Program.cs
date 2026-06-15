@@ -42,6 +42,9 @@ builder.Services.AddHttpClient("PrintAgent", (sp, client) =>
 });
 builder.Services.AddScoped<BornoBit.Restaurant.Web.Services.Printing.IReceiptPrintService,
     BornoBit.Restaurant.Web.Services.Printing.ReceiptPrintService>();
+// Override the Application's no-op KOT sender with the real print-agent transport (Web has the agent).
+builder.Services.AddScoped<BornoBit.Restaurant.Application.Ordering.Printing.IKitchenTicketSender,
+    BornoBit.Restaurant.Web.Services.Printing.PrintAgentKitchenTicketSender>();
 
 // Operations dashboard real-time: an in-process notifier for Web-side actions, plus a poller that
 // bridges API-process changes (customer QR orders/requests) onto the dashboard's SignalR hub.
@@ -49,6 +52,7 @@ builder.Services.AddSingleton<BornoBit.Restaurant.Web.Services.Dashboard.IDashbo
     BornoBit.Restaurant.Web.Services.Dashboard.DashboardNotifier>();
 builder.Services.AddHostedService<BornoBit.Restaurant.Web.Services.Dashboard.DashboardPollingService>();
 builder.Services.AddHostedService<BornoBit.Restaurant.Web.Services.Stock.StockSyncRetryService>();
+builder.Services.AddHostedService<BornoBit.Restaurant.Web.Services.Stock.KotPrintRetryService>();
 
 // IPaymentGateway + IManagerApprovalService are now registered in AddInfrastructure (shared by API + Web).
 
@@ -107,6 +111,7 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<RecipeSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AccountingSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<GeneralLedgerSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<BillingSettingsSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AppMenuSeeder>().SeedAsync();
     }

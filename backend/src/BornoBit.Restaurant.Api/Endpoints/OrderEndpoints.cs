@@ -23,7 +23,8 @@ public static class OrderEndpoints
             if (customerId is null) return Results.Unauthorized();
 
             var lines = (body.Lines ?? new List<PlaceOrderLineRequest>())
-                .Select(l => new PlaceOrderLineInput(l.MenuItemId, l.Quantity, l.VariantId))
+                .Select(l => new PlaceOrderLineInput(l.MenuItemId, l.Quantity, l.VariantId, null,
+                    l.OptionIds is { Count: > 0 } ? l.OptionIds : null))
                 .ToList();
 
             try
@@ -80,6 +81,6 @@ public static class OrderEndpoints
         return Guid.TryParse(raw, out var id) ? id : null;
     }
 
-    public record PlaceOrderLineRequest(Guid MenuItemId, int Quantity, Guid? VariantId = null);
+    public record PlaceOrderLineRequest(Guid MenuItemId, int Quantity, Guid? VariantId = null, List<Guid>? OptionIds = null);
     public record PlaceOrderRequest(Guid? TableId, OrderType Type, string? Notes, List<PlaceOrderLineRequest>? Lines);
 }

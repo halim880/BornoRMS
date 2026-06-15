@@ -1,5 +1,6 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Common.Security;
+using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Domain.Identity;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
@@ -30,11 +31,13 @@ public class VoidOrderLineCommandHandler : IRequestHandler<VoidOrderLineCommand,
 {
     private readonly IAppDbContext _db;
     private readonly ICurrentUser _currentUser;
+    private readonly IStockConsumptionService _consumption;
 
-    public VoidOrderLineCommandHandler(IAppDbContext db, ICurrentUser currentUser)
+    public VoidOrderLineCommandHandler(IAppDbContext db, ICurrentUser currentUser, IStockConsumptionService consumption)
     {
         _db = db;
         _currentUser = currentUser;
+        _consumption = consumption;
     }
 
     public async Task<Unit> Handle(VoidOrderLineCommand request, CancellationToken cancellationToken)
@@ -55,6 +58,11 @@ public class VoidOrderLineCommandHandler : IRequestHandler<VoidOrderLineCommand,
 
         try
         {
+            // If this order already deducted stock (confirmed), restore just this line's share before
+            // removing it — otherwise its consumption would be orphaned in the ledger.
+            if (order.StockSyncStatus == StockSyncStatus.Synced)
+                await _consumption.ReverseLineAsync(_db, order, line, cancellationToken);
+
             order.RemoveLine(request.LineId);
             order.UpdateKitchenNotes(note);
         }

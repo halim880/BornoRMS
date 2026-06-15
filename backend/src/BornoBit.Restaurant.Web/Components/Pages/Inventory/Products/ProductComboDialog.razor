@@ -1,0 +1,100 @@
+@using BornoBit.Restaurant.Application.Products
+@using BornoBit.Restaurant.Web.Components.BornoUi
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:14px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div class="bo-cmp-field-hint">
+            A combo bundles several products and sells at <strong>@Content.ProductName</strong>'s own price.
+            Components print on the kitchen ticket. (Per-component stock deduction is not yet wired.)
+        </div>
+
+        <BoCheckbox @bind-Value="Content.IsCombo" Label="This product is a combo / meal deal" />
+
+        @if (Content.IsCombo)
+        {
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                @if (Content.Components.Count == 0)
+                {
+                    <div class="bo-cmp-field-hint">No components yet — add the products this combo includes.</div>
+                }
+                @foreach (var row in Content.Components)
+                {
+                    <div style="display:flex; gap:8px; align-items:flex-end;">
+                        <BoSelect TOption="ProductDto"
+                                  Items="@_pickable"
+                                  OptionValue="@(p => p.Id.ToString())"
+                                  OptionText="@(p => $"{p.Name} ({p.Price:0.##} {p.Currency})")"
+                                  SelectedOption="@_pickable.FirstOrDefault(p => p.Id == row.ComponentProductId)"
+                                  SelectedOptionChanged="@(p => row.ComponentProductId = p?.Id ?? Guid.Empty)"
+                                  Label="Product" Placeholder="Select product" Style="flex:1;" />
+                        <BoNumeric T="int" @bind-Value="row.Quantity" Label="Qty" Style="width:90px;" Min="1" Step="1" />
+                        <button type="button" class="bo-btn bo-btn-ghost" title="Remove component"
+                                @onclick="@(() => Content.Components.Remove(row))">✕</button>
+                    </div>
+                }
+                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => Content.Components.Add(new ComboComponentFormRow()))">+ Add component</button>
+            </div>
+        }
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Save</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public ProductComboFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private List<ProductDto> _pickable = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Components are normal sellable products — exclude this product itself and other combos.
+            _pickable = (await Mediator.Send(new GetProductsQuery()))
+                .Where(p => p.Id != Content.ProductId && !p.IsCombo)
+                .ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load products: {ex.Message}"; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (Content.IsCombo && Content.Components.Count == 0) { _error = "A combo needs at least one component."; return; }
+        if (Content.Components.Any(c => c.ComponentProductId == Guid.Empty)) { _error = "Pick a product for every component."; return; }
+
+        var components = Content.Components
+            .Select((c, i) => new ComboComponentInput(c.Id, c.ComponentProductId, c.Quantity, i + 1))
+            .ToList();
+
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new UpdateProductComboCommand(Content.ProductId, Content.IsCombo, components));
+            Content.Saved = true;
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex)
+        {
+            _error = vex.Errors.Any() ? string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)) : vex.Message;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private Task CancelAsync() { Dialog.Cancel(); return Task.CompletedTask; }
+}

@@ -35,6 +35,11 @@ export default function CartPage() {
                     {item.name}
                     {item.variantName && <span className="text-slate-500"> ({item.variantName})</span>}
                   </div>
+                  {item.options.length > 0 && (
+                    <div className="text-xs text-emerald-700">
+                      {item.options.map((o) => (o.priceDelta > 0 ? `${o.name} (+${formatMoney(o.priceDelta, item.currency)})` : o.name)).join(", ")}
+                    </div>
+                  )}
                   <div className="text-sm text-slate-500">{formatMoney(item.price, item.currency)} each</div>
                 </div>
                 <div className="flex items-center gap-3">

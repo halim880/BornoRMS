@@ -43,9 +43,23 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
         public required Guid ProductId { get; init; }
         public Guid? VariantId { get; init; }
         public required string Name { get; init; }
+        /// <summary>Base / variant unit price, before add-ons.</summary>
         public required decimal Price { get; init; }
         public required string Currency { get; init; }
         public int Qty { get; set; } = 1;
+        public List<CartOption> Options { get; init; } = new();
+
+        /// <summary>Unit price including add-on surcharges.</summary>
+        public decimal UnitPrice => Price + Options.Sum(o => o.PriceDelta);
+        /// <summary>Stable key of the chosen options so lines with different add-ons stay distinct.</summary>
+        public string OptKey => Options.Count == 0 ? "" : string.Join(",", Options.Select(o => o.OptionId).OrderBy(x => x));
+    }
+
+    private sealed class CartOption
+    {
+        public required Guid OptionId { get; init; }
+        public required string Name { get; init; }
+        public required decimal PriceDelta { get; init; }
     }
 
     // ---- console state ----
@@ -86,7 +100,7 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
 
     private string Currency => IsEditMode ? _activeOrder!.Currency
         : _cart.Count > 0 ? _cart[0].Currency : "Tk";
-    private decimal Total => _cart.Sum(l => l.Price * l.Qty);
+    private decimal Total => _cart.Sum(l => l.UnitPrice * l.Qty);
     private bool IsEditMode => _activeOrder is not null;
     private bool CanPlace => !_placing && _cart.Count > 0
         && (IsEditMode || _type != OrderType.DineIn || _selectedTable is not null);
@@ -464,19 +478,44 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (!item.HasVariants)
+        Guid? variantId = null;
+        var name = item.Name;
+        var price = item.Price;
+
+        if (item.HasVariants)
         {
-            AddToCart(item.Id, null, item.Name, item.Price, item.Currency);
-            return;
+            var result = await DialogService.ShowAsync<VariantPickerDialog, ProductDto>(item, new BoDialogOptions
+            {
+                Title = item.Name,
+                Width = "360px"
+            });
+            if (result.Cancelled || result.Data is not ProductVariantDto variant) return;
+            variantId = variant.Id;
+            name = $"{item.Name} ({variant.Name})";
+            price = variant.Price;
         }
 
-        var result = await DialogService.ShowAsync<VariantPickerDialog, ProductDto>(item, new BoDialogOptions
+        var options = new List<CartOption>();
+        if (item.HasOptions)
         {
-            Title = item.Name,
-            Width = "360px"
-        });
-        if (!result.Cancelled && result.Data is ProductVariantDto variant)
-            AddToCart(item.Id, variant.Id, $"{item.Name} ({variant.Name})", variant.Price, item.Currency);
+            var groups = await Sender.Send(new GetProductOptionGroupsQuery(item.Id));
+            var model = new OptionPickerModel
+            {
+                ProductName = item.Name,
+                Currency = item.Currency,
+                Groups = groups.Select(OptionGroupChoice.From).ToList()
+            };
+            var picked = await DialogService.ShowAsync<OptionPickerDialog, OptionPickerModel>(model, new BoDialogOptions
+            {
+                Title = $"{item.Name} · options",
+                Width = "420px",
+                DismissOnOverlayClick = false
+            });
+            if (picked.Cancelled || picked.Data is not OptionPickerModel chosen) return;
+            options = chosen.Selected().Select(s => new CartOption { OptionId = s.OptionId, Name = s.Name, PriceDelta = s.PriceDelta }).ToList();
+        }
+
+        AddToCart(item.Id, variantId, name, price, item.Currency, options);
     }
 
     private async Task SelectRunningOrderAsync(ActiveOrderDto order)
@@ -498,7 +537,11 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
                     Name = l.Name,
                     Price = l.UnitPrice,
                     Currency = detail.Currency,
-                    Qty = l.Quantity
+                    Qty = l.Quantity,
+                    Options = (l.Modifiers ?? Array.Empty<OrderLineModifierDto>())
+                        .Where(m => m.OptionId.HasValue)
+                        .Select(m => new CartOption { OptionId = m.OptionId!.Value, Name = m.OptionName, PriceDelta = m.PriceDelta })
+                        .ToList()
                 });
             }
             _activeOrder = order;
@@ -515,11 +558,13 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
         _cart.Clear();
     }
 
-    private void AddToCart(Guid productId, Guid? variantId, string name, decimal price, string currency)
+    private void AddToCart(Guid productId, Guid? variantId, string name, decimal price, string currency, List<CartOption>? options = null)
     {
-        var existing = _cart.FirstOrDefault(l => l.ProductId == productId && l.VariantId == variantId);
+        options ??= new();
+        var optKey = options.Count == 0 ? "" : string.Join(",", options.Select(o => o.OptionId).OrderBy(x => x));
+        var existing = _cart.FirstOrDefault(l => l.ProductId == productId && l.VariantId == variantId && l.OptKey == optKey);
         if (existing is null)
-            _cart.Add(new CartLine { ProductId = productId, VariantId = variantId, Name = name, Price = price, Currency = currency });
+            _cart.Add(new CartLine { ProductId = productId, VariantId = variantId, Name = name, Price = price, Currency = currency, Options = options });
         else
             existing.Qty++;
     }
@@ -541,7 +586,8 @@ public partial class WaiterOrders : ComponentBase, IAsyncDisposable
         _placing = true;
         try
         {
-            var lines = _cart.Select(l => new PlaceOrderLineInput(l.ProductId, l.Qty, l.VariantId)).ToList();
+            var lines = _cart.Select(l => new PlaceOrderLineInput(l.ProductId, l.Qty, l.VariantId, null,
+                l.Options.Count == 0 ? null : l.Options.Select(o => o.OptionId).ToList())).ToList();
 
             if (IsEditMode)
             {

@@ -29,6 +29,9 @@ public class InventoryItem : AuditableEntity
     /// <summary>Optional link to a sellable <c>Product</c> for finished goods.</summary>
     public Guid? ProductId { get; private set; }
 
+    /// <summary>When the linked product has variants, the specific variant this item stocks (null = product-level / non-variant).</summary>
+    public Guid? VariantId { get; private set; }
+
     /// <summary>Informational pack size in base units (e.g. 1 bosta = 50 kg); sacks vary by item so this is per-item, not a global unit.</summary>
     public decimal? PackSize { get; private set; }
     public string? PackNote { get; private set; }
@@ -116,6 +119,16 @@ public class InventoryItem : AuditableEntity
         ProductId = productId;
         PackSize = packSize;
         PackNote = Trim(packNote);
+    }
+
+    /// <summary>
+    /// Links this finished-good item to a sellable product (and optionally a specific variant) so the
+    /// consumption engine deducts it when that product/variant is sold. Pass <c>null</c> productId to unlink.
+    /// </summary>
+    public void LinkToProduct(Guid? productId, Guid? variantId)
+    {
+        ProductId = productId;
+        VariantId = productId is null ? null : variantId;
     }
 
     /// <summary>Receive stock (purchase / opening balance). Recomputes the moving-average unit cost.</summary>

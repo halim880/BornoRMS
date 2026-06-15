@@ -1,6 +1,8 @@
 using BornoBit.Restaurant.Application.Accounting.Audit;
+using BornoBit.Restaurant.Application.Accounting.Transactions;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Common.Security;
+using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Identity;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -9,6 +11,7 @@ using BornoBit.Restaurant.Shared.Identity;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BornoBit.Restaurant.Application.Ordering.Commands;
 
@@ -36,12 +39,20 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
     private readonly IAppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly IManagerApprovalService _approvals;
+    private readonly IStockConsumptionService _consumption;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<RefundPaymentCommandHandler> _logger;
 
-    public RefundPaymentCommandHandler(IAppDbContext db, ICurrentUser currentUser, IManagerApprovalService approvals)
+    public RefundPaymentCommandHandler(
+        IAppDbContext db, ICurrentUser currentUser, IManagerApprovalService approvals,
+        IStockConsumptionService consumption, TimeProvider timeProvider, ILogger<RefundPaymentCommandHandler> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _approvals = approvals;
+        _consumption = consumption;
+        _timeProvider = timeProvider;
+        _logger = logger;
     }
 
     public async Task<SettlementResultDto> Handle(RefundPaymentCommand request, CancellationToken cancellationToken)
@@ -65,6 +76,10 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
 
         try
         {
+            // If already imported to the books, reverse the booked takings + reopen for re-accounting
+            // (snapshots the pre-refund net, so this must run before RefundPayment mutates the ledger).
+            await OrderAccountingReversal.ReverseIfAccountedAsync(_db, order, _timeProvider, cancellationToken);
+
             order.RefundPayment(request.PaymentId, request.Amount, reason,
                 _currentUser.UserId, _currentUser.UserName, drawer?.Id);
 
@@ -80,6 +95,11 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
             order.OrderNumber, request.Amount, before, FinancialAudit.Snapshot(order), reason);
 
         await AddPaymentCommandHandler.SaveWithConcurrencyGuardAsync(_db, cancellationToken);
+
+        // Fully refunded back to unpaid → restore the stock this order consumed (idempotent).
+        if (!order.IsPaid && order.AmountPaid <= 0m && order.StockSyncStatus == StockSyncStatus.Synced)
+            await OrderStockSync.TryReverseAsync(_db, _consumption, order, _logger, cancellationToken);
+
         return order.ToSettlementResult();
     }
 }

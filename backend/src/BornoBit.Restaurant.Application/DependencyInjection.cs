@@ -1,6 +1,7 @@
 using BornoBit.Restaurant.Application.Common.Behaviors;
 using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Application.Ordering.Common;
+using BornoBit.Restaurant.Application.Ordering.Printing;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +31,10 @@ public static class DependencyInjection
 
         // Single source of truth for dine-in table occupancy (shared by waiter + POS order flows).
         services.AddScoped<IDineInSessionResolver, DineInSessionResolver>();
+
+        // Default no-op KOT transport. The Web host overrides this with the real print-agent sender;
+        // the API host keeps the no-op (no print agent there).
+        services.AddScoped<IKitchenTicketSender, NullKitchenTicketSender>();
 
         return services;
     }

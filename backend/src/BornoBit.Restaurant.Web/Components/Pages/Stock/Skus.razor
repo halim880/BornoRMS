@@ -1,0 +1,93 @@
+@page "/stock/skus"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@using BornoBit.Restaurant.Application.Inventory.Skus
+@using BornoBit.Restaurant.Domain.Catalog
+@using BornoBit.Restaurant.Web.Components.BornoUi
+
+<PageTitle>Product SKUs · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Product SKUs"
+                Description="Create a stock SKU for each sellable product and variant. A SKU links a size (e.g. 500ml / 1L / 2L) to its own inventory item so selling it deducts the right stock.">
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading products…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_products.Count == 0)
+    {
+        <EmptyState Description="No sellable products yet. Add products under Catalog → Products first (recipe-based items are managed in Stock → Recipes)." />
+    }
+    else
+    {
+        @foreach (var p in _products)
+        {
+            <div class="bo-card" style="padding:0; overflow:hidden; margin-bottom:16px;">
+                <div style="display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--bo-border-soft);">
+                    <span class="bo-code bo-code-slate">@p.Code</span>
+                    <strong>@p.Name</strong>
+                    @if (p.Method == InventoryMethod.DirectStock)
+                    {
+                        <BoBadge Tone="success">Direct stock</BoBadge>
+                    }
+                    else
+                    {
+                        <BoBadge Tone="neutral">No stock impact</BoBadge>
+                    }
+                </div>
+
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th style="@Head">Variant</th>
+                            <th style="@Head">SKU</th>
+                            <th style="@HeadRight">On hand</th>
+                            <th style="@HeadRight">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in p.Slots)
+                        {
+                            <tr style="border-top:1px solid var(--bo-border-soft);">
+                                <td style="padding:10px 14px;">@(s.VariantName ?? "—")</td>
+                                <td style="padding:10px 14px;">
+                                    @if (s.ItemCode is not null)
+                                    {
+                                        <span class="bo-code bo-code-slate">@s.ItemCode</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:var(--bo-text-muted);">No SKU</span>
+                                    }
+                                </td>
+                                <td style="padding:10px 14px; text-align:right;">
+                                    @(s.ItemCode is not null ? $"{s.QtyOnHand:0.###} {s.UnitCode}" : "")
+                                </td>
+                                <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
+                                    @if (s.ItemCode is null)
+                                    {
+                                        <button type="button" class="bo-btn bo-btn-primary" @onclick="@(() => AddSkuAsync(p, s))">+ Add SKU</button>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:var(--bo-text-subtle); font-size:var(--bo-font-xs);">Linked · edit in Stock → Items</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const string Head = "padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted);";
+    private const string HeadRight = "padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; letter-spacing:0.06em; color: var(--bo-text-muted); text-align:right;";
+}

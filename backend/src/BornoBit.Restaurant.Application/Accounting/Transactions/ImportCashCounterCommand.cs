@@ -101,6 +101,7 @@ public class ImportCashCounterCommandHandler : IRequestHandler<ImportCashCounter
                 number, occurredOn, TransactionType.Income, account.Id, salesCategory.Id,
                 amount, $"CashCounter {date:yyyy-MM-dd}", $"Imported {method} takings from Cash Counter");
             _db.FinanceTransactions.Add(txn);
+            await Posting.GeneralLedgerPoster.PostMirrorAsync(_db, txn, nowUtc, cancellationToken);
 
             postedTotal += amount;
             posted = true;

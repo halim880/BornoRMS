@@ -20,6 +20,7 @@ public record InventoryItemDto(
     bool IsPerishable,
     bool IsActive,
     Guid? ProductId,
+    Guid? VariantId,
     decimal? PackSize,
     string? PackNote,
     bool IsLowStock,

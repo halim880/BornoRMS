@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { apiFetch, ApiError, type OrderDetail } from "@/lib/api";
 import { formatMoney, formatDateTime } from "@/lib/format";
+import OrderStatusTracker from "@/components/OrderStatusTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -37,9 +38,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </div>
         <div className="text-xl font-bold">{order.orderNumber}</div>
         <div className="mt-1 text-sm text-slate-600">
-          {order.status} · {order.orderType} · {formatDateTime(order.orderedAtUtc)}
+          {order.orderType} · {formatDateTime(order.orderedAtUtc)}
         </div>
       </div>
+
+      <OrderStatusTracker initial={order} />
 
       <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
         {order.lines.map((l) => (

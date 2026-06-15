@@ -13,7 +13,8 @@ public enum FinancialAuditAction
     OrderSettled = 5,
     DrawerOpened = 6,
     DrawerClosed = 7,
-    CashImported = 8
+    CashImported = 8,
+    SupplierPaid = 9
 }
 
 /// <summary>

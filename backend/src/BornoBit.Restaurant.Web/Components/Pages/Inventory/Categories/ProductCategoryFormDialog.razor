@@ -12,6 +12,7 @@
         <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="200" />
         <BoInput @bind-Value="Content.Description" Label="Description" Style="width:100%;" Maxlength="1000" />
         <BoNumeric T="int" @bind-Value="Content.DisplayOrder" Label="Display order" Style="width:100%;" Min="0" Step="1" />
+        <BoNumeric T="decimal?" @bind-Value="Content.TaxRatePercent" Label="VAT % (blank = use default)" Style="width:100%;" Min="0" Max="100" Step="0.01" />
     </div>
 </BoDialogBody>
 
@@ -40,7 +41,8 @@
                 var id = await Mediator.Send(new CreateProductCategoryCommand(
                     Content.Name.Trim(),
                     string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim(),
-                    Content.DisplayOrder));
+                    Content.DisplayOrder,
+                    Content.TaxRatePercent));
                 Content.SavedId = id;
             }
             else
@@ -49,7 +51,8 @@
                     Content.Id.Value,
                     Content.Name.Trim(),
                     string.IsNullOrWhiteSpace(Content.Description) ? null : Content.Description.Trim(),
-                    Content.DisplayOrder));
+                    Content.DisplayOrder,
+                    Content.TaxRatePercent));
                 Content.SavedId = Content.Id;
             }
             Dialog.Close(Content);

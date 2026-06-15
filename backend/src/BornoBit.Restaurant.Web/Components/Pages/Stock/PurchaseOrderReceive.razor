@@ -1,0 +1,174 @@
+@page "/stock/po/{Id:guid}/receive"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@using BornoBit.Restaurant.Application.Inventory.PurchaseOrders
+@using BornoBit.Restaurant.Application.Inventory.Purchases
+@using BornoBit.Restaurant.Domain.Inventory
+@using BornoBit.Restaurant.Web.Components.BornoUi
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+@inject NavigationManager Nav
+
+<PageTitle>Receive Goods · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="@(_po is null ? "Receive Goods" : $"Receive against {_po.PoNumber}")"
+                Description="Record goods received against this order. Quantities default to what's still outstanding — adjust for short or partial deliveries. Saved as a draft goods receipt; post it to raise stock and update the order." />
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading…" />
+    }
+    else if (_loadError is not null)
+    {
+        <BoMessageBar Intent="error">@_loadError</BoMessageBar>
+    }
+    else if (_po is not null)
+    {
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <BoMessageBar Intent="error">@_error</BoMessageBar>
+            }
+
+            <div style="display:flex; gap:32px; flex-wrap:wrap;">
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Supplier</div>
+                    <strong>@_po.SupplierName</strong>
+                </div>
+                <div style="min-width:220px;">
+                    <BoInput @bind-Value="_invoiceNo" Label="Invoice no (optional)" Maxlength="80" />
+                </div>
+                <div style="min-width:170px;">
+                    <BoDatePicker @bind-Value="_receivedDate" Label="Received date" Required="true" />
+                </div>
+            </div>
+
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Outstanding</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:140px;">Receive qty</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:150px;">Unit cost</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:120px; text-align:right;">Line total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:6px 10px;">@r.ItemName <span style="color: var(--bo-text-subtle);">(@r.UnitCode)</span></td>
+                            <td style="padding:6px 10px; text-align:right; color: var(--bo-text-muted);">@r.OutstandingQty.ToString("0.###")</td>
+                            <td style="padding:6px 10px;">
+                                <BoNumeric T="decimal" Value="r.ReceiveQty" ValueChanged="@(v => r.ReceiveQty = v)" Min="0" Step="0.001" Decimals="3" Style="width:100%;" />
+                            </td>
+                            <td style="padding:6px 10px;">
+                                <BoNumeric T="decimal" Value="r.UnitCost" ValueChanged="@(v => r.UnitCost = v)" Min="0" Step="0.01" Decimals="2" Style="width:100%;" />
+                            </td>
+                            <td style="padding:6px 10px; text-align:right;">@((r.ReceiveQty * r.UnitCost).ToString("0.00"))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong>Total: @_rows.Sum(r => r.ReceiveQty * r.UnitCost).ToString("0.00") Tk</strong>
+                <div style="display:flex; gap:8px;">
+                    <a class="bo-btn bo-btn-ghost" href="@($"/stock/po/{Id}")">Cancel</a>
+                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Create draft receipt</BoButton>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _loadError;
+    private string? _error;
+
+    private PurchaseOrderDetailDto? _po;
+    private string? _invoiceNo;
+    private DateOnly? _receivedDate = DateOnly.FromDateTime(DateTime.Today);
+
+    private readonly List<ReceiveRow> _rows = new();
+
+    private class ReceiveRow
+    {
+        public Guid PurchaseOrderLineId { get; init; }
+        public Guid ItemId { get; init; }
+        public string ItemName { get; init; } = "";
+        public Guid UnitId { get; init; }
+        public string UnitCode { get; init; } = "";
+        public decimal OutstandingQty { get; init; }
+        public decimal ReceiveQty { get; set; }
+        public decimal UnitCost { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _po = await Mediator.Send(new GetPurchaseOrderQuery(Id));
+            if (_po.Status is not (PurchaseOrderStatus.Approved or PurchaseOrderStatus.PartiallyReceived))
+            {
+                ToastService.ShowError("Goods can only be received against an approved purchase order.");
+                Nav.NavigateTo($"/stock/po/{Id}");
+                return;
+            }
+
+            foreach (var l in _po.Lines)
+            {
+                // Convert the outstanding base quantity back into the line's ordered unit for entry.
+                var perUnit = l.QtyOrderedBase != 0m ? l.QtyOrdered / l.QtyOrderedBase : 1m;
+                var outstandingQty = Math.Round(l.OutstandingBase * perUnit, 3, MidpointRounding.AwayFromZero);
+                _rows.Add(new ReceiveRow
+                {
+                    PurchaseOrderLineId = l.Id,
+                    ItemId = l.InventoryItemId,
+                    ItemName = l.ItemName,
+                    UnitId = l.UnitId,
+                    UnitCode = l.UnitCode,
+                    OutstandingQty = outstandingQty,
+                    ReceiveQty = outstandingQty,
+                    UnitCost = l.UnitCost
+                });
+            }
+        }
+        catch (Exception ex) { _loadError = $"Failed to load: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (_po is null) return;
+        if (_receivedDate is null) { _error = "Select a received date."; return; }
+        var valid = _rows.Where(r => r.ReceiveQty > 0).ToList();
+        if (valid.Count == 0) { _error = "Enter a received quantity on at least one line."; return; }
+
+        _busy = true;
+        try
+        {
+            var inputs = valid
+                .Select(r => new GoodsReceiptLineInput(r.ItemId, r.ReceiveQty, r.UnitId, r.UnitCost, r.PurchaseOrderLineId))
+                .ToList();
+            var receivedAtUtc = _receivedDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var invoice = string.IsNullOrWhiteSpace(_invoiceNo) ? null : _invoiceNo.Trim();
+
+            var grnId = await Mediator.Send(new CreateGoodsReceiptCommand(
+                _po.SupplierId, invoice, receivedAtUtc, $"Against {_po.PoNumber}", inputs, _po.Id));
+
+            ToastService.ShowSuccess("Draft goods receipt created. Post it to raise stock and update the order.");
+            Nav.NavigateTo($"/stock/grn/{grnId}");
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

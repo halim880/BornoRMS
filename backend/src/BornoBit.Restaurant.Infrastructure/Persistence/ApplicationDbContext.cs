@@ -32,6 +32,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+    public DbSet<ProductOptionGroup> ProductOptionGroups => Set<ProductOptionGroup>();
+    public DbSet<ProductOption> ProductOptions => Set<ProductOption>();
+    public DbSet<ComboComponent> ComboComponents => Set<ComboComponent>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeItem> RecipeItems => Set<RecipeItem>();
     public DbSet<Customer> Customers => Set<Customer>();
@@ -42,6 +45,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<TableReservation> TableReservations => Set<TableReservation>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
+    public DbSet<OrderLineModifier> OrderLineModifiers => Set<OrderLineModifier>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<KitchenStation> KitchenStations => Set<KitchenStation>();
 
@@ -58,6 +62,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<GoodsReceipt> GoodsReceipts => Set<GoodsReceipt>();
     public DbSet<GoodsReceiptLine> GoodsReceiptLines => Set<GoodsReceiptLine>();
+    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
+    public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
 
     public DbSet<StoreUnit> StoreUnits => Set<StoreUnit>();
     public DbSet<StoreCategory> StoreCategories => Set<StoreCategory>();
@@ -74,6 +81,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<FinanceTransaction> FinanceTransactions => Set<FinanceTransaction>();
     public DbSet<CashDrawerSession> CashDrawerSessions => Set<CashDrawerSession>();
     public DbSet<FinancialAuditLog> FinancialAuditLogs => Set<FinancialAuditLog>();
+
+    public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
+    public DbSet<JournalLine> JournalLines => Set<JournalLine>();
 
     public DbSet<RestaurantBillingSettings> RestaurantBillingSettings => Set<RestaurantBillingSettings>();
 

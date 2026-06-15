@@ -21,5 +21,6 @@ public record KitchenTicketReportData(
 public record KitchenTicketLine(
     string Name,
     int Quantity,
-    string? Notes = null
+    string? Notes = null,
+    IReadOnlyList<string>? Modifiers = null
 );

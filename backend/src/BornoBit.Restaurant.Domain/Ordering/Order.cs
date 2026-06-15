@@ -11,6 +11,8 @@ public class Order : AuditableEntity
     /// <summary>The dine-in visit this order belongs to. Null for takeaway/delivery or legacy orders.</summary>
     public Guid? DiningSessionId { get; private set; }
     public OrderType OrderType { get; private set; }
+    /// <summary>Where this order originated. Drives the accept workflow (auto-confirm vs. explicit Accept).</summary>
+    public OrderChannel Channel { get; private set; } = OrderChannel.Pos;
     public DateTime OrderedAtUtc { get; private set; }
     public OrderStatus Status { get; private set; } = OrderStatus.Placed;
     public string Currency { get; private set; } = "Tk";
@@ -23,6 +25,8 @@ public class Order : AuditableEntity
     public DateTime? PreparingAtUtc { get; private set; }
     public DateTime? ReadyAtUtc { get; private set; }
     public DateTime? ServedAtUtc { get; private set; }
+    /// <summary>Estimated ready time, computed on acceptance from the slowest line's prep time. Surfaced to the customer.</summary>
+    public DateTime? EstimatedReadyAtUtc { get; private set; }
 
     // Service attribution (dashboard staff metrics + table occupancy).
     public Guid? WaiterUserId { get; private set; }
@@ -70,6 +74,9 @@ public class Order : AuditableEntity
     /// <summary>Whether this order's stock has been deducted. Driven by the consumption engine, not the status workflow.</summary>
     public StockSyncStatus StockSyncStatus { get; private set; } = StockSyncStatus.NotApplicable;
 
+    /// <summary>Whether the kitchen ticket has been dispatched. Driven by the KOT dispatcher, not the status workflow.</summary>
+    public KotPrintStatus KotPrintStatus { get; private set; } = KotPrintStatus.NotPrinted;
+
     private readonly List<OrderLine> _lines = new();
     public IReadOnlyCollection<OrderLine> Lines => _lines.AsReadOnly();
 
@@ -94,7 +101,8 @@ public class Order : AuditableEntity
         OrderType orderType,
         DateTime orderedAtUtc,
         string currency = "Tk",
-        string? notes = null)
+        string? notes = null,
+        OrderChannel channel = OrderChannel.Pos)
     {
         if (string.IsNullOrWhiteSpace(orderNumber)) throw new ArgumentException("Order number is required.", nameof(orderNumber));
         if (customerId == Guid.Empty) throw new ArgumentException("Customer is required.", nameof(customerId));
@@ -108,6 +116,7 @@ public class Order : AuditableEntity
             CustomerId = customerId,
             RestaurantTableId = restaurantTableId,
             OrderType = orderType,
+            Channel = channel,
             OrderedAtUtc = orderedAtUtc,
             Currency = currency.Trim(),
             Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
@@ -116,7 +125,7 @@ public class Order : AuditableEntity
     }
 
     public OrderLine AddLine(Guid menuItemId, string code, string name, decimal unitPrice, string currency, int quantity = 1, Guid? variantId = null,
-        Guid? stationId = null, string? stationName = null, string? notes = null)
+        Guid? stationId = null, string? stationName = null, string? notes = null, int prepMinutes = 0)
     {
         if (menuItemId == Guid.Empty) throw new ArgumentException("Menu item is required.", nameof(menuItemId));
         if (quantity < 1) throw new ArgumentOutOfRangeException(nameof(quantity));
@@ -134,7 +143,8 @@ public class Order : AuditableEntity
             Quantity = quantity,
             StationId = stationId,
             StationName = string.IsNullOrWhiteSpace(stationName) ? null : stationName.Trim(),
-            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()
+            Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+            PrepMinutes = prepMinutes < 0 ? 0 : prepMinutes
         };
         _lines.Add(line);
         return line;
@@ -146,7 +156,7 @@ public class Order : AuditableEntity
     /// even if the catalog price changed after the order was placed.
     /// </summary>
     public OrderLine AddOrIncreaseLine(Guid menuItemId, string code, string name, decimal unitPrice, string currency, int quantity = 1, Guid? variantId = null,
-        Guid? stationId = null, string? stationName = null, string? notes = null)
+        Guid? stationId = null, string? stationName = null, string? notes = null, int prepMinutes = 0)
     {
         if (quantity < 1) throw new ArgumentOutOfRangeException(nameof(quantity));
 
@@ -157,7 +167,7 @@ public class Order : AuditableEntity
             return existing;
         }
 
-        return AddLine(menuItemId, code, name, unitPrice, currency, quantity, variantId, stationId, stationName, notes);
+        return AddLine(menuItemId, code, name, unitPrice, currency, quantity, variantId, stationId, stationName, notes, prepMinutes);
     }
 
     public void SetLineQuantity(Guid lineId, int quantity)
@@ -179,6 +189,9 @@ public class Order : AuditableEntity
     {
         TransitionTo(OrderStatus.Confirmed, expected: OrderStatus.Placed);
         ConfirmedAtUtc = DateTime.UtcNow;
+        // Accept = fire: estimate ready time from the slowest line's prep so the customer gets an ETA.
+        var prepMinutes = _lines.Count > 0 ? _lines.Max(l => l.PrepMinutes) : 0;
+        EstimatedReadyAtUtc = ConfirmedAtUtc.Value.AddMinutes(prepMinutes);
     }
 
     public void StartPreparing()
@@ -450,10 +463,9 @@ public class Order : AuditableEntity
 
         IsPaid = PaymentStatus == PaymentStatus.Paid;
         if (IsPaid)
-        {
             PaidAtUtc ??= DateTime.UtcNow;
-            if (Status != OrderStatus.Cancelled) Status = OrderStatus.Completed;
-        }
+        // Payment is orthogonal to the kitchen status: it must NOT move Status. Completion (Served AND
+        // Paid) is orchestrated by the settle/serve command handlers, never by this payment rollup.
 
         var charges = _payments.Where(p => p.Kind == PaymentKind.Charge && p.Status == PaymentEntryStatus.Captured).ToList();
         if (charges.Count > 0)
@@ -479,6 +491,9 @@ public class Order : AuditableEntity
         AccountedAtUtc = DateTime.UtcNow;
     }
 
+    /// <summary>Reopens this invoice for re-accounting after a post-import refund/void. Idempotent.</summary>
+    public void ClearAccounted() => AccountedAtUtc = null;
+
     /// <summary>Marks stock deduction as in progress (set before the consumption engine runs).</summary>
     public void MarkStockPending() => StockSyncStatus = StockSyncStatus.Pending;
     /// <summary>Marks stock as successfully deducted for this order.</summary>
@@ -487,6 +502,13 @@ public class Order : AuditableEntity
     public void MarkStockFailed() => StockSyncStatus = StockSyncStatus.Failed;
     /// <summary>Marks a prior deduction as reversed (restored to stock on cancellation).</summary>
     public void MarkStockReversed() => StockSyncStatus = StockSyncStatus.Reversed;
+
+    /// <summary>Marks the kitchen ticket dispatch as in progress (set before the print agent is called).</summary>
+    public void MarkKotPending() => KotPrintStatus = KotPrintStatus.Pending;
+    /// <summary>Marks the kitchen ticket as acknowledged by the print agent.</summary>
+    public void MarkKotPrinted() => KotPrintStatus = KotPrintStatus.Printed;
+    /// <summary>Marks the dispatch as failed so the retry worker re-attempts it.</summary>
+    public void MarkKotFailed() => KotPrintStatus = KotPrintStatus.Failed;
 
     private void TransitionTo(OrderStatus next, OrderStatus expected)
     {

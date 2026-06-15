@@ -56,6 +56,7 @@ public class CreateTransactionCommandHandler : IRequestHandler<CreateTransaction
             request.Reference, request.Notes);
 
         _db.FinanceTransactions.Add(txn);
+        await Posting.GeneralLedgerPoster.PostMirrorAsync(_db, txn, nowUtc, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return txn.Id;
     }

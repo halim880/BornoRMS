@@ -10,7 +10,8 @@ public record UpdateProductCategoryCommand(
     Guid Id,
     string Name,
     string? Description,
-    int DisplayOrder
+    int DisplayOrder,
+    decimal? TaxRatePercent = null
 ) : IRequest<Unit>;
 
 public class UpdateProductCategoryCommandValidator : AbstractValidator<UpdateProductCategoryCommand>
@@ -21,6 +22,7 @@ public class UpdateProductCategoryCommandValidator : AbstractValidator<UpdatePro
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Description).MaximumLength(1000);
         RuleFor(x => x.DisplayOrder).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.TaxRatePercent).InclusiveBetween(0, 100).When(x => x.TaxRatePercent.HasValue);
     }
 }
 
@@ -41,7 +43,7 @@ public class UpdateProductCategoryCommandHandler : IRequestHandler<UpdateProduct
             .AnyAsync(c => c.Id != request.Id && c.Name == name, cancellationToken);
         if (clash) throw new ValidationException($"A product category named '{name}' already exists.");
 
-        entity.UpdateDetails(name, request.DisplayOrder, request.Description);
+        entity.UpdateDetails(name, request.DisplayOrder, request.Description, request.TaxRatePercent);
         await _db.SaveChangesAsync(cancellationToken);
         return Unit.Value;
     }

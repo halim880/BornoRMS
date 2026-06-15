@@ -12,6 +12,10 @@ public class GoodsReceipt : AuditableEntity
 {
     public string GrnNumber { get; private set; } = default!;
     public Guid SupplierId { get; private set; }
+
+    /// <summary>Optional source purchase order this receipt fulfils. Null = ad-hoc receipt (cash kacha-bazar buying).</summary>
+    public Guid? PurchaseOrderId { get; private set; }
+
     public string? InvoiceNo { get; private set; }
     public DateTime ReceivedAtUtc { get; private set; }
     public string Currency { get; private set; } = "Tk";
@@ -32,7 +36,8 @@ public class GoodsReceipt : AuditableEntity
         DateTime receivedAtUtc,
         string? invoiceNo = null,
         string currency = "Tk",
-        string? notes = null)
+        string? notes = null,
+        Guid? purchaseOrderId = null)
     {
         if (string.IsNullOrWhiteSpace(grnNumber)) throw new ArgumentException("GRN number is required.", nameof(grnNumber));
         if (supplierId == Guid.Empty) throw new ArgumentException("Supplier is required.", nameof(supplierId));
@@ -42,6 +47,7 @@ public class GoodsReceipt : AuditableEntity
         {
             GrnNumber = grnNumber.Trim().ToUpperInvariant(),
             SupplierId = supplierId,
+            PurchaseOrderId = purchaseOrderId,
             ReceivedAtUtc = receivedAtUtc,
             InvoiceNo = Trim(invoiceNo),
             Currency = currency.Trim(),
@@ -69,7 +75,7 @@ public class GoodsReceipt : AuditableEntity
         _lines.Clear();
     }
 
-    public GoodsReceiptLine AddLine(Guid inventoryItemId, string itemName, decimal qty, Guid unitId, decimal qtyBase, decimal unitCost)
+    public GoodsReceiptLine AddLine(Guid inventoryItemId, string itemName, decimal qty, Guid unitId, decimal qtyBase, decimal unitCost, Guid? purchaseOrderLineId = null)
     {
         if (Status != GoodsReceiptStatus.Draft) throw new InvalidOperationException("Cannot modify a posted goods receipt.");
         if (inventoryItemId == Guid.Empty) throw new ArgumentException("Item is required.", nameof(inventoryItemId));
@@ -86,7 +92,8 @@ public class GoodsReceipt : AuditableEntity
             Qty = qty,
             UnitId = unitId,
             QtyBase = qtyBase,
-            UnitCost = unitCost
+            UnitCost = unitCost,
+            PurchaseOrderLineId = purchaseOrderLineId
         };
         _lines.Add(line);
         return line;

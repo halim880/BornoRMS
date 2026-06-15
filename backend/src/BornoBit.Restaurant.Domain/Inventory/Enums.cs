@@ -32,3 +32,17 @@ public enum GoodsReceiptStatus
     Draft = 1,
     Posted = 2
 }
+
+/// <summary>
+/// Lifecycle of a purchase order. Stock never moves on a PO — only the goods receipts raised against it
+/// move stock. <see cref="PartiallyReceived"/>/<see cref="Received"/> are driven by matching posted GRN
+/// quantities back to the ordered lines.
+/// </summary>
+public enum PurchaseOrderStatus
+{
+    Draft = 1,
+    Approved = 2,
+    PartiallyReceived = 3,
+    Received = 4,
+    Cancelled = 5
+}

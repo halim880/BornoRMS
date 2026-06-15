@@ -35,6 +35,8 @@ public class CreateCashAccountCommandHandler : IRequestHandler<CreateCashAccount
 
         var account = CashAccount.Create(name, request.Kind, request.OpeningBalance);
         _db.CashAccounts.Add(account);
+        // Create + map its GL asset account now so it appears in the chart under its kind group (Cash/Bank/MFS).
+        await Posting.ChartOfAccountsMapper.EnsureCashAccountGlAsync(_db, account, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return account.Id;
     }

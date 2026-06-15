@@ -34,8 +34,13 @@ public class UpdateTransactionCommandValidator : AbstractValidator<UpdateTransac
 public class UpdateTransactionCommandHandler : IRequestHandler<UpdateTransactionCommand>
 {
     private readonly IAppDbContext _db;
+    private readonly TimeProvider _timeProvider;
 
-    public UpdateTransactionCommandHandler(IAppDbContext db) => _db = db;
+    public UpdateTransactionCommandHandler(IAppDbContext db, TimeProvider timeProvider)
+    {
+        _db = db;
+        _timeProvider = timeProvider;
+    }
 
     public async Task Handle(UpdateTransactionCommand request, CancellationToken cancellationToken)
     {
@@ -48,6 +53,10 @@ public class UpdateTransactionCommandHandler : IRequestHandler<UpdateTransaction
             request.OccurredOn, request.Type,
             request.CashAccountId, request.CategoryId, request.Amount,
             request.Reference, request.Notes);
+
+        // Re-mirror in the GL: void the prior journal(s) and post a fresh balanced entry.
+        var revision = await Posting.GeneralLedgerPoster.VoidMirrorsAsync(_db, txn.Number, cancellationToken);
+        await Posting.GeneralLedgerPoster.PostMirrorAsync(_db, txn, _timeProvider.GetUtcNow().UtcDateTime, cancellationToken, $"-R{revision}");
 
         await _db.SaveChangesAsync(cancellationToken);
     }

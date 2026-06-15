@@ -66,6 +66,24 @@ export type MenuVariant = {
   displayOrder: number;
 };
 
+export type MenuOption = {
+  id: string;
+  name: string;
+  banglaName: string | null;
+  priceDelta: number;
+  displayOrder: number;
+};
+
+export type MenuOptionGroup = {
+  id: string;
+  name: string;
+  banglaName: string | null;
+  minSelections: number;
+  maxSelections: number;
+  displayOrder: number;
+  options: MenuOption[];
+};
+
 export type MenuItem = {
   id: string;
   code: string;
@@ -77,6 +95,8 @@ export type MenuItem = {
   imageUrl: string | null;
   displayOrder: number;
   variants: MenuVariant[];
+  optionGroups: MenuOptionGroup[];
+  isCombo: boolean;
 };
 
 export type MenuCategory = {
@@ -124,6 +144,13 @@ export type OrderListItem = {
   isPaid: boolean;
 };
 
+export type OrderLineModifier = {
+  groupName: string;
+  optionName: string;
+  priceDelta: number;
+  optionId: string | null;
+};
+
 export type OrderLine = {
   menuItemId: string;
   variantId: string | null;
@@ -132,6 +159,7 @@ export type OrderLine = {
   unitPrice: number;
   quantity: number;
   lineTotal: number;
+  modifiers: OrderLineModifier[] | null;
 };
 
 export type OrderDetail = {
@@ -155,5 +183,7 @@ export type OrderDetail = {
   paymentMethod: PaymentMethod | null;
   amountTendered: number | null;
   changeGiven: number | null;
+  confirmedAtUtc: string | null;
+  estimatedReadyAtUtc: string | null;
   lines: OrderLine[];
 };

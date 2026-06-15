@@ -57,7 +57,17 @@
                                 }
                             </td>
                             <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@p.Code</span></td>
-                            <td style="padding:10px 14px;"><strong>@p.Name</strong></td>
+                            <td style="padding:10px 14px;">
+                                <strong>@p.Name</strong>
+                                @if (p.IsCombo)
+                                {
+                                    <span class="bo-pill" style="margin-left:6px; background:var(--bo-bg-soft);">Combo</span>
+                                }
+                                @if (p.HasOptions)
+                                {
+                                    <span class="bo-pill" style="margin-left:6px; background:var(--bo-bg-soft);">@p.OptionGroupCount option@(p.OptionGroupCount == 1 ? "" : "s")</span>
+                                }
+                            </td>
                             <td style="padding:10px 14px;">@(string.IsNullOrEmpty(p.BanglaName) ? "—" : p.BanglaName)</td>
                             <td style="padding:10px 14px; color: var(--bo-text-muted);">@p.CategoryName</td>
                             <td style="padding:10px 14px; text-align:right;">
@@ -78,6 +88,8 @@
                             </td>
                             <td style="padding:10px 14px; text-align:right;">
                                 <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowEditAsync(p))">Edit</button>
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowOptionsAsync(p))">Options</button>
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowComboAsync(p))">Combo</button>
                                 @if (p.IsActive)
                                 {
                                     <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(p, false))">Deactivate</button>

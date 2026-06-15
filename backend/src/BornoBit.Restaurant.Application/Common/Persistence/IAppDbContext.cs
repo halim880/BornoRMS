@@ -21,6 +21,9 @@ public interface IAppDbContext
     DbSet<ProductCategory> ProductCategories { get; }
     DbSet<Product> Products { get; }
     DbSet<ProductVariant> ProductVariants { get; }
+    DbSet<ProductOptionGroup> ProductOptionGroups { get; }
+    DbSet<ProductOption> ProductOptions { get; }
+    DbSet<ComboComponent> ComboComponents { get; }
     DbSet<Recipe> Recipes { get; }
     DbSet<RecipeItem> RecipeItems { get; }
     DbSet<Customer> Customers { get; }
@@ -31,6 +34,7 @@ public interface IAppDbContext
     DbSet<TableReservation> TableReservations { get; }
     DbSet<Order> Orders { get; }
     DbSet<OrderLine> OrderLines { get; }
+    DbSet<OrderLineModifier> OrderLineModifiers { get; }
     DbSet<Payment> Payments { get; }
     DbSet<KitchenStation> KitchenStations { get; }
 
@@ -47,6 +51,9 @@ public interface IAppDbContext
     DbSet<Supplier> Suppliers { get; }
     DbSet<GoodsReceipt> GoodsReceipts { get; }
     DbSet<GoodsReceiptLine> GoodsReceiptLines { get; }
+    DbSet<PurchaseOrder> PurchaseOrders { get; }
+    DbSet<PurchaseOrderLine> PurchaseOrderLines { get; }
+    DbSet<SupplierPayment> SupplierPayments { get; }
 
     // Store / warehouse (isolated from POS Inventory)
     DbSet<StoreUnit> StoreUnits { get; }
@@ -64,6 +71,11 @@ public interface IAppDbContext
     DbSet<FinanceTransaction> FinanceTransactions { get; }
     DbSet<CashDrawerSession> CashDrawerSessions { get; }
     DbSet<FinancialAuditLog> FinancialAuditLogs { get; }
+
+    // General ledger (double-entry, auto-posted from the cash book + optional manual journals)
+    DbSet<Account> Accounts { get; }
+    DbSet<JournalEntry> JournalEntries { get; }
+    DbSet<JournalLine> JournalLines { get; }
 
     DbSet<RestaurantBillingSettings> RestaurantBillingSettings { get; }
 

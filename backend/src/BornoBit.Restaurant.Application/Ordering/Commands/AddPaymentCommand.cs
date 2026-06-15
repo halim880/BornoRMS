@@ -4,6 +4,7 @@ using BornoBit.Restaurant.Application.Common.Security;
 using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Application.Ordering.Common;
 using BornoBit.Restaurant.Application.Ordering.Payments;
+using BornoBit.Restaurant.Application.Ordering.Printing;
 using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Identity;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -45,17 +46,20 @@ public class AddPaymentCommandHandler : IRequestHandler<AddPaymentCommand, Settl
     private readonly IStockConsumptionService _consumption;
     private readonly IPaymentGateway _gateway;
     private readonly IDineInSessionResolver _sessions;
+    private readonly IKitchenTicketSender _kot;
     private readonly ILogger<AddPaymentCommandHandler> _logger;
 
     public AddPaymentCommandHandler(
         IAppDbContext db, ICurrentUser currentUser, IStockConsumptionService consumption,
-        IPaymentGateway gateway, IDineInSessionResolver sessions, ILogger<AddPaymentCommandHandler> logger)
+        IPaymentGateway gateway, IDineInSessionResolver sessions, IKitchenTicketSender kot,
+        ILogger<AddPaymentCommandHandler> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _consumption = consumption;
         _gateway = gateway;
         _sessions = sessions;
+        _kot = kot;
         _logger = logger;
     }
 
@@ -91,6 +95,14 @@ public class AddPaymentCommandHandler : IRequestHandler<AddPaymentCommand, Settl
             throw new ConflictException(ex.Message);
         }
 
+        // Petpooja QSR: paying fires the kitchen — payment must never bypass the kitchen. A still-Placed
+        // order is confirmed (and its KOT dispatched below) instead of being left paid-but-never-cooked.
+        var routedToKitchen = false;
+        if (order.IsPaid && order.Status == OrderStatus.Placed) { order.Confirm(); routedToKitchen = true; }
+
+        // Completed = Served AND Paid: paying an already-served order completes it. Payment alone does not.
+        if (order.Status == OrderStatus.Served && order.IsPaid) order.Complete();
+
         FinancialAudit.Write(_db, FinancialAuditAction.PaymentCaptured, _currentUser, nameof(Order), order.Id,
             order.OrderNumber, captured, before, FinancialAudit.Snapshot(order));
 
@@ -101,6 +113,10 @@ public class AddPaymentCommandHandler : IRequestHandler<AddPaymentCommand, Settl
         if (order.IsPaid && order.StockSyncStatus is not (StockSyncStatus.Synced or StockSyncStatus.Reversed))
             await OrderStockSync.TryApplyAsync(_db, _consumption, order, _logger, cancellationToken);
 
+        // Quick-pay routed the order to the kitchen → dispatch its ticket (idempotent + failure-tolerant).
+        if (routedToKitchen)
+            await OrderKotSync.TryDispatchAsync(_db, _kot, order, _logger, cancellationToken);
+
         // Free the table once this was the session's last unpaid order.
         if (order.IsPaid && order.DiningSessionId is { } sessionId)
         {
@@ -108,8 +124,13 @@ public class AddPaymentCommandHandler : IRequestHandler<AddPaymentCommand, Settl
             await _db.SaveChangesAsync(cancellationToken);
         }
 
+        // Once paid, stock is (best-effort) deducted — warn the cashier about any line that has no SKU/recipe.
+        var warnings = order.IsPaid
+            ? await StockTrackingInspector.FindUntrackedAsync(_db, order, cancellationToken)
+            : Array.Empty<string>();
+
         var change = order.Payments.OrderBy(p => p.CreatedAtUtc).LastOrDefault()?.Change ?? 0m;
-        return order.ToSettlementResult(change);
+        return order.ToSettlementResult(change, warnings);
     }
 
     internal static async Task SaveWithConcurrencyGuardAsync(IAppDbContext db, CancellationToken cancellationToken)

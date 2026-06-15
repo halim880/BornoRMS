@@ -195,7 +195,7 @@
     [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
 
     private OrderDetailDto? _order;
-    private BillingSettingsDto _settings = new(0m, 0m, "Tk", true, 20m);
+    private BillingSettingsDto _settings = new(0m, 0m, "Tk", true, 20m, false);
     private bool _tipEnabled = true;
 
     private static readonly string[] _discountKinds = { "Percent", "Fixed" };
@@ -301,6 +301,7 @@
                 VatAmount, ServiceAmount, TipAmount, RoundingAmount, payments));
 
             _changed = true;
+            foreach (var w in result.Warnings) ToastService.ShowWarning(w);
             ToastService.ShowSuccess($"Settled · {result.PaymentStatus} · change {result.Change:0.##}");
             _ = AutoPrintAsync();
             Dialog.Close(true);

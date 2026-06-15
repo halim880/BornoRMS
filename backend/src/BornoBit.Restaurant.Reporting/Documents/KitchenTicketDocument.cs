@@ -124,6 +124,12 @@ public class KitchenTicketDocument : IDocument
                     table.Cell().Text($"{line.Quantity}x").FontSize(ItemFontSize).Bold();
                     table.Cell().Text(line.Name).FontSize(ItemFontSize).Bold();
 
+                    foreach (var modifier in line.Modifiers ?? Array.Empty<string>())
+                    {
+                        table.Cell().Text(string.Empty);
+                        table.Cell().Text($"+ {modifier}").FontSize(SmallFontSize);
+                    }
+
                     if (!string.IsNullOrWhiteSpace(line.Notes))
                     {
                         table.Cell().Text(string.Empty);

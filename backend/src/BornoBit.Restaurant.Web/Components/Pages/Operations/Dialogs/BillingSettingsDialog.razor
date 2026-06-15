@@ -25,7 +25,8 @@
                 <BoInput @bind-Value="_currency" Label="Currency" />
             </div>
             <BoCheckbox @bind-Value="_tipEnabled" Label="Enable tip field at settlement" />
-            <span class="bset-hint">VAT and service charge prefill the settlement screen; the cashier can override per order. Discounts at or above the threshold require Manager/Admin approval.</span>
+            <BoCheckbox @bind-Value="_priceIncludesTax" Label="Menu prices already include VAT (extract, don't add)" />
+            <span class="bset-hint">VAT and service charge prefill the settlement screen; the cashier can override per order. Per-category VAT rates override the default; categories with no rate use the VAT % above. Discounts at or above the threshold require Manager/Admin approval.</span>
         </div>
     }
 </BoDialogBody>
@@ -48,6 +49,7 @@
     private string? _threshold;
     private string _currency = "Tk";
     private bool _tipEnabled = true;
+    private bool _priceIncludesTax;
 
     protected override async Task OnInitializedAsync()
     {
@@ -57,6 +59,7 @@
         _threshold = s.HighDiscountThresholdPercent.ToString(CultureInfo.InvariantCulture);
         _currency = s.Currency;
         _tipEnabled = s.TipEnabled;
+        _priceIncludesTax = s.PriceIncludesTax;
         _loading = false;
     }
 
@@ -65,7 +68,7 @@
         _busy = true; _error = null;
         try
         {
-            await Sender.Send(new UpdateBillingSettingsCommand(P(_vat), P(_service), _currency, _tipEnabled, P(_threshold)));
+            await Sender.Send(new UpdateBillingSettingsCommand(P(_vat), P(_service), _currency, _tipEnabled, P(_threshold), _priceIncludesTax));
             ToastService.ShowSuccess("Billing settings saved.");
             Dialog.Close(true);
         }

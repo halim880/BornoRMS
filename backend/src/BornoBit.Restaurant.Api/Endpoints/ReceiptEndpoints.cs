@@ -102,7 +102,8 @@ public static class ReceiptEndpoints
         ChangeGiven: order.ChangeGiven,
         Notes: order.Notes,
         GeneratedAtUtc: DateTime.UtcNow,
-        Lines: order.Lines.Select(l => new OrderReceiptLine(l.Code, l.Name, l.Quantity, l.UnitPrice, l.LineTotal)).ToList(),
+        Lines: order.Lines.Select(l => new OrderReceiptLine(l.Code, l.Name, l.Quantity, l.UnitPrice, l.LineTotal,
+            l.Modifiers?.Select(m => new OrderReceiptModifier(m.OptionName, m.PriceDelta)).ToList())).ToList(),
         RoundingAdjustment: order.RoundingAdjustment,
         CashierName: cashierName,
         Branding: branding

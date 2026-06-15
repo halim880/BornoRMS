@@ -78,6 +78,64 @@ public partial class Products : ComponentBase
         }
     }
 
+    private async Task ShowOptionsAsync(ProductDto p)
+    {
+        var groups = await Mediator.Send(new GetProductOptionGroupsQuery(p.Id));
+        var model = new ProductOptionsFormModel
+        {
+            ProductId = p.Id,
+            ProductName = p.Name,
+            Groups = groups.Select(g => new OptionGroupFormRow
+            {
+                Id = g.Id,
+                Name = g.Name,
+                BanglaName = g.BanglaName,
+                IsSingle = g.IsSingleSelect,
+                IsRequired = g.IsRequired,
+                Options = g.Options.Select(o => new OptionFormRow
+                {
+                    Id = o.Id, Name = o.Name, BanglaName = o.BanglaName, PriceDelta = o.PriceDelta
+                }).ToList()
+            }).ToList()
+        };
+        var result = await DialogService.ShowAsync<ProductOptionsDialog, ProductOptionsFormModel>(model, new BoDialogOptions
+        {
+            Title = $"Modifiers & add-ons · {p.Name}",
+            Width = "680px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is ProductOptionsFormModel saved && saved.Saved)
+        {
+            ToastService.ShowSuccess("Option groups saved.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ShowComboAsync(ProductDto p)
+    {
+        var combo = await Mediator.Send(new GetProductComboQuery(p.Id));
+        var model = new ProductComboFormModel
+        {
+            ProductId = p.Id,
+            ProductName = p.Name,
+            IsCombo = combo.IsCombo,
+            Components = combo.Components
+                .Select(c => new ComboComponentFormRow { Id = c.Id, ComponentProductId = c.ComponentProductId, Quantity = c.Quantity })
+                .ToList()
+        };
+        var result = await DialogService.ShowAsync<ProductComboDialog, ProductComboFormModel>(model, new BoDialogOptions
+        {
+            Title = $"Combo · {p.Name}",
+            Width = "620px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is ProductComboFormModel saved && saved.Saved)
+        {
+            ToastService.ShowSuccess("Combo saved.");
+            await ReloadAsync();
+        }
+    }
+
     private async Task ToggleActiveAsync(ProductDto p, bool active)
     {
         try

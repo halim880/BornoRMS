@@ -70,33 +70,37 @@ public class StockConsumptionService : IStockConsumptionService
     {
         if (order.StockSyncStatus == StockSyncStatus.Reversed) return;
 
-        var consumed = await db.StockMovements
-            .Where(m => m.ReferenceType == OrderRef && m.ReferenceId == order.Id && m.MovementType == StockMovementType.ConsumptionOut)
+        // Net this order's deductions (ConsumptionOut, stored negative) against any earlier line-void
+        // restores (AdjustmentIn, positive) so we only give back what is still outstanding — restoring
+        // the full ConsumptionOut would double-restore a line that was already voided back.
+        var movements = await db.StockMovements
+            .Where(m => m.ReferenceType == OrderRef && m.ReferenceId == order.Id
+                        && (m.MovementType == StockMovementType.ConsumptionOut || m.MovementType == StockMovementType.AdjustmentIn))
             .ToListAsync(ct);
-        if (consumed.Count == 0) return;
+        if (movements.Count == 0) return;
 
-        // Aggregate per item (an item can appear once, but be defensive).
-        var perItem = consumed
+        var perItem = movements
             .GroupBy(m => m.InventoryItemId)
-            .Select(g => new { ItemId = g.Key, QtyBase = Math.Abs(g.Sum(m => m.QtyBase)) })
+            .Select(g => new { ItemId = g.Key, Outstanding = -g.Sum(m => m.QtyBase) })
+            .Where(x => x.Outstanding > 0m)
             .ToList();
 
         var itemIds = perItem.Select(x => x.ItemId).ToList();
         var items = await db.InventoryItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, ct);
 
         var nowUtc = _time.GetUtcNow().UtcDateTime;
-        var reason = $"Order {order.OrderNumber} cancelled";
+        var reason = $"Order {order.OrderNumber} reversed";
 
         foreach (var row in perItem)
         {
-            if (row.QtyBase <= 0m || !items.TryGetValue(row.ItemId, out var item)) continue;
+            if (!items.TryGetValue(row.ItemId, out var item)) continue;
 
-            item.RestoreConsumed(row.QtyBase);
+            item.RestoreConsumed(row.Outstanding);
 
             db.StockMovements.Add(StockMovement.Create(
                 item.Id,
                 StockMovementType.AdjustmentIn,
-                qtyBase: row.QtyBase,
+                qtyBase: row.Outstanding,
                 occurredAtUtc: nowUtc,
                 unitCost: item.AvgCost,
                 reason: reason,
@@ -107,5 +111,37 @@ public class StockConsumptionService : IStockConsumptionService
         }
 
         order.MarkStockReversed();
+    }
+
+    public async Task ReverseLineAsync(IAppDbContext db, Order order, OrderLine line, CancellationToken ct)
+    {
+        var input = new[] { new RecipeExploder.LineInput(line.MenuItemId, line.VariantId, line.Quantity) };
+        var requirements = await RecipeExploder.ExplodeAsync(db, input, ct);
+        if (requirements.Count == 0) return; // line has no stock impact
+
+        var itemIds = requirements.Select(r => r.InventoryItemId).ToList();
+        var items = await db.InventoryItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, ct);
+
+        var nowUtc = _time.GetUtcNow().UtcDateTime;
+        var reason = $"Order {order.OrderNumber} item void";
+
+        foreach (var req in requirements)
+        {
+            if (req.QtyBase <= 0m || !items.TryGetValue(req.InventoryItemId, out var item)) continue;
+
+            item.RestoreConsumed(req.QtyBase);
+
+            db.StockMovements.Add(StockMovement.Create(
+                item.Id,
+                StockMovementType.AdjustmentIn,
+                qtyBase: req.QtyBase,
+                occurredAtUtc: nowUtc,
+                unitCost: item.AvgCost,
+                reason: reason,
+                referenceType: OrderRef,
+                referenceId: order.Id));
+
+            await StockProjectionWriter.BumpAsync(db, item.Id, item.QtyOnHand, nowUtc, ct);
+        }
     }
 }

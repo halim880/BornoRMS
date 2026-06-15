@@ -48,5 +48,9 @@ public class InventoryItemConfiguration : IEntityTypeConfiguration<InventoryItem
             .WithMany()
             .HasForeignKey(i => i.ProductId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // Soft link to the specific variant this item stocks (no FK — variant rows are managed via the
+        // Product aggregate and re-synced; the SetProductInventoryMethod command keeps this in step).
+        builder.Property(i => i.VariantId);
     }
 }

@@ -35,7 +35,12 @@ export default function CheckoutPage() {
           type: table ? "DineIn" : "Takeaway",
           tableId: table?.id ?? null,
           notes: notes.trim() || null,
-          lines: cart.map((c) => ({ menuItemId: c.menuItemId, variantId: c.variantId, quantity: c.quantity })),
+          lines: cart.map((c) => ({
+            menuItemId: c.menuItemId,
+            variantId: c.variantId,
+            quantity: c.quantity,
+            optionIds: c.options.map((o) => o.optionId),
+          })),
         }),
       });
       const data = await res.json();
@@ -70,6 +75,11 @@ export default function CheckoutPage() {
             <span>
               {c.name}
               {c.variantName ? ` (${c.variantName})` : ""} × {c.quantity}
+              {c.options.length > 0 && (
+                <span className="block text-xs text-emerald-700">
+                  {c.options.map((o) => (o.priceDelta > 0 ? `${o.name} (+${formatMoney(o.priceDelta, c.currency)})` : o.name)).join(", ")}
+                </span>
+              )}
             </span>
             <span>{formatMoney(c.price * c.quantity, c.currency)}</span>
           </div>

@@ -15,5 +15,6 @@ public class RestaurantBillingSettingsConfiguration : IEntityTypeConfiguration<R
         builder.Property(s => s.ServiceChargePercent).HasPrecision(5, 2);
         builder.Property(s => s.HighDiscountThresholdPercent).HasPrecision(5, 2);
         builder.Property(s => s.Currency).IsRequired().HasMaxLength(8);
+        builder.Property(s => s.PriceIncludesTax).HasDefaultValue(false);
     }
 }

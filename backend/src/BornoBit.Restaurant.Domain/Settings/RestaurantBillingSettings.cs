@@ -17,6 +17,9 @@ public class RestaurantBillingSettings : AuditableEntity
     public bool TipEnabled { get; private set; }
     /// <summary>Discounts at or above this percent require Manager/Admin approval.</summary>
     public decimal HighDiscountThresholdPercent { get; private set; }
+    /// <summary>When true, menu prices already include VAT (tax is extracted from the line total rather
+    /// than added on top). When false, VAT is added to the bill.</summary>
+    public bool PriceIncludesTax { get; private set; }
 
     private RestaurantBillingSettings() { }
 
@@ -26,10 +29,11 @@ public class RestaurantBillingSettings : AuditableEntity
         ServiceChargePercent = 0m,
         Currency = "Tk",
         TipEnabled = true,
-        HighDiscountThresholdPercent = 20m
+        HighDiscountThresholdPercent = 20m,
+        PriceIncludesTax = false
     };
 
-    public void Update(decimal vatPercent, decimal serviceChargePercent, string currency, bool tipEnabled, decimal highDiscountThresholdPercent)
+    public void Update(decimal vatPercent, decimal serviceChargePercent, string currency, bool tipEnabled, decimal highDiscountThresholdPercent, bool priceIncludesTax)
     {
         if (vatPercent < 0m || vatPercent > 100m) throw new ArgumentOutOfRangeException(nameof(vatPercent));
         if (serviceChargePercent < 0m || serviceChargePercent > 100m) throw new ArgumentOutOfRangeException(nameof(serviceChargePercent));
@@ -41,5 +45,6 @@ public class RestaurantBillingSettings : AuditableEntity
         Currency = currency.Trim();
         TipEnabled = tipEnabled;
         HighDiscountThresholdPercent = highDiscountThresholdPercent;
+        PriceIncludesTax = priceIncludesTax;
     }
 }

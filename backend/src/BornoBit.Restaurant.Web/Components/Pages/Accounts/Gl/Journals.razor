@@ -1,0 +1,61 @@
+@page "/accounts/gl/journal"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Domain.Accounting
+
+<PageTitle>Journal · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Journal" Description="Every general-ledger entry — auto-posted from the cash book plus any manual entries.">
+        <Actions>
+            <BoButton Variant="primary" OnClick="NewAsync">New journal entry</BoButton>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading journal…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_items.Count == 0)
+    {
+        <EmptyState Description="No journal entries yet." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Number</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Date</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Narration</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Status</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Amount</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in _items)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:8px 14px;"><span class="bo-code bo-code-slate">@e.EntryNumber</span></td>
+                            <td style="padding:8px 14px; color:var(--bo-text-muted); white-space:nowrap;">@e.EntryDate.ToString("yyyy-MM-dd")</td>
+                            <td style="padding:8px 14px;">@(e.Narration ?? e.Reference ?? "—")</td>
+                            <td style="padding:8px 14px; font-weight:600; color:@StatusColor(e.Status);">@e.Status</td>
+                            <td style="padding:8px 14px; text-align:right;">@e.TotalDebit.ToString("#,##0.00")</td>
+                            <td style="padding:8px 14px; text-align:right;">
+                                @if (e.Status != JournalStatus.Void)
+                                {
+                                    <BoButton Variant="ghost" Size="sm" OnClick="@(() => VoidAsync(e))">Void</BoButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

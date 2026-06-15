@@ -5,4 +5,5 @@ public record ProductCategoryDto(
     string Name,
     string? Description,
     int DisplayOrder,
-    bool IsActive);
+    bool IsActive,
+    decimal? TaxRatePercent);

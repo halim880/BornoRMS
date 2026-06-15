@@ -13,6 +13,7 @@ public class ProductCategoryConfiguration : IEntityTypeConfiguration<ProductCate
 
         builder.Property(c => c.Name).IsRequired().HasMaxLength(200);
         builder.Property(c => c.Description).HasMaxLength(1000);
+        builder.Property(c => c.TaxRatePercent).HasPrecision(5, 2);
 
         builder.HasIndex(c => c.Name);
         builder.HasIndex(c => c.DisplayOrder);

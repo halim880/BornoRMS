@@ -1,0 +1,93 @@
+@page "/accounts/gl/chart"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.Accounts
+
+<PageTitle>Chart of Accounts · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Chart of Accounts"
+                Description="The general-ledger account tree. Groups roll up their children; postable leaves carry the journal lines.">
+        <Actions>
+            <BoButton Variant="ghost" Size="sm" OnClick="ExpandAll">Expand all</BoButton>
+            <BoButton Variant="ghost" Size="sm" OnClick="CollapseAll">Collapse all</BoButton>
+            <BoButton Variant="primary" OnClick="AddRootAsync">Add account</BoButton>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading accounts…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_nodes.Count == 0)
+    {
+        <EmptyState Description="No accounts yet." />
+    }
+    else
+    {
+        <div class="bo-card coa-tree" style="padding:8px;">
+            @foreach (var n in _nodes)
+            {
+                @RenderNode(n, 0)
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private RenderFragment RenderNode(AccountNodeDto n, int depth) => __builder =>
+    {
+        var isGroup = n.Children.Count > 0 || !n.IsPostable;
+        var expanded = IsExpanded(n.Id);
+
+        <div class="coa-row @(n.IsActive ? "" : "coa-inactive")" style="padding-left:@(depth * 20)px;">
+            <span class="coa-twirl" @onclick="@(() => Toggle(n.Id))">
+                @if (n.Children.Count > 0)
+                {
+                    <span class="coa-chevron @(expanded ? "open" : "")">›</span>
+                }
+            </span>
+            <span class="bo-code bo-code-slate">@n.Code</span>
+            <span class="coa-name" style="font-weight:@(isGroup ? "700" : "400");">@n.Name</span>
+            <span class="coa-type">@n.AccountType</span>
+            @if (!n.IsActive)
+            {
+                <span class="coa-badge">inactive</span>
+            }
+            <span class="coa-actions">
+                @if (isGroup)
+                {
+                    <BoButton Variant="ghost" Size="sm" OnClick="@(() => AddChildAsync(n))">+ Add</BoButton>
+                }
+                <BoButton Variant="ghost" Size="sm" OnClick="@(() => EditAsync(n))">Edit</BoButton>
+                <BoButton Variant="ghost" Size="sm" OnClick="@(() => ToggleActiveAsync(n))">@(n.IsActive ? "Deactivate" : "Activate")</BoButton>
+            </span>
+        </div>
+
+        @if (expanded)
+        {
+            foreach (var c in n.Children)
+            {
+                @RenderNode(c, depth + 1)
+            }
+        }
+    };
+}
+
+<style>
+    .coa-tree { display:flex; flex-direction:column; }
+    .coa-row { display:flex; align-items:center; gap:10px; padding-top:6px; padding-bottom:6px; border-bottom:1px solid var(--bo-border-soft); }
+    .coa-row:hover { background:var(--bo-bg-soft); }
+    .coa-twirl { width:16px; display:inline-flex; justify-content:center; cursor:pointer; color:var(--bo-text-muted); }
+    .coa-chevron { transition:transform 140ms ease; display:inline-block; }
+    .coa-chevron.open { transform:rotate(90deg); }
+    .coa-name { flex:1; }
+    .coa-type { font-size:var(--bo-font-xs); color:var(--bo-text-muted); text-transform:uppercase; width:90px; }
+    .coa-badge { font-size:var(--bo-font-xs); color:var(--bo-danger, #dc2626); border:1px solid var(--bo-danger, #dc2626); border-radius:4px; padding:0 6px; }
+    .coa-actions { display:flex; gap:2px; opacity:0; transition:opacity 120ms ease; }
+    .coa-row:hover .coa-actions { opacity:1; }
+    .coa-inactive .coa-name, .coa-inactive .bo-code { opacity:0.5; text-decoration:line-through; }
+</style>

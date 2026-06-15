@@ -216,6 +216,7 @@
 .pos-line-info { display: flex; flex-direction: column; min-width: 0; }
 .pos-line-name { font-weight: 700; font-size: 13px; line-height: 1.25; }
 .pos-line-rate { font-size: 11.5px; color: var(--bo-text-muted); }
+.pos-line-opts { font-size: 11px; color: var(--bo-primary); }
 
 .pos-line-qty { display: flex; align-items: center; gap: 2px; }
 

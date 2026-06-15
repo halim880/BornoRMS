@@ -7,15 +7,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BornoBit.Restaurant.Application.Inventory.Purchases;
 
-public record GoodsReceiptLineInput(Guid ItemId, decimal Qty, Guid UnitId, decimal UnitCost);
+public record GoodsReceiptLineInput(Guid ItemId, decimal Qty, Guid UnitId, decimal UnitCost, Guid? PurchaseOrderLineId = null);
 
-/// <summary>Create a Draft goods receipt. Stock is not moved until the receipt is posted.</summary>
+/// <summary>
+/// Create a Draft goods receipt. Stock is not moved until the receipt is posted. When
+/// <paramref name="PurchaseOrderId"/> is set the receipt is matched to that PO — posting it bumps the
+/// matched PO lines' received quantities and advances the PO status.
+/// </summary>
 public record CreateGoodsReceiptCommand(
     Guid SupplierId,
     string? InvoiceNo,
     DateTime? ReceivedAtUtc,
     string? Notes,
-    IReadOnlyList<GoodsReceiptLineInput> Lines
+    IReadOnlyList<GoodsReceiptLineInput> Lines,
+    Guid? PurchaseOrderId = null
 ) : IRequest<Guid>;
 
 public class CreateGoodsReceiptCommandValidator : AbstractValidator<CreateGoodsReceiptCommand>
@@ -52,6 +57,18 @@ public class CreateGoodsReceiptCommandHandler : IRequestHandler<CreateGoodsRecei
         if (!await _db.Suppliers.AnyAsync(s => s.Id == request.SupplierId, cancellationToken))
             throw new NotFoundException($"Supplier {request.SupplierId} not found.");
 
+        // When matched to a PO, validate it belongs to the same supplier and is open for receiving.
+        if (request.PurchaseOrderId is { } poId)
+        {
+            var po = await _db.PurchaseOrders
+                .FirstOrDefaultAsync(p => p.Id == poId, cancellationToken)
+                ?? throw new NotFoundException($"Purchase order {poId} not found.");
+            if (po.SupplierId != request.SupplierId)
+                throw new ValidationException("The goods receipt supplier must match the purchase order's supplier.");
+            if (po.Status is not (Domain.Inventory.PurchaseOrderStatus.Approved or Domain.Inventory.PurchaseOrderStatus.PartiallyReceived))
+                throw new ValidationException($"Purchase order '{po.PoNumber}' is {po.Status} — goods can only be received against an approved order.");
+        }
+
         var itemIds = request.Lines.Select(l => l.ItemId).Distinct().ToList();
         var items = await _db.InventoryItems
             .Where(i => itemIds.Contains(i.Id))
@@ -75,7 +92,8 @@ public class CreateGoodsReceiptCommandHandler : IRequestHandler<CreateGoodsRecei
             request.SupplierId,
             receivedAt,
             request.InvoiceNo,
-            notes: request.Notes);
+            notes: request.Notes,
+            purchaseOrderId: request.PurchaseOrderId);
 
         foreach (var line in request.Lines)
         {
@@ -88,7 +106,7 @@ public class CreateGoodsReceiptCommandHandler : IRequestHandler<CreateGoodsRecei
                 throw new ValidationException($"Unit '{unit.Code}' is not compatible with '{item.Name}' (base unit '{baseUnit.Code}').");
 
             var qtyBase = unit.ToBase(line.Qty);
-            grn.AddLine(item.Id, item.Name, line.Qty, unit.Id, qtyBase, line.UnitCost);
+            grn.AddLine(item.Id, item.Name, line.Qty, unit.Id, qtyBase, line.UnitCost, line.PurchaseOrderLineId);
         }
 
         _db.GoodsReceipts.Add(grn);

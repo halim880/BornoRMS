@@ -54,13 +54,14 @@ public static class RecipeExploder
             : await db.Units.Where(u => unitIds.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id, u => u.ToBaseFactor, ct);
 
-        // Direct-stock product → linked inventory item.
+        // Direct-stock product → linked inventory item, keyed per (product, variant). A non-variant product
+        // links one item with VariantId == null; a variant product links one item per variant.
         var directLinks = directProductIds.Count == 0
-            ? new Dictionary<Guid, Guid>()
+            ? new Dictionary<(Guid ProductId, Guid? VariantId), Guid>()
             : await db.InventoryItems
                 .Where(i => i.ProductId != null && directProductIds.Contains(i.ProductId!.Value))
-                .Select(i => new { ProductId = i.ProductId!.Value, i.Id })
-                .ToDictionaryAsync(x => x.ProductId, x => x.Id, ct);
+                .Select(i => new { ProductId = i.ProductId!.Value, i.VariantId, i.Id })
+                .ToDictionaryAsync(x => (x.ProductId, x.VariantId), x => x.Id, ct);
 
         var required = new Dictionary<Guid, decimal>();
 
@@ -77,7 +78,9 @@ public static class RecipeExploder
             switch (method)
             {
                 case InventoryMethod.DirectStock:
-                    if (directLinks.TryGetValue(line.ProductId, out var directItemId))
+                    // Variant-specific link wins; fall back to the product-level link (VariantId == null).
+                    if (directLinks.TryGetValue((line.ProductId, line.VariantId), out var directItemId)
+                        || directLinks.TryGetValue((line.ProductId, (Guid?)null), out directItemId))
                         Add(directItemId, line.Quantity);
                     break;
 

@@ -32,5 +32,8 @@ public record OrderReceiptLine(
     string Name,
     int Quantity,
     decimal UnitPrice,
-    decimal LineTotal
+    decimal LineTotal,
+    IReadOnlyList<OrderReceiptModifier>? Modifiers = null
 );
+
+public record OrderReceiptModifier(string Name, decimal PriceDelta);

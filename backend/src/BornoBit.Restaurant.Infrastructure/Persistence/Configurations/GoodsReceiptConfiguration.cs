@@ -22,10 +22,16 @@ public class GoodsReceiptConfiguration : IEntityTypeConfiguration<GoodsReceipt>
         builder.HasIndex(g => g.GrnNumber).IsUnique();
         builder.HasIndex(g => g.SupplierId);
         builder.HasIndex(g => g.Status);
+        builder.HasIndex(g => g.PurchaseOrderId);
 
         builder.HasOne<Supplier>()
             .WithMany()
             .HasForeignKey(g => g.SupplierId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<PurchaseOrder>()
+            .WithMany()
+            .HasForeignKey(g => g.PurchaseOrderId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(g => g.Lines)

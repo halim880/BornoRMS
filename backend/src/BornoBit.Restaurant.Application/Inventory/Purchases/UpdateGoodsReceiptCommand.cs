@@ -56,6 +56,11 @@ public class UpdateGoodsReceiptCommandHandler : IRequestHandler<UpdateGoodsRecei
         if (grn.Status != Domain.Inventory.GoodsReceiptStatus.Draft)
             throw new ValidationException("Only draft receipts can be edited.");
 
+        // A PO-matched receipt carries per-line purchase-order links this command can't reconstruct; editing
+        // would silently break matching. Delete and re-receive from the purchase order instead.
+        if (grn.PurchaseOrderId is not null)
+            throw new ValidationException("This receipt was raised against a purchase order. Delete it and receive again from the order to change it.");
+
         if (!await _db.Suppliers.AnyAsync(s => s.Id == request.SupplierId, cancellationToken))
             throw new NotFoundException($"Supplier {request.SupplierId} not found.");
 

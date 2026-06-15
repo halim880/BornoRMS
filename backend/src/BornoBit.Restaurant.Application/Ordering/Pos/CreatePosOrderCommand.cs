@@ -70,7 +70,7 @@ public class CreatePosOrderCommandHandler : IRequestHandler<CreatePosOrderComman
             ? $"Address: {request.CustomerAddress.Trim()}"
             : null;
 
-        var order = Order.Create(orderNumber, customerId, request.TableId, request.Type, nowUtc, notes: notes);
+        var order = Order.Create(orderNumber, customerId, request.TableId, request.Type, nowUtc, notes: notes, channel: OrderChannel.Pos);
 
         // Dine-in orders join a dining session so the table reads as occupied on the Waiter/Dashboard floor too.
         if (request.Type == OrderType.DineIn && request.TableId is { } dineTableId)

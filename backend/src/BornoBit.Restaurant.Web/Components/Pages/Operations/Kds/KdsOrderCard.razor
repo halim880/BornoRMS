@@ -63,7 +63,14 @@
 
     <div class="kds-card-actions">
         <BoButton Variant="ghost" Size="sm" OnClick="EditNotes">Notes</BoButton>
-        <BoButton Variant="@AdvanceVariant" Size="sm" OnClick="Advance">@AdvanceLabel ⟶</BoButton>
+        @if (Card.Status == OrderStatus.Placed)
+        {
+            <BoButton Variant="accent" Size="sm" OnClick="Accept">Accept ✓</BoButton>
+        }
+        else
+        {
+            <BoButton Variant="@AdvanceVariant" Size="sm" OnClick="Advance">@AdvanceLabel ⟶</BoButton>
+        }
     </div>
 </div>
 
@@ -72,6 +79,7 @@
     [Parameter] public DateTime Now { get; set; } = DateTime.UtcNow;
     [Parameter] public bool ShowStationTag { get; set; } = true;
     [Parameter] public EventCallback<Guid> OnAdvance { get; set; }
+    [Parameter] public EventCallback<Guid> OnAccept { get; set; }
     [Parameter] public EventCallback<(Guid OrderId, bool Value)> OnTogglePriority { get; set; }
     [Parameter] public EventCallback<KitchenOrderCardDto> OnEditNotes { get; set; }
 
@@ -90,7 +98,7 @@
 
     private string AdvanceLabel => Card.Status switch
     {
-        OrderStatus.Placed or OrderStatus.Confirmed => "Start",
+        OrderStatus.Confirmed => "Start",
         OrderStatus.Preparing => "Ready",
         OrderStatus.Ready => "Served",
         _ => "Next"
@@ -104,6 +112,7 @@
     };
 
     private Task Advance() => OnAdvance.InvokeAsync(Card.Id);
+    private Task Accept() => OnAccept.InvokeAsync(Card.Id);
     private Task TogglePriority() => OnTogglePriority.InvokeAsync((Card.Id, !Card.IsPriority));
     private Task EditNotes() => OnEditNotes.InvokeAsync(Card);
 

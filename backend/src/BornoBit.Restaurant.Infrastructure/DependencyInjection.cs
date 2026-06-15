@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<IOrderNumberGenerator, OrderNumberGenerator>();
         services.AddScoped<ISessionNumberGenerator, SessionNumberGenerator>();
         services.AddScoped<ITransactionNumberGenerator, TransactionNumberGenerator>();
+        services.AddScoped<IJournalNumberGenerator, JournalNumberGenerator>();
         services.AddScoped<IDrawerNumberGenerator, DrawerNumberGenerator>();
         services.AddScoped<ISmsSender, StubSmsSender>();
         services.AddScoped<ICustomerTokenService, CustomerTokenService>();
@@ -69,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<RecipeSeeder>();
         services.AddScoped<StoreUnitSeeder>();
         services.AddScoped<AccountingSeeder>();
+        services.AddScoped<GeneralLedgerSeeder>();
         services.AddScoped<BillingSettingsSeeder>();
 
         services

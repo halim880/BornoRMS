@@ -22,6 +22,71 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Accounting.Account", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AccountType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPostable")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountType");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("ParentId");
+
+                    b.ToTable("Accounts", (string)null);
+                });
+
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Accounting.CashAccount", b =>
                 {
                     b.Property<Guid>("Id")
@@ -39,6 +104,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
 
                     b.Property<string>("DeletedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("GlAccountId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -181,6 +249,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
 
                     b.Property<string>("DeletedBy")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("GlAccountId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -338,6 +409,135 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.HasIndex("EntityType", "EntityId");
 
                     b.ToTable("FinancialAuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Accounting.JournalEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("EntryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EntryNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Narration")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("PostedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("VoucherType")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntryDate");
+
+                    b.HasIndex("EntryNumber")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("JournalEntries", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Accounting.JournalLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Credit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Debit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("LineNarration")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.ToTable("JournalLines", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ComboComponent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ComboProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ComponentProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ComponentProductId");
+
+                    b.HasIndex("ComboProductId", "DisplayOrder");
+
+                    b.ToTable("ComboComponents", (string)null);
                 });
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.MenuCategory", b =>
@@ -515,6 +715,11 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsCombo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -525,6 +730,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("PrepMinutes")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("Price")
                         .HasPrecision(18, 2)
@@ -589,6 +797,10 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<decimal?>("TaxRatePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -602,6 +814,78 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("ProductCategories", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ProductOption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BanglaName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("OptionGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("PriceDelta")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OptionGroupId", "DisplayOrder");
+
+                    b.ToTable("ProductOptions", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ProductOptionGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BanglaName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxSelections")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MinSelections")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "DisplayOrder");
+
+                    b.ToTable("ProductOptionGroups", (string)null);
                 });
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ProductVariant", b =>
@@ -1137,6 +1421,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.Property<DateTime?>("PostedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("PurchaseOrderId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("ReceivedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1156,6 +1443,8 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
 
                     b.HasIndex("GrnNumber")
                         .IsUnique();
+
+                    b.HasIndex("PurchaseOrderId");
 
                     b.HasIndex("Status");
 
@@ -1180,6 +1469,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("PurchaseOrderLineId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Qty")
                         .HasPrecision(18, 3)
@@ -1353,6 +1645,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<Guid?>("VariantId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BaseUnitId");
@@ -1367,6 +1662,121 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.HasIndex("ProductId");
 
                     b.ToTable("InventoryItems", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.PurchaseOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ExpectedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("OrderedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PoNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PoNumber")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("PurchaseOrders", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.PurchaseOrderLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InventoryItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("PurchaseOrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QtyOrdered")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("QtyOrderedBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("QtyReceivedBase")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InventoryItemId");
+
+                    b.HasIndex("PurchaseOrderId");
+
+                    b.HasIndex("UnitId");
+
+                    b.ToTable("PurchaseOrderLines", (string)null);
                 });
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.StockMovement", b =>
@@ -1513,6 +1923,65 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Suppliers", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.SupplierPayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("CashAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("PaidOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("SupplierId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashAccountId");
+
+                    b.HasIndex("PaidOn");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("SupplierPayments", (string)null);
                 });
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.Unit", b =>
@@ -1811,6 +2280,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int>("Channel")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("ConfirmedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1849,6 +2321,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<DateTime?>("EstimatedReadyAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<int?>("GuestCount")
                         .HasColumnType("int");
 
@@ -1866,6 +2341,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.Property<string>("KitchenNotes")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("KotPrintStatus")
+                        .HasColumnType("int");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
@@ -2002,6 +2480,9 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("PrepMinutes")
+                        .HasColumnType("int");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -2011,6 +2492,18 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.Property<string>("StationName")
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
+
+                    b.Property<decimal>("TaxAmountSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TaxRatePercentSnapshot")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("TaxableAmountSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("UnitPriceSnapshot")
                         .HasPrecision(18, 2)
@@ -2028,10 +2521,42 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.ToTable("OrderLines", (string)null);
                 });
 
-            modelBuilder.Entity("BornoBit.Restaurant.Domain.Ordering.Payment", b =>
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Ordering.OrderLineModifier", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("GroupName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("OptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OptionName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("OrderLineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("PriceDelta")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderLineId");
+
+                    b.ToTable("OrderLineModifiers", (string)null);
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Ordering.Payment", b =>
+                {
+                    b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Amount")
@@ -2135,6 +2660,11 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("PriceIncludesTax")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<decimal>("ServiceChargePercent")
                         .HasPrecision(5, 2)
@@ -2988,6 +3518,14 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Accounting.Account", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Accounting.CashDrawerSession", b =>
                 {
                     b.HasOne("BornoBit.Restaurant.Domain.Accounting.CashAccount", null)
@@ -3012,6 +3550,36 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Accounting.JournalLine", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Accounting.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BornoBit.Restaurant.Domain.Accounting.JournalEntry", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ComboComponent", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Catalog.Product", null)
+                        .WithMany("ComboComponents")
+                        .HasForeignKey("ComboProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BornoBit.Restaurant.Domain.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ComponentProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.MenuItem", b =>
                 {
                     b.HasOne("BornoBit.Restaurant.Domain.Catalog.MenuCategory", null)
@@ -3032,6 +3600,24 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("ProductCategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ProductOption", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Catalog.ProductOptionGroup", null)
+                        .WithMany("Options")
+                        .HasForeignKey("OptionGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ProductOptionGroup", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Catalog.Product", null)
+                        .WithMany("OptionGroups")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
@@ -3108,6 +3694,11 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.GoodsReceipt", b =>
                 {
+                    b.HasOne("BornoBit.Restaurant.Domain.Inventory.PurchaseOrder", null)
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("BornoBit.Restaurant.Domain.Inventory.Supplier", null)
                         .WithMany()
                         .HasForeignKey("SupplierId")
@@ -3156,6 +3747,36 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.PurchaseOrder", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Inventory.Supplier", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.PurchaseOrderLine", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Inventory.InventoryItem", null)
+                        .WithMany()
+                        .HasForeignKey("InventoryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BornoBit.Restaurant.Domain.Inventory.PurchaseOrder", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BornoBit.Restaurant.Domain.Inventory.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.StockMovement", b =>
                 {
                     b.HasOne("BornoBit.Restaurant.Domain.Inventory.InventoryItem", null)
@@ -3171,6 +3792,21 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .WithOne()
                         .HasForeignKey("BornoBit.Restaurant.Domain.Inventory.StockProjection", "InventoryItemId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.SupplierPayment", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Accounting.CashAccount", null)
+                        .WithMany()
+                        .HasForeignKey("CashAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BornoBit.Restaurant.Domain.Inventory.Supplier", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
@@ -3225,6 +3861,15 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.HasOne("BornoBit.Restaurant.Domain.Ordering.Order", null)
                         .WithMany("Lines")
                         .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Ordering.OrderLineModifier", b =>
+                {
+                    b.HasOne("BornoBit.Restaurant.Domain.Ordering.OrderLine", null)
+                        .WithMany("Modifiers")
+                        .HasForeignKey("OrderLineId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -3364,9 +4009,23 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Accounting.JournalEntry", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.Product", b =>
                 {
+                    b.Navigation("ComboComponents");
+
+                    b.Navigation("OptionGroups");
+
                     b.Navigation("Variants");
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ProductOptionGroup", b =>
+                {
+                    b.Navigation("Options");
                 });
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.Recipe", b =>
@@ -3375,6 +4034,11 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.GoodsReceipt", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Inventory.PurchaseOrder", b =>
                 {
                     b.Navigation("Lines");
                 });
@@ -3389,6 +4053,11 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                     b.Navigation("Lines");
 
                     b.Navigation("Payments");
+                });
+
+            modelBuilder.Entity("BornoBit.Restaurant.Domain.Ordering.OrderLine", b =>
+                {
+                    b.Navigation("Modifiers");
                 });
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Store.StoreGoodsReceipt", b =>

@@ -1,0 +1,222 @@
+@page "/stock/po/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Inventory")]
+@using BornoBit.Restaurant.Application.Inventory.PurchaseOrders
+@using BornoBit.Restaurant.Domain.Inventory
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Dialog.IBoDialogService DialogService
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+@inject NavigationManager Nav
+
+<PageTitle>@(_po?.PoNumber ?? "Purchase Order") · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="@(_po?.PoNumber ?? "Purchase Order")"
+                Description="Purchase order details and goods-receipt matching.">
+        <Actions>
+            <a class="bo-btn bo-btn-ghost" href="/stock/po">← Back</a>
+            @if (_po is not null)
+            {
+                @if (_po.Status == PurchaseOrderStatus.Draft)
+                {
+                    <a class="bo-btn bo-btn-ghost" href="@($"/stock/po/{_po.Id}/edit")">Edit</a>
+                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="DeleteAsync" disabled="@_busy">Delete</button>
+                    <button type="button" class="bo-btn bo-btn-primary" @onclick="ApproveAsync" disabled="@_busy">Approve</button>
+                }
+                else if (_po.Status is PurchaseOrderStatus.Approved or PurchaseOrderStatus.PartiallyReceived)
+                {
+                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="CancelAsync" disabled="@_busy">Cancel</button>
+                    <a class="bo-btn bo-btn-primary" href="@($"/stock/po/{_po.Id}/receive")">Receive Goods</a>
+                }
+            }
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading purchase order…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_po is not null)
+    {
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; gap:32px; flex-wrap:wrap;">
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Supplier</div>
+                    <strong>@_po.SupplierName</strong>
+                </div>
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Ordered</div>
+                    <span>@_po.OrderedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                </div>
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Expected</div>
+                    <span>@(_po.ExpectedAtUtc is { } e ? e.ToLocalTime().ToString("yyyy-MM-dd") : "—")</span>
+                </div>
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Status</div>
+                    <BoBadge Tone="@PurchaseOrders.StatusTone(_po.Status)">@PurchaseOrders.StatusLabel(_po.Status)</BoBadge>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_po.Notes))
+            {
+                <div>
+                    <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Notes</div>
+                    <span style="color: var(--bo-text-muted);">@_po.Notes</span>
+                </div>
+            }
+
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Ordered</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Received</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Outstanding</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Unit cost</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Line total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in _po.Lines)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:8px 10px;">@l.ItemName</td>
+                            <td style="padding:8px 10px; text-align:right;">@l.QtyOrdered.ToString("0.###") @l.UnitCode</td>
+                            <td style="padding:8px 10px; text-align:right;">@l.QtyReceivedBase.ToString("0.###")</td>
+                            <td style="padding:8px 10px; text-align:right;">
+                                <span style="@(l.OutstandingBase > 0m ? "color:var(--bo-warning, #b45309);font-weight:600;" : "color:var(--bo-text-muted);")">@l.OutstandingBase.ToString("0.###")</span>
+                            </td>
+                            <td style="padding:8px 10px; text-align:right;">@l.UnitCost.ToString("0.00")</td>
+                            <td style="padding:8px 10px; text-align:right;">@l.LineTotal.ToString("0.00")</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr style="border-top:2px solid var(--bo-border-soft);">
+                        <td colspan="5" style="padding:8px 10px; text-align:right;"><strong>Subtotal</strong></td>
+                        <td style="padding:8px 10px; text-align:right;"><strong>@_po.Subtotal.ToString("0.00") @_po.Currency</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <div>
+                <div style="font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); margin-bottom:6px;">Goods receipts against this order</div>
+                @if (_po.Receipts.Count == 0)
+                {
+                    <div style="padding:8px 0; color: var(--bo-text-subtle);">No goods received yet.</div>
+                }
+                else
+                {
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:var(--bo-bg-soft); text-align:left;">
+                                <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">GRN #</th>
+                                <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Received</th>
+                                <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:center;">Status</th>
+                                <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Value</th>
+                                <th style="width:80px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _po.Receipts)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:8px 10px;"><span class="bo-code bo-code-slate">@r.GrnNumber</span></td>
+                                    <td style="padding:8px 10px; color: var(--bo-text-muted);">@r.ReceivedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td style="padding:8px 10px; text-align:center;">
+                                        <BoBadge Tone="@(r.Status == GoodsReceiptStatus.Posted ? "success" : "warning")">@r.Status</BoBadge>
+                                    </td>
+                                    <td style="padding:8px 10px; text-align:right;">@r.Subtotal.ToString("0.00")</td>
+                                    <td style="padding:8px 10px; text-align:right;">
+                                        <a class="bo-btn bo-btn-ghost" href="@($"/stock/grn/{r.Id}")">View</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private PurchaseOrderDetailDto? _po;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            _po = await Mediator.Send(new GetPurchaseOrderQuery(Id));
+        }
+        catch (Exception ex) { _error = $"Failed to load purchase order: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task ApproveAsync()
+    {
+        if (_po is null) return;
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new ApprovePurchaseOrderCommand(_po.Id));
+            ToastService.ShowSuccess($"{_po.PoNumber} approved.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (_po is null) return;
+        var ok = await DialogService.ConfirmAsync(
+            "Cancel purchase order",
+            $"Cancel {_po.PoNumber}? Goods already received stay; the order just stops accepting new receipts.",
+            confirmLabel: "Cancel PO", variant: "danger");
+        if (!ok) return;
+
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new CancelPurchaseOrderCommand(_po.Id));
+            ToastService.ShowSuccess($"{_po.PoNumber} cancelled.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_po is null) return;
+        var ok = await DialogService.ConfirmAsync(
+            "Delete purchase order",
+            $"Delete draft {_po.PoNumber}? This cannot be undone.",
+            confirmLabel: "Delete", variant: "danger");
+        if (!ok) return;
+
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new DeletePurchaseOrderCommand(_po.Id));
+            ToastService.ShowSuccess($"{_po.PoNumber} deleted.");
+            Nav.NavigateTo("/stock/po");
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _busy = false; }
+    }
+}

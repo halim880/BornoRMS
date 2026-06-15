@@ -1,21 +1,34 @@
 "use client";
 
+export type CartOption = {
+  optionId: string;
+  name: string;
+  priceDelta: number;
+};
+
 export type CartItem = {
   menuItemId: string;
   variantId: string | null;
   name: string;
   variantName: string | null;
+  /// Effective unit price, including any add-on surcharges.
   price: number;
   currency: string;
   quantity: number;
+  options: CartOption[];
 };
 
-// v2: lines carry Product ids (+ optional variant) instead of legacy MenuItem ids,
-// so carts saved under the old key are intentionally abandoned.
-const KEY = "bb_cart_v2";
+// v3: lines carry chosen modifiers/add-ons, so the line key now folds in the option ids.
+// Carts saved under the older keys are intentionally abandoned.
+const KEY = "bb_cart_v3";
 
-export function lineKey(item: Pick<CartItem, "menuItemId" | "variantId">): string {
-  return `${item.menuItemId}:${item.variantId ?? ""}`;
+function optionSig(options: CartOption[] | undefined): string {
+  if (!options || options.length === 0) return "";
+  return options.map((o) => o.optionId).sort().join(",");
+}
+
+export function lineKey(item: Pick<CartItem, "menuItemId" | "variantId" | "options">): string {
+  return `${item.menuItemId}:${item.variantId ?? ""}:${optionSig(item.options)}`;
 }
 
 export function readCart(): CartItem[] {

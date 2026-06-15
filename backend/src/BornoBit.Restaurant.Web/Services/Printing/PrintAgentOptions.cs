@@ -24,6 +24,12 @@ public sealed class PrintAgentOptions
 
     public bool OpenCashDrawerOnCashPayment { get; set; } = true;
 
+    /// <summary>Auto-dispatch the kitchen order ticket when an order is accepted/fired.</summary>
+    public bool AutoPrintKot { get; set; } = true;
+
+    /// <summary>Profile/alias for the kitchen printer; falls back to <see cref="PrinterName"/> when null.</summary>
+    public string? KitchenPrinterName { get; set; }
+
     public bool IsOff => string.Equals(Mode, "Off", StringComparison.OrdinalIgnoreCase);
     public bool IsHub => string.Equals(Mode, "Hub", StringComparison.OrdinalIgnoreCase);
 }

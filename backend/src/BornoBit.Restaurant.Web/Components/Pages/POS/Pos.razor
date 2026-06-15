@@ -155,10 +155,15 @@ else
                 {
                     @foreach (var line in _activeDetail.Lines)
                     {
-                        <div class="pos-line" @key="@($"{line.MenuItemId}:{line.VariantId}")">
+                        var optSig = string.Join(",", (line.Modifiers ?? Array.Empty<OrderLineModifierDto>()).Select(m => m.OptionId));
+                        <div class="pos-line" @key="@($"{line.MenuItemId}:{line.VariantId}:{optSig}")">
                             <div class="pos-line-info">
                                 <span class="pos-line-name">@line.Name</span>
                                 <span class="pos-line-rate">Rate : @line.UnitPrice.ToString("0.##") Tk.</span>
+                                @if (line.Modifiers is { Count: > 0 })
+                                {
+                                    <span class="pos-line-opts">@string.Join(", ", line.Modifiers.Select(m => m.PriceDelta > 0 ? $"{m.OptionName} (+{m.PriceDelta:0.##})" : m.OptionName))</span>
+                                }
                             </div>
                             <div class="pos-line-qty">
                                 <button type="button" class="pos-qty-btn" disabled="@_busy"

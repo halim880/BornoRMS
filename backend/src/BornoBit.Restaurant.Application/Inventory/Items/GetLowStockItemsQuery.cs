@@ -24,7 +24,7 @@ public class GetLowStockItemsQueryHandler : IRequestHandler<GetLowStockItemsQuer
             select new InventoryItemDto(
                 i.Id, i.Code, i.Name, i.BanglaName, i.InventoryCategoryId, c.Name,
                 i.ItemType, i.BaseUnitId, u.Code, i.QtyOnHand, i.ReorderLevel, i.ReorderQty,
-                i.AvgCost, i.Currency, i.IsPerishable, i.IsActive, i.ProductId, i.PackSize, i.PackNote,
+                i.AvgCost, i.Currency, i.IsPerishable, i.IsActive, i.ProductId, i.VariantId, i.PackSize, i.PackNote,
                 true, i.QtyOnHand * i.AvgCost))
             .ToListAsync(cancellationToken);
     }

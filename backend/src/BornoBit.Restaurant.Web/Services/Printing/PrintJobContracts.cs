@@ -14,6 +14,38 @@ public sealed record PrintJobRequest
     public string? PrinterName { get; init; }
     public bool OpenCashDrawer { get; init; }
     public ReceiptPayload? Receipt { get; init; }
+    /// <summary>Set instead of <see cref="Receipt"/> for a kitchen ticket job. Tolerant agents ignore it if unsupported.</summary>
+    public KitchenTicketPayload? KitchenTicket { get; init; }
+}
+
+public sealed record KitchenTicketPayload
+{
+    public string RestaurantName { get; init; } = "";
+    public string? TimeZoneId { get; init; }
+
+    public string OrderNumber { get; init; } = "";
+    public string? TicketLabel { get; init; }
+    public string? OrderType { get; init; }
+    public string? TableNumber { get; init; }
+    public string? CustomerName { get; init; }
+    public DateTime OrderedAtUtc { get; init; }
+
+    public bool IsPriority { get; init; }
+    /// <summary>Internal kitchen note (not customer-visible).</summary>
+    public string? KitchenNotes { get; init; }
+    /// <summary>Customer order note.</summary>
+    public string? Notes { get; init; }
+
+    public IReadOnlyList<KitchenTicketLinePayload> Lines { get; init; } = [];
+}
+
+public sealed record KitchenTicketLinePayload
+{
+    public string Name { get; init; } = "";
+    public int Quantity { get; init; }
+    public string? Notes { get; init; }
+    public string? StationName { get; init; }
+    public IReadOnlyList<string> Modifiers { get; init; } = [];
 }
 
 public sealed record ReceiptPayload

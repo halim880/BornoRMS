@@ -4,6 +4,7 @@ using BornoBit.Restaurant.Application.Common.Security;
 using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Application.Ordering.Common;
 using BornoBit.Restaurant.Application.Ordering.Payments;
+using BornoBit.Restaurant.Application.Ordering.Printing;
 using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Identity;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -58,17 +59,20 @@ public class SettleOrderCommandHandler : IRequestHandler<SettleOrderCommand, Set
     private readonly IStockConsumptionService _consumption;
     private readonly IPaymentGateway _gateway;
     private readonly IDineInSessionResolver _sessions;
+    private readonly IKitchenTicketSender _kot;
     private readonly ILogger<SettleOrderCommandHandler> _logger;
 
     public SettleOrderCommandHandler(
         IAppDbContext db, ICurrentUser currentUser, IStockConsumptionService consumption,
-        IPaymentGateway gateway, IDineInSessionResolver sessions, ILogger<SettleOrderCommandHandler> logger)
+        IPaymentGateway gateway, IDineInSessionResolver sessions, IKitchenTicketSender kot,
+        ILogger<SettleOrderCommandHandler> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _consumption = consumption;
         _gateway = gateway;
         _sessions = sessions;
+        _kot = kot;
         _logger = logger;
     }
 
@@ -86,6 +90,7 @@ public class SettleOrderCommandHandler : IRequestHandler<SettleOrderCommand, Set
         var vatPercent = settings?.VatPercent ?? 0m;
         var servicePercent = settings?.ServiceChargePercent ?? 0m;
         var highDiscountThreshold = settings?.HighDiscountThresholdPercent ?? 100m;
+        var priceIncludesTax = settings?.PriceIncludesTax ?? false;
 
         var subtotal = order.Subtotal;
 
@@ -99,8 +104,16 @@ public class SettleOrderCommandHandler : IRequestHandler<SettleOrderCommand, Set
             PermissionGuard.Require(_currentUser, Roles.Admin, Roles.Manager);
 
         var taxableBase = Math.Max(0m, subtotal - discountAmt);
-        var taxAmount = request.TaxAmount ?? Math.Round(taxableBase * vatPercent / 100m, 2);
+
+        // Per-line VAT: rate comes from each line's product category (null → restaurant default VAT).
+        // Order-level discount is allocated proportionally across lines. Snapshots are stamped on the
+        // lines (frozen for the VAT report). With price-inclusive VAT the tax is extracted from the line
+        // total and NOT added to the payable; otherwise it is added on top (the legacy behaviour).
+        var rateByProduct = await BuildRateMapAsync(order, vatPercent, cancellationToken);
+        var computedTax = ComputeLineTaxes(order, rateByProduct, vatPercent, priceIncludesTax, subtotal, discountAmt);
+
         var serviceAmount = request.ServiceChargeAmount ?? Math.Round(taxableBase * servicePercent / 100m, 2);
+        var taxAmount = request.TaxAmount ?? (priceIncludesTax ? 0m : computedTax);
         var tip = request.TipAmount ?? 0m;
         var rounding = request.Rounding ?? 0m;
 
@@ -127,6 +140,14 @@ public class SettleOrderCommandHandler : IRequestHandler<SettleOrderCommand, Set
             throw new ConflictException(ex.Message);
         }
 
+        // Petpooja QSR: paying fires the kitchen — payment must never bypass the kitchen. A still-Placed
+        // order is confirmed (and its KOT dispatched below) instead of being left paid-but-never-cooked.
+        var routedToKitchen = false;
+        if (order.IsPaid && order.Status == OrderStatus.Placed) { order.Confirm(); routedToKitchen = true; }
+
+        // Completed = Served AND Paid: paying an already-served order completes it. Payment alone does not.
+        if (order.Status == OrderStatus.Served && order.IsPaid) order.Complete();
+
         FinancialAudit.Write(_db, FinancialAuditAction.OrderSettled, _currentUser, nameof(Order), order.Id,
             order.OrderNumber, order.GrandTotal, before, FinancialAudit.Snapshot(order));
 
@@ -137,6 +158,10 @@ public class SettleOrderCommandHandler : IRequestHandler<SettleOrderCommand, Set
         if (order.IsPaid && order.StockSyncStatus is not (StockSyncStatus.Synced or StockSyncStatus.Reversed))
             await OrderStockSync.TryApplyAsync(_db, _consumption, order, _logger, cancellationToken);
 
+        // Settle routed the order to the kitchen → dispatch its ticket (idempotent + failure-tolerant).
+        if (routedToKitchen)
+            await OrderKotSync.TryDispatchAsync(_db, _kot, order, _logger, cancellationToken);
+
         // Free the table once this was the session's last unpaid order.
         if (order.IsPaid && order.DiningSessionId is { } sessionId)
         {
@@ -144,7 +169,62 @@ public class SettleOrderCommandHandler : IRequestHandler<SettleOrderCommand, Set
             await _db.SaveChangesAsync(cancellationToken);
         }
 
+        // Once paid, stock is (best-effort) deducted — warn the cashier about any line that has no SKU/recipe.
+        var warnings = order.IsPaid
+            ? await StockTrackingInspector.FindUntrackedAsync(_db, order, cancellationToken)
+            : Array.Empty<string>();
+
         var change = order.Payments.OrderBy(p => p.CreatedAtUtc).LastOrDefault()?.Change ?? 0m;
-        return order.ToSettlementResult(change);
+        return order.ToSettlementResult(change, warnings);
+    }
+
+    /// <summary>Map each ordered product id to its category VAT rate (null where the category inherits the default).</summary>
+    private async Task<Dictionary<Guid, decimal?>> BuildRateMapAsync(Order order, decimal vatPercent, CancellationToken cancellationToken)
+    {
+        var productIds = order.Lines.Select(l => l.MenuItemId).Distinct().ToList();
+        return await (
+            from p in _db.Products
+            join c in _db.ProductCategories on p.ProductCategoryId equals c.Id
+            where productIds.Contains(p.Id)
+            select new { p.Id, c.TaxRatePercent })
+            .ToDictionaryAsync(x => x.Id, x => x.TaxRatePercent, cancellationToken);
+    }
+
+    /// <summary>
+    /// Stamps the VAT snapshot on every line and returns the total VAT. Each line's taxable base is its
+    /// share of the post-discount subtotal; <paramref name="priceIncludesTax"/> selects extract-from vs
+    /// add-on VAT. Snapshots always store the VAT-exclusive (net) base so the VAT report reconciles.
+    /// </summary>
+    private static decimal ComputeLineTaxes(
+        Order order, IReadOnlyDictionary<Guid, decimal?> rateByProduct,
+        decimal vatPercent, bool priceIncludesTax, decimal subtotal, decimal discountAmt)
+    {
+        var factor = subtotal > 0m ? (subtotal - discountAmt) / subtotal : 0m;
+        var total = 0m;
+
+        foreach (var line in order.Lines)
+        {
+            var rate = (rateByProduct.TryGetValue(line.MenuItemId, out var r) ? r : null) ?? vatPercent;
+            var gross = Math.Round(line.LineTotal * factor, 2);
+
+            decimal net, tax;
+            if (priceIncludesTax)
+            {
+                tax = rate > 0m ? Math.Round(gross * rate / (100m + rate), 2) : 0m;
+                net = gross - tax;
+            }
+            else
+            {
+                net = gross;
+                tax = Math.Round(net * rate / 100m, 2);
+            }
+
+            line.TaxRatePercentSnapshot = rate;
+            line.TaxableAmountSnapshot = net;
+            line.TaxAmountSnapshot = tax;
+            total += tax;
+        }
+
+        return total;
     }
 }

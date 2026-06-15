@@ -45,6 +45,8 @@ public class StockValuationDocument : IDocument
                 {
                     c.Item().Text(_data.RestaurantName).FontSize(16).Bold();
                     c.Item().Text("Stock Valuation Report").FontSize(11).FontColor(Colors.Grey.Darken2);
+                    if (!string.IsNullOrWhiteSpace(_data.FilterNote))
+                        c.Item().Text(_data.FilterNote).FontSize(8).FontColor(Colors.Grey.Darken1);
                 });
                 row.ConstantItem(180).AlignRight().Column(c =>
                 {
@@ -62,31 +64,40 @@ public class StockValuationDocument : IDocument
         {
             table.ColumnsDefinition(c =>
             {
-                c.RelativeColumn(2);   // category
+                c.ConstantColumn(70);  // code
                 c.RelativeColumn(3);   // item
+                c.RelativeColumn(2);   // category
+                c.ConstantColumn(60);  // type
                 c.ConstantColumn(70);  // on hand
-                c.ConstantColumn(60);  // avg cost
-                c.ConstantColumn(70);  // value
+                c.ConstantColumn(55);  // reorder
+                c.ConstantColumn(55);  // avg cost
+                c.ConstantColumn(65);  // value
             });
 
             table.Header(h =>
             {
-                h.Cell().Text("Category").Bold();
+                h.Cell().Text("Code").Bold();
                 h.Cell().Text("Item").Bold();
+                h.Cell().Text("Category").Bold();
+                h.Cell().Text("Type").Bold();
                 h.Cell().AlignRight().Text("On hand").Bold();
+                h.Cell().AlignRight().Text("Reorder").Bold();
                 h.Cell().AlignRight().Text("Avg cost").Bold();
                 h.Cell().AlignRight().Text("Value").Bold();
             });
 
             foreach (var line in _data.Lines)
             {
-                table.Cell().Text(line.Category).FontColor(Colors.Grey.Darken1);
+                table.Cell().Text(line.Code).FontColor(Colors.Grey.Darken1);
                 table.Cell().Text(t =>
                 {
                     t.Span(line.Name);
                     if (line.IsLowStock) t.Span("  (low)").FontColor(Colors.Red.Darken1).FontSize(8);
                 });
+                table.Cell().Text(line.Category).FontColor(Colors.Grey.Darken1);
+                table.Cell().Text(line.ItemType).FontColor(Colors.Grey.Darken1);
                 table.Cell().AlignRight().Text($"{line.QtyOnHand:0.###} {line.UnitCode}");
+                table.Cell().AlignRight().Text($"{line.ReorderLevel:0.###}");
                 table.Cell().AlignRight().Text(Money(line.AvgCost));
                 table.Cell().AlignRight().Text(Money(line.StockValue));
             }

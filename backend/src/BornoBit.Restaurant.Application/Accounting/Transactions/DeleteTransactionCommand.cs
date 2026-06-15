@@ -19,6 +19,9 @@ public class DeleteTransactionCommandHandler : IRequestHandler<DeleteTransaction
         var txn = await _db.FinanceTransactions.FirstOrDefaultAsync(t => t.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Transaction not found.");
 
+        // Reverse the GL: void the mirror journal(s) so the ledger no longer counts this transaction.
+        await Posting.GeneralLedgerPoster.VoidMirrorsAsync(_db, txn.Number, cancellationToken);
+
         _db.FinanceTransactions.Remove(txn);
         await _db.SaveChangesAsync(cancellationToken);
     }

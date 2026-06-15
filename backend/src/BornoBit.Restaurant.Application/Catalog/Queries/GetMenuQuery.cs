@@ -23,9 +23,22 @@ public record MenuItemDto(
     string Currency,
     string? ImageUrl,
     int DisplayOrder,
-    IReadOnlyList<MenuVariantDto> Variants);
+    IReadOnlyList<MenuVariantDto> Variants,
+    IReadOnlyList<MenuOptionGroupDto> OptionGroups,
+    bool IsCombo = false);
 
 public record MenuVariantDto(Guid Id, string Name, decimal Price, int DisplayOrder);
+
+public record MenuOptionDto(Guid Id, string Name, string? BanglaName, decimal PriceDelta, int DisplayOrder);
+
+public record MenuOptionGroupDto(
+    Guid Id,
+    string Name,
+    string? BanglaName,
+    int MinSelections,
+    int MaxSelections,
+    int DisplayOrder,
+    IReadOnlyList<MenuOptionDto> Options);
 
 /// <summary>
 /// Customer-facing menu. Reads the same <c>Products</c>/<c>ProductCategories</c> catalog the POS
@@ -57,7 +70,19 @@ public class GetMenuQueryHandler : IRequestHandler<GetMenuQuery, IReadOnlyList<M
                             .Where(v => v.IsActive)
                             .OrderBy(v => v.DisplayOrder).ThenBy(v => v.Name)
                             .Select(v => new MenuVariantDto(v.Id, v.Name, v.Price, v.DisplayOrder))
-                            .ToList()))
+                            .ToList(),
+                        p.OptionGroups
+                            .Where(g => g.IsActive)
+                            .OrderBy(g => g.DisplayOrder).ThenBy(g => g.Name)
+                            .Select(g => new MenuOptionGroupDto(
+                                g.Id, g.Name, g.BanglaName, g.MinSelections, g.MaxSelections, g.DisplayOrder,
+                                g.Options
+                                    .Where(o => o.IsActive)
+                                    .OrderBy(o => o.DisplayOrder).ThenBy(o => o.Name)
+                                    .Select(o => new MenuOptionDto(o.Id, o.Name, o.BanglaName, o.PriceDelta, o.DisplayOrder))
+                                    .ToList()))
+                            .ToList(),
+                        p.IsCombo))
                     .ToList()))
             .ToListAsync(cancellationToken);
 

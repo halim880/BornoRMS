@@ -32,19 +32,22 @@ public record SettlementResultDto(
     decimal BalanceDue,
     PaymentStatus PaymentStatus,
     decimal Change,
-    IReadOnlyList<PaymentLineDto> Payments);
+    IReadOnlyList<PaymentLineDto> Payments,
+    IReadOnlyList<string> Warnings);
 
 public static class PaymentMapping
 {
     public static PaymentLineDto ToDto(this Payment p) => new(
         p.Id, p.Method, p.Provider, p.Amount, p.Tendered, p.Change, p.Kind, p.Status, p.CreatedAtUtc, p.CashierName, p.Reference);
 
-    public static SettlementResultDto ToSettlementResult(this Order order, decimal change = 0m) => new(
+    public static SettlementResultDto ToSettlementResult(
+        this Order order, decimal change = 0m, IReadOnlyList<string>? warnings = null) => new(
         order.Id,
         order.GrandTotal,
         order.AmountPaid,
         order.BalanceDue,
         order.PaymentStatus,
         change,
-        order.Payments.OrderBy(p => p.CreatedAtUtc).Select(p => p.ToDto()).ToList());
+        order.Payments.OrderBy(p => p.CreatedAtUtc).Select(p => p.ToDto()).ToList(),
+        warnings ?? Array.Empty<string>());
 }

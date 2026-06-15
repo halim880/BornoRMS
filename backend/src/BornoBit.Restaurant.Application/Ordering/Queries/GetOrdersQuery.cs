@@ -32,7 +32,9 @@ public record OrderListItemDto(
     decimal Total,
     bool IsPaid,
     DateTime? PaidAtUtc = null,
-    PaymentMethod? PaymentMethod = null);
+    PaymentMethod? PaymentMethod = null,
+    DateTime? ConfirmedAtUtc = null,
+    DateTime? EstimatedReadyAtUtc = null);
 
 public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedResult<OrderListItemDto>>
 {
@@ -87,7 +89,9 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedResult
                 (x.Order.Lines.Sum(l => (decimal?)l.UnitPriceSnapshot * l.Quantity) ?? 0m) - x.Order.DiscountAmount + x.Order.RoundingAdjustment,
                 x.Order.IsPaid,
                 x.Order.PaidAtUtc,
-                x.Order.PaymentMethod))
+                x.Order.PaymentMethod,
+                x.Order.ConfirmedAtUtc,
+                x.Order.EstimatedReadyAtUtc))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<OrderListItemDto>(items, page, pageSize, total);

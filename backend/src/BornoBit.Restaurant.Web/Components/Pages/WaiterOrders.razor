@@ -383,17 +383,21 @@ else
                                 <div class="cart-lines">
                                     @foreach (var line in _cart)
                                     {
-                                        <div class="cart-line" @key="@($"{line.ProductId}:{line.VariantId}")">
+                                        <div class="cart-line" @key="@($"{line.ProductId}:{line.VariantId}:{line.OptKey}")">
                                             <div class="cart-line-info">
                                                 <span class="cart-line-name">@line.Name</span>
-                                                <span class="cart-line-sub">@line.Currency @line.Price.ToString("0.##") each</span>
+                                                <span class="cart-line-sub">@line.Currency @line.UnitPrice.ToString("0.##") each</span>
+                                                @if (line.Options.Count > 0)
+                                                {
+                                                    <span class="cart-line-opts">@string.Join(", ", line.Options.Select(o => o.PriceDelta > 0 ? $"{o.Name} (+{o.PriceDelta:0.##})" : o.Name))</span>
+                                                }
                                             </div>
                                             <div class="qty">
                                                 <button type="button" class="qty-btn" @onclick="() => Decrement(line)">−</button>
                                                 <span class="qty-val">@line.Qty</span>
                                                 <button type="button" class="qty-btn qty-btn--plus" @onclick="() => Increment(line)">+</button>
                                             </div>
-                                            <span class="cart-line-total">@((line.Price * line.Qty).ToString("0.##"))</span>
+                                            <span class="cart-line-total">@((line.UnitPrice * line.Qty).ToString("0.##"))</span>
                                             <button type="button" class="line-remove" title="Remove" @onclick="() => Remove(line)">✕</button>
                                         </div>
                                     }
@@ -722,6 +726,7 @@ else
     .cart-line-info { display: flex; flex-direction: column; min-width: 0; }
     .cart-line-name { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cart-line-sub { font-size: 12px; color: var(--bo-text-muted); }
+    .cart-line-opts { font-size: 11.5px; color: var(--bo-primary); }
 
     .qty { display: flex; align-items: center; gap: 2px; }
     .qty-btn {

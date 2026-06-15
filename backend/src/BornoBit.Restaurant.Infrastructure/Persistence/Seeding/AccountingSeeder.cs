@@ -30,6 +30,7 @@ public class AccountingSeeder
     {
         ("Sales", TransactionType.Income),
         ("Other Income", TransactionType.Income),
+        ("Refunds", TransactionType.Expense),
         ("Purchases", TransactionType.Expense),
         ("Salaries", TransactionType.Expense),
         ("Rent", TransactionType.Expense),

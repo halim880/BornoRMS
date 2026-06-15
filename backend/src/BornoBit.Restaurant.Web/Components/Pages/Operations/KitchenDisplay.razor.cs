@@ -183,6 +183,21 @@ public partial class KitchenDisplay : ComponentBase, IAsyncDisposable
     }
 
     // ---- Order actions ----
+    private async Task Accept(Guid orderId)
+    {
+        try
+        {
+            await Mediator.Send(new AcceptKitchenOrderCommand(orderId));
+            await ReloadAsync();
+            await Notifier.NotifyAsync(DashboardScopes.Orders);   // fan out + fire the kitchen ticket
+            Toast.ShowSuccess("Order accepted — kitchen ticket sent.");
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError(ex.Message);
+        }
+    }
+
     private async Task Advance(Guid orderId)
     {
         try
@@ -199,7 +214,7 @@ public partial class KitchenDisplay : ComponentBase, IAsyncDisposable
             var newStatus = await Mediator.Send(new AdvanceKitchenOrderCommand(orderId));
             await ReloadAsync();
             await Notifier.NotifyAsync(DashboardScopes.Orders);   // fan out to cashier/waiter/table/dashboard
-            await Notifier.NotifyAsync(DashboardScopes.Inventory); // BeginPreparing deducts stock → refresh stock dashboard
+            await Notifier.NotifyAsync(DashboardScopes.Inventory); // StartPreparing deducts stock → refresh stock dashboard
             if (newStatus == OrderStatus.Ready)
                 Toast.ShowSuccess("Order is ready — front of house notified.");
         }

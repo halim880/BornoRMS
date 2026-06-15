@@ -31,7 +31,9 @@ public class GetProductsQueryHandler : IRequestHandler<GetProductsQuery, IReadOn
                     .Select(v => new ProductVariantDto(v.Id, v.Name, v.Price, v.DisplayOrder))
                     .ToList(),
                 p.KitchenStationId,
-                p.InventoryMethod))
+                p.InventoryMethod,
+                p.IsCombo,
+                _db.ProductOptionGroups.Count(g => g.ProductId == p.Id)))
             .ToListAsync(cancellationToken);
     }
 }

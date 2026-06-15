@@ -15,7 +15,8 @@ public record BillingSettingsDto(
     decimal ServiceChargePercent,
     string Currency,
     bool TipEnabled,
-    decimal HighDiscountThresholdPercent);
+    decimal HighDiscountThresholdPercent,
+    bool PriceIncludesTax);
 
 // ----- Query -----
 
@@ -30,8 +31,8 @@ public class GetBillingSettingsQueryHandler : IRequestHandler<GetBillingSettings
     public async Task<BillingSettingsDto> Handle(GetBillingSettingsQuery request, CancellationToken cancellationToken)
     {
         var s = await _db.RestaurantBillingSettings.AsNoTracking().FirstOrDefaultAsync(cancellationToken);
-        if (s is null) return new BillingSettingsDto(0m, 0m, "Tk", true, 20m);
-        return new BillingSettingsDto(s.VatPercent, s.ServiceChargePercent, s.Currency, s.TipEnabled, s.HighDiscountThresholdPercent);
+        if (s is null) return new BillingSettingsDto(0m, 0m, "Tk", true, 20m, false);
+        return new BillingSettingsDto(s.VatPercent, s.ServiceChargePercent, s.Currency, s.TipEnabled, s.HighDiscountThresholdPercent, s.PriceIncludesTax);
     }
 }
 
@@ -42,7 +43,8 @@ public record UpdateBillingSettingsCommand(
     decimal ServiceChargePercent,
     string Currency,
     bool TipEnabled,
-    decimal HighDiscountThresholdPercent) : IRequest<BillingSettingsDto>;
+    decimal HighDiscountThresholdPercent,
+    bool PriceIncludesTax) : IRequest<BillingSettingsDto>;
 
 public class UpdateBillingSettingsCommandValidator : AbstractValidator<UpdateBillingSettingsCommand>
 {
@@ -79,7 +81,7 @@ public class UpdateBillingSettingsCommandHandler : IRequestHandler<UpdateBilling
 
         try
         {
-            settings.Update(request.VatPercent, request.ServiceChargePercent, request.Currency, request.TipEnabled, request.HighDiscountThresholdPercent);
+            settings.Update(request.VatPercent, request.ServiceChargePercent, request.Currency, request.TipEnabled, request.HighDiscountThresholdPercent, request.PriceIncludesTax);
         }
         catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
         {
@@ -87,6 +89,6 @@ public class UpdateBillingSettingsCommandHandler : IRequestHandler<UpdateBilling
         }
 
         await _db.SaveChangesAsync(cancellationToken);
-        return new BillingSettingsDto(settings.VatPercent, settings.ServiceChargePercent, settings.Currency, settings.TipEnabled, settings.HighDiscountThresholdPercent);
+        return new BillingSettingsDto(settings.VatPercent, settings.ServiceChargePercent, settings.Currency, settings.TipEnabled, settings.HighDiscountThresholdPercent, settings.PriceIncludesTax);
     }
 }

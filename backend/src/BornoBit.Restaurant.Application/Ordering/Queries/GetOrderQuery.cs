@@ -9,6 +9,8 @@ namespace BornoBit.Restaurant.Application.Ordering.Queries;
 
 public record GetOrderQuery(Guid OrderId) : IRequest<OrderDetailDto>;
 
+public record OrderLineModifierDto(string GroupName, string OptionName, decimal PriceDelta, Guid? OptionId = null);
+
 public record OrderLineDto(
     Guid MenuItemId,
     Guid? VariantId,
@@ -17,7 +19,8 @@ public record OrderLineDto(
     decimal UnitPrice,
     int Quantity,
     decimal LineTotal,
-    string? Notes = null);
+    string? Notes = null,
+    IReadOnlyList<OrderLineModifierDto>? Modifiers = null);
 
 public record OrderDetailDto(
     Guid Id,
@@ -51,6 +54,8 @@ public record OrderDetailDto(
     DateTime? PaidAtUtc,
     string? WaiterName,
     Guid? DiningSessionId,
+    DateTime? ConfirmedAtUtc,
+    DateTime? EstimatedReadyAtUtc,
     IReadOnlyList<OrderLineDto> Lines,
     IReadOnlyList<PaymentLineDto> Payments);
 
@@ -75,7 +80,14 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
 
         var lines = await _db.OrderLines
             .Where(l => l.OrderId == request.OrderId)
-            .Select(l => new OrderLineDto(l.MenuItemId, l.VariantId, l.Code, l.Name, l.UnitPriceSnapshot, l.Quantity, l.UnitPriceSnapshot * l.Quantity, l.Notes))
+            .Select(l => new OrderLineDto(
+                l.MenuItemId, l.VariantId, l.Code, l.Name, l.UnitPriceSnapshot, l.Quantity,
+                (l.UnitPriceSnapshot + l.Modifiers.Sum(m => m.PriceDelta)) * l.Quantity,
+                l.Notes,
+                l.Modifiers
+                    .OrderBy(m => m.GroupName)
+                    .Select(m => new OrderLineModifierDto(m.GroupName, m.OptionName, m.PriceDelta, m.OptionId))
+                    .ToList()))
             .ToListAsync(cancellationToken);
 
         var payments = await _db.Payments
@@ -124,6 +136,8 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
             ord.PaidAtUtc,
             ord.WaiterName,
             ord.DiningSessionId,
+            ord.ConfirmedAtUtc,
+            ord.EstimatedReadyAtUtc,
             lines,
             payments);
     }

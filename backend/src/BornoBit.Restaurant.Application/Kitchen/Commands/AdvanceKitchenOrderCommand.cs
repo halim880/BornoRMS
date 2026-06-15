@@ -10,8 +10,10 @@ using Microsoft.Extensions.Logging;
 namespace BornoBit.Restaurant.Application.Kitchen.Commands;
 
 /// <summary>
-/// Single-click kitchen advance: Pending → Preparing (auto-confirming) → Ready → Served.
-/// Returns the order's new status so the caller can react (e.g. fan-out a Ready notification).
+/// Single-click kitchen advance through the fulfilment track: Confirmed → Preparing → Ready → Served.
+/// Accepting a still-Placed order is a separate step (<see cref="AcceptKitchenOrderCommand"/>), so this
+/// no longer auto-confirms. On Served it completes the order if it is already paid (Completed = Served
+/// AND Paid). Returns the order's new status so the caller can react.
 /// </summary>
 public record AdvanceKitchenOrderCommand(Guid OrderId) : IRequest<OrderStatus>;
 
@@ -46,9 +48,8 @@ public class AdvanceKitchenOrderCommandHandler : IRequestHandler<AdvanceKitchenO
         {
             switch (order.Status)
             {
-                case OrderStatus.Placed:
                 case OrderStatus.Confirmed:
-                    order.BeginPreparing();
+                    order.StartPreparing();
                     startedCooking = true;
                     break;
                 case OrderStatus.Preparing:
@@ -56,7 +57,11 @@ public class AdvanceKitchenOrderCommandHandler : IRequestHandler<AdvanceKitchenO
                     break;
                 case OrderStatus.Ready:
                     order.MarkServed();
+                    // Completed = Served AND Paid: if the order is already paid, serving completes it.
+                    if (order.IsPaid) order.Complete();
                     break;
+                case OrderStatus.Placed:
+                    throw new ConflictException($"Order {order.OrderNumber} must be accepted before it can be started.");
                 default:
                     throw new ConflictException($"Order {order.OrderNumber} cannot be advanced from {order.Status}.");
             }

@@ -14,5 +14,8 @@ public class GoodsReceiptLine : BaseEntity
     public decimal QtyBase { get; set; }
     public decimal UnitCost { get; set; }
 
+    /// <summary>When this receipt is raised against a purchase order, the PO line this row fulfils (drives PO/GRN matching).</summary>
+    public Guid? PurchaseOrderLineId { get; set; }
+
     public decimal LineTotal => Qty * UnitCost;
 }

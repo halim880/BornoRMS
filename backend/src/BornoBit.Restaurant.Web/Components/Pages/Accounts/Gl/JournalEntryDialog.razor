@@ -1,0 +1,118 @@
+@using BornoBit.Restaurant.Application.Accounting.Accounts
+@using BornoBit.Restaurant.Application.Accounting.Journals
+@using BornoBit.Restaurant.Domain.Accounting
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="display:flex; gap:12px;">
+            <BoDatePicker DateTimeValue="Content.EntryDate" DateTimeValueChanged="@(d => { if (d.HasValue) Content.EntryDate = d.Value.Date; })" Label="Date" Required="true" />
+            <BoInput @bind-Value="Content.Reference" Label="Reference" Style="flex:1;" Maxlength="80" />
+        </div>
+        <BoInput @bind-Value="Content.Narration" Label="Narration" Style="width:100%;" Maxlength="1000" />
+
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr style="text-align:left;">
+                    <th style="padding:6px; font-size:var(--bo-font-xs); color:var(--bo-text-muted);">Account</th>
+                    <th style="padding:6px; font-size:var(--bo-font-xs); color:var(--bo-text-muted); text-align:right;">Debit</th>
+                    <th style="padding:6px; font-size:var(--bo-font-xs); color:var(--bo-text-muted); text-align:right;">Credit</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Content.Lines)
+                {
+                    <tr>
+                        <td style="padding:4px;">
+                            <BoSelect TOption="AccountDto"
+                                      Items="@_accounts"
+                                      OptionValue="@(a => a.Id.ToString())"
+                                      OptionText="@(a => $"{a.Code} · {a.Name}")"
+                                      SelectedOption="@_accounts.FirstOrDefault(a => a.Id == line.AccountId)"
+                                      SelectedOptionChanged="@(a => line.AccountId = a?.Id)"
+                                      Placeholder="(account)" Style="width:100%;" />
+                        </td>
+                        <td style="padding:4px; width:120px;"><BoNumberInput T="decimal" @bind-Value="line.Debit" Min="0" Step="0.01" /></td>
+                        <td style="padding:4px; width:120px;"><BoNumberInput T="decimal" @bind-Value="line.Credit" Min="0" Step="0.01" /></td>
+                        <td style="padding:4px;">
+                            <BoButton Variant="ghost" Size="sm" OnClick="@(() => RemoveLine(line))" Disabled="Content.Lines.Count <= 2">✕</BoButton>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div>
+            <BoButton Variant="ghost" Size="sm" OnClick="AddLine">+ Add line</BoButton>
+        </div>
+
+        <div style="display:flex; gap:24px; justify-content:flex-end; font-weight:700;">
+            <span>Debit: @Content.TotalDebit.ToString("#,##0.00")</span>
+            <span>Credit: @Content.TotalCredit.ToString("#,##0.00")</span>
+            <span style="color:@(Content.IsBalanced ? "var(--bo-success, #16a34a)" : "var(--bo-danger, #dc2626)");">@(Content.IsBalanced ? "Balanced" : "Not balanced")</span>
+        </div>
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy" Disabled="!Content.IsBalanced">Post entry</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public JournalEntryFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private List<AccountDto> _accounts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = (await Mediator.Send(new GetAccountsQuery(PostableOnly: true, ActiveOnly: true)))
+                .OrderBy(a => a.Code).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load accounts: {ex.Message}"; }
+    }
+
+    private void AddLine() => Content.Lines.Add(new JournalLineRow());
+    private void RemoveLine(JournalLineRow row) { if (Content.Lines.Count > 2) Content.Lines.Remove(row); }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (Content.Lines.Any(l => l.AccountId is null)) { _error = "Every line needs an account."; return; }
+        if (Content.Lines.Any(l => (l.Debit > 0m) == (l.Credit > 0m))) { _error = "Each line needs exactly one of debit or credit."; return; }
+        if (!Content.IsBalanced) { _error = "The entry must balance (total debit = total credit)."; return; }
+
+        _busy = true;
+        try
+        {
+            var lines = Content.Lines
+                .Select(l => new JournalLineInput(l.AccountId!.Value, l.Debit, l.Credit, l.Narration))
+                .ToList();
+            await Mediator.Send(new CreateJournalEntryCommand(
+                Content.EntryDate, VoucherType.Journal,
+                string.IsNullOrWhiteSpace(Content.Reference) ? null : Content.Reference.Trim(),
+                string.IsNullOrWhiteSpace(Content.Narration) ? null : Content.Narration.Trim(),
+                lines, PostImmediately: true));
+            Content.Saved = true;
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

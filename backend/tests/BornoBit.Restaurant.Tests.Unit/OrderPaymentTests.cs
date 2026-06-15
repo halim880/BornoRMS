@@ -112,6 +112,24 @@ public class OrderPaymentTests
     }
 
     [Fact]
+    public void ClearAccounted_reopens_a_paid_order_for_reaccounting()
+    {
+        var order = NewOrder();
+        order.AddPayment(PaymentMethod.Cash, null, 200m, 200m, null, "cashier");
+        Assert.True(order.IsPaid);
+
+        order.MarkAccounted();
+        Assert.NotNull(order.AccountedAtUtc);
+
+        // A post-import refund/void reopens the invoice so the next cash import re-books the corrected net.
+        order.ClearAccounted();
+        Assert.Null(order.AccountedAtUtc);
+
+        order.MarkAccounted(); // accountable again — no "already accounted" throw
+        Assert.NotNull(order.AccountedAtUtc);
+    }
+
+    [Fact]
     public void Discount_percent_uses_decimal_rounding()
     {
         var order = NewOrder(unitPrice: 33.33m, qty: 3); // subtotal 99.99

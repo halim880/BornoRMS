@@ -32,6 +32,8 @@ public class CreateCategoryCommandHandler : IRequestHandler<CreateCategoryComman
 
         var category = FinanceCategory.Create(name, request.Type);
         _db.FinanceCategories.Add(category);
+        // Create + map its GL income/expense account now so it shows in the chart immediately.
+        await Posting.ChartOfAccountsMapper.EnsureCategoryGlAsync(_db, category, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return category.Id;
     }

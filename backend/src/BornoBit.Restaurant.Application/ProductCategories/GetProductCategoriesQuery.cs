@@ -20,7 +20,7 @@ public class GetProductCategoriesQueryHandler : IRequestHandler<GetProductCatego
     {
         return await _db.ProductCategories
             .OrderBy(c => c.DisplayOrder).ThenBy(c => c.Name)
-            .Select(c => new ProductCategoryDto(c.Id, c.Name, c.Description, c.DisplayOrder, c.IsActive))
+            .Select(c => new ProductCategoryDto(c.Id, c.Name, c.Description, c.DisplayOrder, c.IsActive, c.TaxRatePercent))
             .ToListAsync(cancellationToken);
     }
 }

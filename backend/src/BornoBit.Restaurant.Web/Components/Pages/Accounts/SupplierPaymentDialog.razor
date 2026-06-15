@@ -1,0 +1,88 @@
+@using BornoBit.Restaurant.Application.Accounting.CashAccounts
+@using BornoBit.Restaurant.Application.Inventory.Payables
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="font-size:var(--bo-font-sm); color:var(--bo-text-muted);">
+            Paying <strong>@Content.SupplierName</strong>. Outstanding: <strong>@Content.Outstanding.ToString("#,##0.00")</strong>
+        </div>
+
+        <div style="display:flex; gap:12px;">
+            <BoNumberInput T="decimal" @bind-Value="Content.Amount" Label="Amount" Min="0" Step="0.01" Style="width:200px;" />
+            <BoDatePicker DateTimeValue="Content.PaidOn" DateTimeValueChanged="OnDateChanged" Label="Date" Required="true" />
+        </div>
+
+        <BoSelect TOption="CashAccountDto"
+                  Items="@_accounts"
+                  OptionValue="@(a => a.Id.ToString())"
+                  OptionText="@(a => a.Name)"
+                  SelectedOption="@_selectedAccount"
+                  SelectedOptionChanged="@(a => Content.CashAccountId = a?.Id)"
+                  Label="Pay from account" Required="true" Placeholder="(select an account)" Style="width:100%;" />
+
+        <BoInput @bind-Value="Content.Reference" Label="Reference" Style="width:100%;" Maxlength="80" />
+        <BoTextArea @bind-Value="Content.Notes" Label="Notes" Style="width:100%;" Maxlength="1000" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Record payment</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public SupplierPaymentFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+    private List<CashAccountDto> _accounts = new();
+
+    private CashAccountDto? _selectedAccount => _accounts.FirstOrDefault(a => a.Id == Content.CashAccountId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = (await Mediator.Send(new GetCashAccountsQuery(ActiveOnly: true))).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load accounts: {ex.Message}"; }
+    }
+
+    private void OnDateChanged(DateTime? d)
+    {
+        if (d.HasValue) Content.PaidOn = d.Value.Date;
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (Content.CashAccountId is null) { _error = "Cash account is required."; return; }
+        if (Content.Amount <= 0m) { _error = "Amount must be greater than zero."; return; }
+
+        _busy = true;
+        try
+        {
+            var reference = string.IsNullOrWhiteSpace(Content.Reference) ? null : Content.Reference.Trim();
+            var notes = string.IsNullOrWhiteSpace(Content.Notes) ? null : Content.Notes.Trim();
+
+            await Mediator.Send(new RecordSupplierPaymentCommand(
+                Content.SupplierId, Content.CashAccountId.Value, Content.PaidOn, Content.Amount, reference, notes));
+            Content.Saved = true;
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

@@ -21,9 +21,12 @@ public record ProductDto(
     bool IsActive,
     IReadOnlyList<ProductVariantDto> Variants,
     Guid? KitchenStationId = null,
-    BornoBit.Restaurant.Domain.Catalog.InventoryMethod InventoryMethod = BornoBit.Restaurant.Domain.Catalog.InventoryMethod.None)
+    BornoBit.Restaurant.Domain.Catalog.InventoryMethod InventoryMethod = BornoBit.Restaurant.Domain.Catalog.InventoryMethod.None,
+    bool IsCombo = false,
+    int OptionGroupCount = 0)
 {
     public bool HasVariants => Variants.Count > 0;
+    public bool HasOptions => OptionGroupCount > 0;
 
     /// <summary>Lowest sellable price — the cheapest variant, or the base price when no variants.</summary>
     public decimal MinPrice => HasVariants ? Variants.Min(v => v.Price) : Price;

@@ -14,7 +14,13 @@ public class CashAccount : AuditableEntity
     public decimal OpeningBalance { get; private set; }
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>The GL asset account this cash account posts to (set by the GL seeder / auto-create). Null = unmapped.</summary>
+    public Guid? GlAccountId { get; private set; }
+
     private CashAccount() { }
+
+    /// <summary>Links this cash account to its GL asset account (idempotent map step).</summary>
+    public void MapToGlAccount(Guid glAccountId) => GlAccountId = glAccountId;
 
     public static CashAccount Create(string name, CashAccountKind kind, decimal openingBalance = 0m)
     {

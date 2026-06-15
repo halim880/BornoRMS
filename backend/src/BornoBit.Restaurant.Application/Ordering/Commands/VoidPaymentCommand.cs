@@ -1,6 +1,8 @@
 using BornoBit.Restaurant.Application.Accounting.Audit;
+using BornoBit.Restaurant.Application.Accounting.Transactions;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Common.Security;
+using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Identity;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -9,6 +11,7 @@ using BornoBit.Restaurant.Shared.Identity;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BornoBit.Restaurant.Application.Ordering.Commands;
 
@@ -35,12 +38,20 @@ public class VoidPaymentCommandHandler : IRequestHandler<VoidPaymentCommand, Set
     private readonly IAppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly IManagerApprovalService _approvals;
+    private readonly IStockConsumptionService _consumption;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<VoidPaymentCommandHandler> _logger;
 
-    public VoidPaymentCommandHandler(IAppDbContext db, ICurrentUser currentUser, IManagerApprovalService approvals)
+    public VoidPaymentCommandHandler(
+        IAppDbContext db, ICurrentUser currentUser, IManagerApprovalService approvals,
+        IStockConsumptionService consumption, TimeProvider timeProvider, ILogger<VoidPaymentCommandHandler> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _approvals = approvals;
+        _consumption = consumption;
+        _timeProvider = timeProvider;
+        _logger = logger;
     }
 
     public async Task<SettlementResultDto> Handle(VoidPaymentCommand request, CancellationToken cancellationToken)
@@ -66,6 +77,10 @@ public class VoidPaymentCommandHandler : IRequestHandler<VoidPaymentCommand, Set
 
         try
         {
+            // If already imported to the books, reverse the booked takings + reopen for re-accounting
+            // (snapshots the pre-void net, so this must run before VoidPayment mutates the ledger).
+            await OrderAccountingReversal.ReverseIfAccountedAsync(_db, order, _timeProvider, cancellationToken);
+
             order.VoidPayment(request.PaymentId, reason);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException)
@@ -83,6 +98,11 @@ public class VoidPaymentCommandHandler : IRequestHandler<VoidPaymentCommand, Set
             order.OrderNumber, amount, before, FinancialAudit.Snapshot(order), reason);
 
         await AddPaymentCommandHandler.SaveWithConcurrencyGuardAsync(_db, cancellationToken);
+
+        // Voiding the last charge drops the order back to unpaid → restore the stock it consumed (idempotent).
+        if (!order.IsPaid && order.AmountPaid <= 0m && order.StockSyncStatus == StockSyncStatus.Synced)
+            await OrderStockSync.TryReverseAsync(_db, _consumption, order, _logger, cancellationToken);
+
         return order.ToSettlementResult();
     }
 }

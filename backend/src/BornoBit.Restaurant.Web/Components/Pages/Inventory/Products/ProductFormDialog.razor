@@ -59,7 +59,7 @@
                       SelectedOptionChanged="@(o => Content.InventoryMethod = o?.Value ?? InventoryMethod.None)"
                       Label="Stock impact" Style="flex:1;" />
 
-            @if (Content.InventoryMethod == InventoryMethod.DirectStock)
+            @if (Content.InventoryMethod == InventoryMethod.DirectStock && Content.Variants.Count == 0)
             {
                 <BoSelect TOption="InventoryItemDto"
                           Items="@_stockItems"
@@ -70,6 +70,10 @@
                           Label="Stock item" Placeholder="Select item" Style="flex:1;" />
             }
         </div>
+        @if (Content.InventoryMethod == InventoryMethod.DirectStock && Content.Variants.Count > 0)
+        {
+            <div class="bo-cmp-field-hint">Each variant deducts its own stock item — pick one per size below.</div>
+        }
         @if (Content.InventoryMethod == InventoryMethod.RecipeBased)
         {
             <div class="bo-cmp-field-hint">Define the ingredient list in Stock → Recipes.</div>
@@ -86,6 +90,16 @@
                 <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
                     <BoInput @bind-Value="row.Name" Placeholder="e.g. Half" Style="flex:1;" Maxlength="100" />
                     <BoNumeric T="decimal" @bind-Value="row.Price" Style="width:130px;" Min="0" Step="0.01" />
+                    @if (Content.InventoryMethod == InventoryMethod.DirectStock)
+                    {
+                        <BoSelect TOption="InventoryItemDto"
+                                  Items="@_stockItems"
+                                  OptionValue="@(i => i.Id.ToString())"
+                                  OptionText="@(i => $"{i.Name} ({i.UnitCode})")"
+                                  SelectedOption="@_stockItems.FirstOrDefault(i => i.Id == row.LinkedInventoryItemId)"
+                                  SelectedOptionChanged="@(i => row.LinkedInventoryItemId = i?.Id)"
+                                  Placeholder="Stock item" Style="width:190px;" />
+                    }
                     <button type="button" class="bo-btn bo-btn-ghost" title="Remove variant"
                             @onclick="@(() => Content.Variants.Remove(row))">✕</button>
                 </div>
@@ -156,9 +170,15 @@
             _stations = (await Mediator.Send(new GetKitchenStationsQuery())).ToList();
             _stockItems = (await Mediator.Send(new GetInventoryItemsQuery(PageSize: 500, IncludeInactive: false))).Items.ToList();
 
-            // Preselect the linked item when editing an existing DirectStock product.
-            if (Content.InventoryMethod == InventoryMethod.DirectStock && Content.LinkedInventoryItemId is null && Content.Id is { } pid)
-                Content.LinkedInventoryItemId = _stockItems.FirstOrDefault(i => i.ProductId == pid)?.Id;
+            // Preselect the linked item(s) when editing an existing DirectStock product.
+            if (Content.InventoryMethod == InventoryMethod.DirectStock && Content.Id is { } pid)
+            {
+                if (Content.Variants.Count == 0)
+                    Content.LinkedInventoryItemId ??= _stockItems.FirstOrDefault(i => i.ProductId == pid && i.VariantId == null)?.Id;
+                else
+                    foreach (var row in Content.Variants)
+                        row.LinkedInventoryItemId ??= _stockItems.FirstOrDefault(i => i.ProductId == pid && i.VariantId == row.Id)?.Id;
+            }
         }
         catch (Exception ex) { _error = $"Failed to load categories: {ex.Message}"; }
     }
@@ -228,10 +248,13 @@
                 await Mediator.Send(new AssignProductStationCommand(productId, Content.KitchenStationId));
 
                 // RecipeBased keeps whatever the recipe editor set; here we only need to persist
-                // None / DirectStock (DirectStock also links the chosen stock item to this product).
+                // None / DirectStock (DirectStock links each variant — or the product — to its stock item).
                 if (Content.InventoryMethod != InventoryMethod.RecipeBased)
+                {
+                    var links = await BuildStockLinksAsync(productId);
                     await Mediator.Send(new SetProductInventoryMethodCommand(
-                        productId, Content.InventoryMethod, Content.LinkedInventoryItemId));
+                        productId, Content.InventoryMethod, links));
+                }
             }
 
             Dialog.Close(Content);
@@ -244,6 +267,35 @@
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _busy = false; }
+    }
+
+    /// <summary>
+    /// Builds the per-variant (or product-level) DirectStock links to send to SetProductInventoryMethodCommand.
+    /// Null for non-DirectStock (the command then just unlinks + sets the flag). New variants only get their ids
+    /// server-side, so for a variant product we re-read the saved product and map form rows by name.
+    /// </summary>
+    private async Task<List<VariantStockLinkInput>?> BuildStockLinksAsync(Guid productId)
+    {
+        if (Content.InventoryMethod != InventoryMethod.DirectStock) return null;
+
+        if (Content.Variants.Count == 0)
+            return Content.LinkedInventoryItemId is { } itemId
+                ? new List<VariantStockLinkInput> { new(null, itemId) }
+                : new List<VariantStockLinkInput>();
+
+        var saved = (await Mediator.Send(new GetProductsQuery())).FirstOrDefault(p => p.Id == productId);
+        var idByName = new Dictionary<string, Guid>();
+        foreach (var v in saved?.Variants ?? Array.Empty<ProductVariantDto>())
+            idByName[v.Name.Trim()] = v.Id; // last wins on duplicate names (harmless)
+
+        var links = new List<VariantStockLinkInput>();
+        foreach (var row in Content.Variants)
+        {
+            if (row.LinkedInventoryItemId is not { } itemId) continue; // unlinked variant → no deduction
+            if (idByName.TryGetValue(row.Name.Trim(), out var vid))
+                links.Add(new VariantStockLinkInput(vid, itemId));
+        }
+        return links;
     }
 
     private async Task CancelAsync() => Dialog.Cancel();

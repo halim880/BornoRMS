@@ -53,7 +53,8 @@ public partial class ProductCategories : ComponentBase
             Id = c.Id,
             Name = c.Name,
             Description = c.Description,
-            DisplayOrder = c.DisplayOrder
+            DisplayOrder = c.DisplayOrder,
+            TaxRatePercent = c.TaxRatePercent
         };
         var result = await DialogService.ShowAsync<ProductCategoryFormDialog, ProductCategoryFormModel>(model, new BoDialogOptions
         {

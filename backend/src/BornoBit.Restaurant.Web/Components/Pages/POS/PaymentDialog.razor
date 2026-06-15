@@ -355,6 +355,8 @@
 
             var result = await Sender.Send(new AddPaymentCommand(Content, inputs));
 
+            foreach (var w in result.Warnings) ToastService.ShowWarning(w);
+
             if (result.PaymentStatus == PaymentStatus.Paid)
             {
                 ToastService.ShowSuccess($"Paid in full · change {result.Change:0.##} Tk.");

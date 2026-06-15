@@ -208,7 +208,9 @@ public class AppMenuSeeder
             new("Stock Dashboard", Url: "/stock/dashboard", Icon: "DataPie", RequiredRole: Roles.Manager),
             new("Low Stock", Url: "/stock/low", Icon: "Alert", RequiredRole: Roles.Manager),
             new("Stock Items", Url: "/stock/items", Icon: "BoxMultiple", RequiredRole: Roles.Manager),
+            new("Product SKUs", Url: "/stock/skus", Icon: "Tag", RequiredRole: Roles.Manager),
             new("Recipes", Url: "/stock/recipes", Icon: "BookOpenMicroscope", RequiredRole: Roles.Manager),
+            new("Purchase Orders", Url: "/stock/po", Icon: "DocumentBulletList", RequiredRole: Roles.Manager),
             new("Goods Receipts", Url: "/stock/grn", Icon: "ReceiptMoney", RequiredRole: Roles.Manager),
             new("Wastage", Url: "/stock/wastage", Icon: "Delete", RequiredRole: Roles.Manager),
             new("Stock History", Url: "/stock/history", Icon: "History", RequiredRole: Roles.Manager),
@@ -225,12 +227,24 @@ public class AppMenuSeeder
         new("Accounts", Icon: "Money", RequiredRole: Roles.Admin, Children: new()
         {
             new("Transactions",  Url: "/accounts/transactions",  Icon: "ReceiptMoney", RequiredRole: Roles.Admin),
+            new("Supplier Payables", Url: "/accounts/payables",  Icon: "PeopleTeam",   RequiredRole: Roles.Admin),
             new("Cash Accounts", Url: "/accounts/cash-accounts",  Icon: "Wallet",       RequiredRole: Roles.Admin),
             new("Categories",    Url: "/accounts/categories",     Icon: "FolderList",   RequiredRole: Roles.Admin),
             new("Reporting", Icon: "ChartMultiple", RequiredRole: Roles.Admin, Children: new()
             {
-                new("Cash Book",      Url: "/accounts/reports/cash-book", Icon: "BookOpenMicroscope", RequiredRole: Roles.Admin),
-                new("Account Ledger", Url: "/accounts/reports/ledger",    Icon: "DocumentTable",      RequiredRole: Roles.Admin),
+                new("Profit & Loss",  Url: "/accounts/reports/profit-loss", Icon: "ChartMultiple",      RequiredRole: Roles.Admin),
+                new("Day-End Close",  Url: "/accounts/reports/day-end",     Icon: "CalculatorMultiple", RequiredRole: Roles.Admin),
+                new("VAT Report",     Url: "/accounts/reports/vat",         Icon: "ReceiptMoney",       RequiredRole: Roles.Admin),
+                new("Cash Book",      Url: "/accounts/reports/cash-book",   Icon: "BookOpenMicroscope", RequiredRole: Roles.Admin),
+                new("Account Ledger", Url: "/accounts/reports/ledger",      Icon: "DocumentTable",      RequiredRole: Roles.Admin),
+            }),
+            new("General Ledger", Icon: "BookOpenMicroscope", RequiredRole: Roles.Admin, Children: new()
+            {
+                new("Chart of Accounts", Url: "/accounts/gl/chart",         Icon: "AppsList",      RequiredRole: Roles.Admin),
+                new("Journal",           Url: "/accounts/gl/journal",       Icon: "DocumentBulletList", RequiredRole: Roles.Admin),
+                new("Trial Balance",     Url: "/accounts/gl/trial-balance", Icon: "DocumentTable", RequiredRole: Roles.Admin),
+                new("Profit & Loss (GL)",Url: "/accounts/gl/profit-loss",   Icon: "ChartMultiple", RequiredRole: Roles.Admin),
+                new("Balance Sheet",     Url: "/accounts/gl/balance-sheet", Icon: "DataPie",       RequiredRole: Roles.Admin),
             }),
         }),
         new("Administration", Icon: "Settings", RequiredRole: Roles.Admin, Children: new()

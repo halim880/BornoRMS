@@ -12,7 +12,13 @@ public class FinanceCategory : AuditableEntity
     public TransactionType Type { get; private set; }
     public bool IsActive { get; private set; } = true;
 
+    /// <summary>The GL income/expense account this category posts to (set by the GL seeder / auto-create). Null = unmapped.</summary>
+    public Guid? GlAccountId { get; private set; }
+
     private FinanceCategory() { }
+
+    /// <summary>Links this category to its GL income/expense account (idempotent map step).</summary>
+    public void MapToGlAccount(Guid glAccountId) => GlAccountId = glAccountId;
 
     public static FinanceCategory Create(string name, TransactionType type)
     {
