@@ -96,6 +96,7 @@ using (var scope = app.Services.CreateScope())
 
         await scope.ServiceProvider.GetRequiredService<RoleSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<SuperAdminSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<StaffUserSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<MenuSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<TableSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<KitchenStationSeeder>().SeedAsync();

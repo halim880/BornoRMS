@@ -58,6 +58,7 @@ public static class DependencyInjection
 
         services.AddScoped<RoleSeeder>();
         services.AddScoped<SuperAdminSeeder>();
+        services.AddScoped<StaffUserSeeder>();
         services.AddScoped<MenuSeeder>();
         services.AddScoped<TableSeeder>();
         services.AddScoped<KitchenStationSeeder>();
