@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Store.Purchases;
+using BornoBit.Restaurant.Domain.Store;
 using BornoBit.Restaurant.Web.Components.BornoUi.Toast;
 using MediatR;
 using Microsoft.AspNetCore.Components;
@@ -41,4 +42,24 @@ public partial class StoreGoodsReceipts : ComponentBase
         catch (Exception ex) { ToastService.ShowError(ex.Message); }
         finally { _posting = false; }
     }
+
+    private async Task VoidAsync(StoreGoodsReceiptListItemDto g)
+    {
+        _posting = true;
+        try
+        {
+            await Mediator.Send(new VoidStoreGoodsReceiptCommand(g.Id, null));
+            ToastService.ShowSuccess($"{g.GrnNumber} voided — stock reversed.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _posting = false; }
+    }
+
+    private static string StatusTone(StoreGoodsReceiptStatus status) => status switch
+    {
+        StoreGoodsReceiptStatus.Posted => "success",
+        StoreGoodsReceiptStatus.Voided => "neutral",
+        _ => "warning"
+    };
 }

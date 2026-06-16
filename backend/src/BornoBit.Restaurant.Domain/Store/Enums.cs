@@ -19,16 +19,18 @@ public enum StoreMovementType
     AdjustmentOut = 6
 }
 
-/// <summary>Lifecycle of a store goods receipt. Only a Posted receipt has moved stock.</summary>
+/// <summary>Lifecycle of a store goods receipt. Only a Posted receipt has moved stock; Voided reverses a posted receipt.</summary>
 public enum StoreGoodsReceiptStatus
 {
     Draft = 1,
-    Posted = 2
+    Posted = 2,
+    Voided = 3
 }
 
-/// <summary>Lifecycle of a store issue. Only a Posted issue has moved stock out.</summary>
+/// <summary>Lifecycle of a store issue. Only a Posted issue has moved stock out; Voided reverses a posted issue.</summary>
 public enum StoreIssueStatus
 {
     Draft = 1,
-    Posted = 2
+    Posted = 2,
+    Voided = 3
 }

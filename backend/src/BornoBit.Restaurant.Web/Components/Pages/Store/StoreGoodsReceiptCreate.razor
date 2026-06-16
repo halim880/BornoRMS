@@ -1,19 +1,21 @@
 @page "/store/grn/new"
+@page "/store/grn/{Id:guid}/edit"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
 @using BornoBit.Restaurant.Application.Store.Items
 @using BornoBit.Restaurant.Application.Store.Purchases
 @using BornoBit.Restaurant.Application.Store.Suppliers
 @using BornoBit.Restaurant.Application.Store.Units
+@using BornoBit.Restaurant.Domain.Store
 @using FluentValidation
 @using MediatR
 @inject ISender Mediator
 @inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
 @inject NavigationManager Nav
 
-<PageTitle>New Store Goods Receipt · BornoBit.Restaurant</PageTitle>
+<PageTitle>@(_isEdit ? "Edit" : "New") Store Goods Receipt · BornoBit.Restaurant</PageTitle>
 
 <div class="bo-page">
-    <PageHeader Title="New Store Goods Receipt"
+    <PageHeader Title="@(_isEdit ? "Edit Store Goods Receipt" : "New Store Goods Receipt")"
                 Description="Record stock received from a supplier into the warehouse. Saved as a draft — post it from the list to raise stock." />
 
     @if (_loading)
@@ -108,7 +110,7 @@
                 <strong>Total: @_lines.Sum(l => l.Qty * l.UnitCost).ToString("0.00") Tk</strong>
                 <div style="display:flex; gap:8px;">
                     <a class="bo-btn bo-btn-ghost" href="/store/grn">Cancel</a>
-                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Save draft</BoButton>
+                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(_isEdit ? "Save changes" : "Save draft")</BoButton>
                 </div>
             </div>
         </div>
@@ -116,6 +118,9 @@
 </div>
 
 @code {
+    [Parameter] public Guid? Id { get; set; }
+    private bool _isEdit => Id.HasValue;
+
     private bool _loading = true;
     private bool _busy;
     private string? _loadError;
@@ -147,6 +152,22 @@
             _suppliers = (await Mediator.Send(new GetStoreSuppliersQuery())).Where(s => s.IsActive).ToList();
             _items = (await Mediator.Send(new GetStoreItemsQuery(PageSize: 200, IncludeInactive: false))).Items.ToList();
             _units = (await Mediator.Send(new GetStoreUnitsQuery())).Where(u => u.IsActive).ToList();
+
+            if (_isEdit)
+            {
+                var grn = await Mediator.Send(new GetStoreGoodsReceiptQuery(Id!.Value));
+                if (grn.Status != StoreGoodsReceiptStatus.Draft)
+                {
+                    _loadError = $"Goods receipt '{grn.GrnNumber}' is {grn.Status} and can no longer be edited.";
+                    return;
+                }
+                _supplierId = grn.StoreSupplierId;
+                _selectedSupplier = _suppliers.FirstOrDefault(s => s.Id == grn.StoreSupplierId);
+                _invoiceNo = grn.InvoiceNo;
+                _notes = grn.Notes;
+                foreach (var l in grn.Lines)
+                    _lines.Add(new LineRow { ItemId = l.StoreItemId, Qty = l.Qty, UnitId = l.UnitId, UnitCost = l.UnitCost });
+            }
         }
         catch (Exception ex) { _loadError = $"Failed to load: {ex.Message}"; }
         finally { _loading = false; }
@@ -182,13 +203,18 @@
         try
         {
             var inputs = valid.Select(l => new StoreGoodsReceiptLineInput(l.ItemId, l.Qty, l.UnitId, l.UnitCost)).ToList();
-            await Mediator.Send(new CreateStoreGoodsReceiptCommand(
-                _supplierId,
-                string.IsNullOrWhiteSpace(_invoiceNo) ? null : _invoiceNo.Trim(),
-                null,
-                string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
-                inputs));
-            ToastService.ShowSuccess("Draft goods receipt created. Post it to raise stock.");
+            var invoice = string.IsNullOrWhiteSpace(_invoiceNo) ? null : _invoiceNo.Trim();
+            var notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim();
+            if (_isEdit)
+            {
+                await Mediator.Send(new UpdateStoreGoodsReceiptCommand(Id!.Value, _supplierId, invoice, null, notes, inputs));
+                ToastService.ShowSuccess("Goods receipt updated.");
+            }
+            else
+            {
+                await Mediator.Send(new CreateStoreGoodsReceiptCommand(_supplierId, invoice, null, notes, inputs));
+                ToastService.ShowSuccess("Draft goods receipt created. Post it to raise stock.");
+            }
             Nav.NavigateTo("/store/grn");
         }
         catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }

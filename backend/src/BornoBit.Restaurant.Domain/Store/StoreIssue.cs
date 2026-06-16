@@ -41,6 +41,24 @@ public class StoreIssue : AuditableEntity
         };
     }
 
+    /// <summary>Edit the header fields of a draft issue.</summary>
+    public void UpdateHeader(string destination, DateTime issuedAtUtc, string? notes)
+    {
+        if (Status != StoreIssueStatus.Draft) throw new InvalidOperationException("Cannot edit a posted or voided issue.");
+        if (string.IsNullOrWhiteSpace(destination)) throw new ArgumentException("Destination is required.", nameof(destination));
+
+        Destination = destination.Trim();
+        IssuedAtUtc = issuedAtUtc;
+        Notes = Trim(notes);
+    }
+
+    /// <summary>Remove all lines from a draft issue (EF cascade-deletes the orphaned rows).</summary>
+    public void ClearLines()
+    {
+        if (Status != StoreIssueStatus.Draft) throw new InvalidOperationException("Cannot modify a posted or voided issue.");
+        _lines.Clear();
+    }
+
     public StoreIssueLine AddLine(Guid storeItemId, string itemName, decimal qty, Guid unitId, decimal qtyBase)
     {
         if (Status != StoreIssueStatus.Draft) throw new InvalidOperationException("Cannot modify a posted issue.");
@@ -69,6 +87,13 @@ public class StoreIssue : AuditableEntity
         if (_lines.Count == 0) throw new InvalidOperationException("Cannot post an issue with no lines.");
         Status = StoreIssueStatus.Posted;
         PostedAtUtc = postedAtUtc;
+    }
+
+    /// <summary>Void a posted issue. The caller must have already restored the stock effects of each line.</summary>
+    public void MarkVoided(DateTime voidedAtUtc)
+    {
+        if (Status != StoreIssueStatus.Posted) throw new InvalidOperationException("Only a posted issue can be voided.");
+        Status = StoreIssueStatus.Voided;
     }
 
     private static string? Trim(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

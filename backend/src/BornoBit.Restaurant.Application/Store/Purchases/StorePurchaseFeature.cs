@@ -261,3 +261,150 @@ public class PostStoreGoodsReceiptCommandHandler : IRequestHandler<PostStoreGood
         return Unit.Value;
     }
 }
+
+// ---- Update draft ----
+
+public record UpdateStoreGoodsReceiptCommand(
+    Guid Id,
+    Guid SupplierId,
+    string? InvoiceNo,
+    DateTime? ReceivedAtUtc,
+    string? Notes,
+    IReadOnlyList<StoreGoodsReceiptLineInput> Lines
+) : IRequest<Unit>;
+
+public class UpdateStoreGoodsReceiptCommandValidator : AbstractValidator<UpdateStoreGoodsReceiptCommand>
+{
+    public UpdateStoreGoodsReceiptCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.SupplierId).NotEmpty();
+        RuleFor(x => x.InvoiceNo).MaximumLength(80);
+        RuleFor(x => x.Notes).MaximumLength(1000);
+        RuleFor(x => x.Lines).NotEmpty().WithMessage("At least one line is required.");
+        RuleForEach(x => x.Lines).ChildRules(line =>
+        {
+            line.RuleFor(l => l.ItemId).NotEmpty();
+            line.RuleFor(l => l.UnitId).NotEmpty();
+            line.RuleFor(l => l.Qty).GreaterThan(0);
+            line.RuleFor(l => l.UnitCost).GreaterThanOrEqualTo(0);
+        });
+    }
+}
+
+public class UpdateStoreGoodsReceiptCommandHandler : IRequestHandler<UpdateStoreGoodsReceiptCommand, Unit>
+{
+    private readonly IAppDbContext _db;
+    public UpdateStoreGoodsReceiptCommandHandler(IAppDbContext db) => _db = db;
+
+    public async Task<Unit> Handle(UpdateStoreGoodsReceiptCommand request, CancellationToken cancellationToken)
+    {
+        var grn = await _db.StoreGoodsReceipts.Include(g => g.Lines)
+            .FirstOrDefaultAsync(g => g.Id == request.Id, cancellationToken)
+            ?? throw new NotFoundException($"Store goods receipt {request.Id} not found.");
+
+        if (grn.Status != StoreGoodsReceiptStatus.Draft)
+            throw new ValidationException($"Only a draft goods receipt can be edited; '{grn.GrnNumber}' is {grn.Status}.");
+
+        if (!await _db.StoreSuppliers.AnyAsync(s => s.Id == request.SupplierId, cancellationToken))
+            throw new NotFoundException($"Store supplier {request.SupplierId} not found.");
+
+        var itemIds = request.Lines.Select(l => l.ItemId).Distinct().ToList();
+        var items = await _db.StoreItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
+
+        var unitIds = request.Lines.Select(l => l.UnitId).Distinct().ToList();
+        var units = await _db.StoreUnits.Where(u => unitIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, cancellationToken);
+
+        var baseUnitIds = items.Values.Select(i => i.BaseUnitId).Distinct().ToList();
+        var baseUnits = await _db.StoreUnits.Where(u => baseUnitIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, cancellationToken);
+
+        grn.UpdateHeader(request.SupplierId, request.ReceivedAtUtc ?? grn.ReceivedAtUtc, request.InvoiceNo, request.Notes);
+        grn.ClearLines();
+
+        foreach (var line in request.Lines)
+        {
+            if (!items.TryGetValue(line.ItemId, out var item))
+                throw new NotFoundException($"Store item {line.ItemId} not found.");
+            if (!units.TryGetValue(line.UnitId, out var unit))
+                throw new NotFoundException($"Store unit {line.UnitId} not found.");
+
+            if (baseUnits.TryGetValue(item.BaseUnitId, out var baseUnit) && baseUnit.Dimension != unit.Dimension)
+                throw new ValidationException($"Unit '{unit.Code}' is not compatible with '{item.Name}' (base unit '{baseUnit.Code}').");
+
+            var qtyBase = unit.ToBase(line.Qty);
+            grn.AddLine(item.Id, item.Name, line.Qty, unit.Id, qtyBase, line.UnitCost);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
+    }
+}
+
+// ---- Void (reverse a posted receipt) ----
+
+public record VoidStoreGoodsReceiptCommand(Guid Id, string? Reason) : IRequest<Unit>;
+
+public class VoidStoreGoodsReceiptCommandValidator : AbstractValidator<VoidStoreGoodsReceiptCommand>
+{
+    public VoidStoreGoodsReceiptCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.Reason).MaximumLength(500);
+    }
+}
+
+public class VoidStoreGoodsReceiptCommandHandler : IRequestHandler<VoidStoreGoodsReceiptCommand, Unit>
+{
+    private readonly IAppDbContext _db;
+    private readonly TimeProvider _timeProvider;
+
+    public VoidStoreGoodsReceiptCommandHandler(IAppDbContext db, TimeProvider timeProvider)
+    {
+        _db = db;
+        _timeProvider = timeProvider;
+    }
+
+    public async Task<Unit> Handle(VoidStoreGoodsReceiptCommand request, CancellationToken cancellationToken)
+    {
+        var grn = await _db.StoreGoodsReceipts.Include(g => g.Lines)
+            .FirstOrDefaultAsync(g => g.Id == request.Id, cancellationToken)
+            ?? throw new NotFoundException($"Store goods receipt {request.Id} not found.");
+
+        if (grn.Status != StoreGoodsReceiptStatus.Posted)
+            throw new ValidationException($"Only a posted goods receipt can be voided; '{grn.GrnNumber}' is {grn.Status}.");
+
+        var itemIds = grn.Lines.Select(l => l.StoreItemId).Distinct().ToList();
+        var items = await _db.StoreItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
+
+        // Pre-check: the received stock must still be on hand to reverse cleanly.
+        foreach (var line in grn.Lines)
+        {
+            if (!items.TryGetValue(line.StoreItemId, out var item))
+                throw new NotFoundException($"Store item {line.StoreItemId} not found.");
+            if (line.QtyBase > item.QtyOnHand)
+                throw new ValidationException(
+                    $"Cannot void '{grn.GrnNumber}': {line.QtyBase} of '{item.Name}' was received but only {item.QtyOnHand} is on hand (already issued/consumed).");
+        }
+
+        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? $"Void GRN {grn.GrnNumber}" : request.Reason.Trim();
+
+        foreach (var line in grn.Lines)
+        {
+            var item = items[line.StoreItemId];
+            // Reverse the quantity. Note: moving-average AvgCost is not recomputed (pre-receipt cost is not stored).
+            item.WriteOff(line.QtyBase);
+
+            _db.StoreStockMovements.Add(StoreStockMovement.Create(
+                item.Id, StoreMovementType.AdjustmentOut,
+                qtyBase: -line.QtyBase, occurredAtUtc: nowUtc,
+                unitCost: line.UnitCost,
+                reason: reason,
+                referenceType: nameof(StoreGoodsReceipt), referenceId: grn.Id));
+        }
+
+        grn.MarkVoided(nowUtc);
+        await _db.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
+    }
+}

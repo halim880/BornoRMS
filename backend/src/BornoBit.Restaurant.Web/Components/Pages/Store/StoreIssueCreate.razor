@@ -1,18 +1,20 @@
 @page "/store/issues/new"
+@page "/store/issues/{Id:guid}/edit"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
 @using BornoBit.Restaurant.Application.Store.Items
 @using BornoBit.Restaurant.Application.Store.Issues
 @using BornoBit.Restaurant.Application.Store.Units
+@using BornoBit.Restaurant.Domain.Store
 @using FluentValidation
 @using MediatR
 @inject ISender Mediator
 @inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
 @inject NavigationManager Nav
 
-<PageTitle>New Store Issue · BornoBit.Restaurant</PageTitle>
+<PageTitle>@(_isEdit ? "Edit" : "New") Store Issue · BornoBit.Restaurant</PageTitle>
 
 <div class="bo-page">
-    <PageHeader Title="New Store Issue"
+    <PageHeader Title="@(_isEdit ? "Edit Store Issue" : "New Store Issue")"
                 Description="Issue stock to a destination (e.g. Main Kitchen). Saved as a draft — post it from the list to lower stock." />
 
     @if (_loading)
@@ -98,7 +100,7 @@
             <div style="display:flex; justify-content:flex-end; align-items:center;">
                 <div style="display:flex; gap:8px;">
                     <a class="bo-btn bo-btn-ghost" href="/store/issues">Cancel</a>
-                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Save draft</BoButton>
+                    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(_isEdit ? "Save changes" : "Save draft")</BoButton>
                 </div>
             </div>
         </div>
@@ -106,6 +108,9 @@
 </div>
 
 @code {
+    [Parameter] public Guid? Id { get; set; }
+    private bool _isEdit => Id.HasValue;
+
     private bool _loading = true;
     private bool _busy;
     private string? _loadError;
@@ -132,6 +137,20 @@
         {
             _items = (await Mediator.Send(new GetStoreItemsQuery(PageSize: 200, IncludeInactive: false))).Items.ToList();
             _units = (await Mediator.Send(new GetStoreUnitsQuery())).Where(u => u.IsActive).ToList();
+
+            if (_isEdit)
+            {
+                var issue = await Mediator.Send(new GetStoreIssueQuery(Id!.Value));
+                if (issue.Status != StoreIssueStatus.Draft)
+                {
+                    _loadError = $"Issue '{issue.IssueNumber}' is {issue.Status} and can no longer be edited.";
+                    return;
+                }
+                _destination = issue.Destination;
+                _notes = issue.Notes;
+                foreach (var l in issue.Lines)
+                    _lines.Add(new LineRow { ItemId = l.StoreItemId, Qty = l.Qty, UnitId = l.UnitId });
+            }
         }
         catch (Exception ex) { _loadError = $"Failed to load: {ex.Message}"; }
         finally { _loading = false; }
@@ -166,12 +185,17 @@
         try
         {
             var inputs = valid.Select(l => new StoreIssueLineInput(l.ItemId, l.Qty, l.UnitId)).ToList();
-            await Mediator.Send(new CreateStoreIssueCommand(
-                _destination.Trim(),
-                null,
-                string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
-                inputs));
-            ToastService.ShowSuccess("Draft issue created. Post it to lower stock.");
+            var notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim();
+            if (_isEdit)
+            {
+                await Mediator.Send(new UpdateStoreIssueCommand(Id!.Value, _destination.Trim(), null, notes, inputs));
+                ToastService.ShowSuccess("Issue updated.");
+            }
+            else
+            {
+                await Mediator.Send(new CreateStoreIssueCommand(_destination.Trim(), null, notes, inputs));
+                ToastService.ShowSuccess("Draft issue created. Post it to lower stock.");
+            }
             Nav.NavigateTo("/store/issues");
         }
         catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }

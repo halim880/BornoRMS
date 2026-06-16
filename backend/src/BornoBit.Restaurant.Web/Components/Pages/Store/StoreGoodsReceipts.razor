@@ -52,16 +52,21 @@
                             <td style="padding:10px 14px; text-align:right;">@g.LineCount</td>
                             <td style="padding:10px 14px; text-align:right;">@g.Subtotal.ToString("0.00") @g.Currency</td>
                             <td style="padding:10px 14px; text-align:center;">
-                                <BoBadge Tone="@(g.Status == StoreGoodsReceiptStatus.Posted ? "success" : "warning")">@g.Status</BoBadge>
+                                <BoBadge Tone="@StatusTone(g.Status)">@g.Status</BoBadge>
                             </td>
-                            <td style="padding:10px 14px; text-align:right;">
+                            <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
                                 @if (g.Status == StoreGoodsReceiptStatus.Draft)
                                 {
+                                    <a class="bo-btn bo-btn-ghost" href="@($"/store/grn/{g.Id}/edit")">Edit</a>
                                     <button type="button" class="bo-btn bo-btn-primary" @onclick="@(() => PostAsync(g))" disabled="@_posting">Post</button>
+                                }
+                                else if (g.Status == StoreGoodsReceiptStatus.Posted)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => VoidAsync(g))" disabled="@_posting">Void</button>
                                 }
                                 else
                                 {
-                                    <span style="color: var(--bo-text-subtle);">Posted</span>
+                                    <span style="color: var(--bo-text-subtle);">Voided</span>
                                 }
                             </td>
                         </tr>

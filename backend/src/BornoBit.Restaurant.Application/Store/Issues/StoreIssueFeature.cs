@@ -242,3 +242,136 @@ public class PostStoreIssueCommandHandler : IRequestHandler<PostStoreIssueComman
         return Unit.Value;
     }
 }
+
+// ---- Update draft ----
+
+public record UpdateStoreIssueCommand(
+    Guid Id,
+    string Destination,
+    DateTime? IssuedAtUtc,
+    string? Notes,
+    IReadOnlyList<StoreIssueLineInput> Lines
+) : IRequest<Unit>;
+
+public class UpdateStoreIssueCommandValidator : AbstractValidator<UpdateStoreIssueCommand>
+{
+    public UpdateStoreIssueCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.Destination).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Notes).MaximumLength(1000);
+        RuleFor(x => x.Lines).NotEmpty().WithMessage("At least one line is required.");
+        RuleForEach(x => x.Lines).ChildRules(line =>
+        {
+            line.RuleFor(l => l.ItemId).NotEmpty();
+            line.RuleFor(l => l.UnitId).NotEmpty();
+            line.RuleFor(l => l.Qty).GreaterThan(0);
+        });
+    }
+}
+
+public class UpdateStoreIssueCommandHandler : IRequestHandler<UpdateStoreIssueCommand, Unit>
+{
+    private readonly IAppDbContext _db;
+    public UpdateStoreIssueCommandHandler(IAppDbContext db) => _db = db;
+
+    public async Task<Unit> Handle(UpdateStoreIssueCommand request, CancellationToken cancellationToken)
+    {
+        var issue = await _db.StoreIssues.Include(g => g.Lines)
+            .FirstOrDefaultAsync(g => g.Id == request.Id, cancellationToken)
+            ?? throw new NotFoundException($"Store issue {request.Id} not found.");
+
+        if (issue.Status != StoreIssueStatus.Draft)
+            throw new ValidationException($"Only a draft issue can be edited; '{issue.IssueNumber}' is {issue.Status}.");
+
+        var itemIds = request.Lines.Select(l => l.ItemId).Distinct().ToList();
+        var items = await _db.StoreItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
+
+        var unitIds = request.Lines.Select(l => l.UnitId).Distinct().ToList();
+        var units = await _db.StoreUnits.Where(u => unitIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, cancellationToken);
+
+        var baseUnitIds = items.Values.Select(i => i.BaseUnitId).Distinct().ToList();
+        var baseUnits = await _db.StoreUnits.Where(u => baseUnitIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, cancellationToken);
+
+        issue.UpdateHeader(request.Destination, request.IssuedAtUtc ?? issue.IssuedAtUtc, request.Notes);
+        issue.ClearLines();
+
+        foreach (var line in request.Lines)
+        {
+            if (!items.TryGetValue(line.ItemId, out var item))
+                throw new NotFoundException($"Store item {line.ItemId} not found.");
+            if (!units.TryGetValue(line.UnitId, out var unit))
+                throw new NotFoundException($"Store unit {line.UnitId} not found.");
+
+            if (baseUnits.TryGetValue(item.BaseUnitId, out var baseUnit) && baseUnit.Dimension != unit.Dimension)
+                throw new ValidationException($"Unit '{unit.Code}' is not compatible with '{item.Name}' (base unit '{baseUnit.Code}').");
+
+            var qtyBase = unit.ToBase(line.Qty);
+            issue.AddLine(item.Id, item.Name, line.Qty, unit.Id, qtyBase);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
+    }
+}
+
+// ---- Void (reverse a posted issue) ----
+
+public record VoidStoreIssueCommand(Guid Id, string? Reason) : IRequest<Unit>;
+
+public class VoidStoreIssueCommandValidator : AbstractValidator<VoidStoreIssueCommand>
+{
+    public VoidStoreIssueCommandValidator()
+    {
+        RuleFor(x => x.Id).NotEmpty();
+        RuleFor(x => x.Reason).MaximumLength(500);
+    }
+}
+
+public class VoidStoreIssueCommandHandler : IRequestHandler<VoidStoreIssueCommand, Unit>
+{
+    private readonly IAppDbContext _db;
+    private readonly TimeProvider _timeProvider;
+
+    public VoidStoreIssueCommandHandler(IAppDbContext db, TimeProvider timeProvider)
+    {
+        _db = db;
+        _timeProvider = timeProvider;
+    }
+
+    public async Task<Unit> Handle(VoidStoreIssueCommand request, CancellationToken cancellationToken)
+    {
+        var issue = await _db.StoreIssues.Include(g => g.Lines)
+            .FirstOrDefaultAsync(g => g.Id == request.Id, cancellationToken)
+            ?? throw new NotFoundException($"Store issue {request.Id} not found.");
+
+        if (issue.Status != StoreIssueStatus.Posted)
+            throw new ValidationException($"Only a posted issue can be voided; '{issue.IssueNumber}' is {issue.Status}.");
+
+        var itemIds = issue.Lines.Select(l => l.StoreItemId).Distinct().ToList();
+        var items = await _db.StoreItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
+
+        var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? $"Void issue {issue.IssueNumber}" : request.Reason.Trim();
+
+        foreach (var line in issue.Lines)
+        {
+            if (!items.TryGetValue(line.StoreItemId, out var item))
+                throw new NotFoundException($"Store item {line.StoreItemId} not found.");
+
+            // Restore the issued quantity at the item's current average cost.
+            item.Receive(line.QtyBase, item.AvgCost);
+
+            _db.StoreStockMovements.Add(StoreStockMovement.Create(
+                item.Id, StoreMovementType.AdjustmentIn,
+                qtyBase: line.QtyBase, occurredAtUtc: nowUtc,
+                unitCost: item.AvgCost,
+                reason: reason,
+                referenceType: nameof(StoreIssue), referenceId: issue.Id));
+        }
+
+        issue.MarkVoided(nowUtc);
+        await _db.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
+    }
+}

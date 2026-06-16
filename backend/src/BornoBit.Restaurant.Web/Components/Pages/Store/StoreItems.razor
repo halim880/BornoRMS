@@ -63,7 +63,12 @@
                             <td style="padding:10px 14px; text-align:right;">@i.AvgCost.ToString("0.00") @i.Currency</td>
                             <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
                                 <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowEditAsync(i))">Edit</button>
+                                @if (i.QtyOnHand == 0)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowOpeningAsync(i))">Opening</button>
+                                }
                                 <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowAdjustAsync(i))">Adjust</button>
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowWasteAsync(i))">Waste</button>
                                 @if (i.IsActive)
                                 {
                                     <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(i, false))">Deactivate</button>

@@ -48,16 +48,21 @@
                             <td style="padding:10px 14px; color: var(--bo-text-muted);">@g.IssuedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
                             <td style="padding:10px 14px; text-align:right;">@g.LineCount</td>
                             <td style="padding:10px 14px; text-align:center;">
-                                <BoBadge Tone="@(g.Status == StoreIssueStatus.Posted ? "success" : "warning")">@g.Status</BoBadge>
+                                <BoBadge Tone="@StatusTone(g.Status)">@g.Status</BoBadge>
                             </td>
-                            <td style="padding:10px 14px; text-align:right;">
+                            <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
                                 @if (g.Status == StoreIssueStatus.Draft)
                                 {
+                                    <a class="bo-btn bo-btn-ghost" href="@($"/store/issues/{g.Id}/edit")">Edit</a>
                                     <button type="button" class="bo-btn bo-btn-primary" @onclick="@(() => PostAsync(g))" disabled="@_posting">Post</button>
+                                }
+                                else if (g.Status == StoreIssueStatus.Posted)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => VoidAsync(g))" disabled="@_posting">Void</button>
                                 }
                                 else
                                 {
-                                    <span style="color: var(--bo-text-subtle);">Posted</span>
+                                    <span style="color: var(--bo-text-subtle);">Voided</span>
                                 }
                             </td>
                         </tr>

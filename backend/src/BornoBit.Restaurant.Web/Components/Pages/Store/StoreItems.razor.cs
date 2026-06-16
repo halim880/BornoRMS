@@ -98,6 +98,52 @@ public partial class StoreItems : ComponentBase
         }
     }
 
+    private async Task ShowWasteAsync(StoreItemDto i)
+    {
+        var model = new StoreWasteModel
+        {
+            ItemId = i.Id,
+            BaseUnitId = i.BaseUnitId,
+            ItemName = i.Name,
+            UnitCode = i.UnitCode,
+            CurrentQty = i.QtyOnHand
+        };
+        var result = await DialogService.ShowAsync<StoreWasteDialog, StoreWasteModel>(model, new BoDialogOptions
+        {
+            Title = $"Record wastage · {i.Name}",
+            Width = "480px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is StoreWasteModel saved && saved.Saved)
+        {
+            ToastService.ShowSuccess($"Wastage recorded for '{i.Name}'.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ShowOpeningAsync(StoreItemDto i)
+    {
+        var model = new StoreOpeningModel
+        {
+            ItemId = i.Id,
+            BaseUnitId = i.BaseUnitId,
+            ItemName = i.Name,
+            UnitCode = i.UnitCode,
+            Currency = i.Currency
+        };
+        var result = await DialogService.ShowAsync<StoreOpeningDialog, StoreOpeningModel>(model, new BoDialogOptions
+        {
+            Title = $"Opening balance · {i.Name}",
+            Width = "480px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is StoreOpeningModel saved && saved.Saved)
+        {
+            ToastService.ShowSuccess($"Opening balance set for '{i.Name}'.");
+            await ReloadAsync();
+        }
+    }
+
     private async Task ToggleActiveAsync(StoreItemDto i, bool active)
     {
         try

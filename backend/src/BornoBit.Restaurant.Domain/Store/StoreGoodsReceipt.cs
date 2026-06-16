@@ -49,6 +49,25 @@ public class StoreGoodsReceipt : AuditableEntity
         };
     }
 
+    /// <summary>Edit the header fields of a draft receipt.</summary>
+    public void UpdateHeader(Guid storeSupplierId, DateTime receivedAtUtc, string? invoiceNo, string? notes)
+    {
+        if (Status != StoreGoodsReceiptStatus.Draft) throw new InvalidOperationException("Cannot edit a posted or voided goods receipt.");
+        if (storeSupplierId == Guid.Empty) throw new ArgumentException("Supplier is required.", nameof(storeSupplierId));
+
+        StoreSupplierId = storeSupplierId;
+        ReceivedAtUtc = receivedAtUtc;
+        InvoiceNo = Trim(invoiceNo);
+        Notes = Trim(notes);
+    }
+
+    /// <summary>Remove all lines from a draft receipt (EF cascade-deletes the orphaned rows).</summary>
+    public void ClearLines()
+    {
+        if (Status != StoreGoodsReceiptStatus.Draft) throw new InvalidOperationException("Cannot modify a posted or voided goods receipt.");
+        _lines.Clear();
+    }
+
     public StoreGoodsReceiptLine AddLine(Guid storeItemId, string itemName, decimal qty, Guid unitId, decimal qtyBase, decimal unitCost)
     {
         if (Status != StoreGoodsReceiptStatus.Draft) throw new InvalidOperationException("Cannot modify a posted goods receipt.");
@@ -79,6 +98,13 @@ public class StoreGoodsReceipt : AuditableEntity
         if (_lines.Count == 0) throw new InvalidOperationException("Cannot post a goods receipt with no lines.");
         Status = StoreGoodsReceiptStatus.Posted;
         PostedAtUtc = postedAtUtc;
+    }
+
+    /// <summary>Void a posted receipt. The caller must have already reversed the stock effects of each line.</summary>
+    public void MarkVoided(DateTime voidedAtUtc)
+    {
+        if (Status != StoreGoodsReceiptStatus.Posted) throw new InvalidOperationException("Only a posted goods receipt can be voided.");
+        Status = StoreGoodsReceiptStatus.Voided;
     }
 
     private static string? Trim(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

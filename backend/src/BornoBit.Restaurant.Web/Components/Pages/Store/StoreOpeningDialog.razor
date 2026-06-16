@@ -1,0 +1,51 @@
+@using BornoBit.Restaurant.Application.Store.Items
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+
+        <div style="color: var(--bo-text-muted);">
+            Seed the go-live on-hand quantity and cost for <strong>@Content.ItemName</strong>.
+            Available only while on-hand is zero; later corrections go through Adjust.
+        </div>
+
+        <BoNumeric T="decimal" @bind-Value="Content.Qty" Label="@($"Opening quantity ({Content.UnitCode})")" Style="width:100%;" Min="0" Step="0.001" Decimals="3" />
+        <BoNumeric T="decimal" @bind-Value="Content.UnitCost" Label="@($"Unit cost ({Content.Currency} per {Content.UnitCode})")" Style="width:100%;" Min="0" Step="0.01" Decimals="2" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">Set opening balance</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public StoreOpeningModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new SetStoreOpeningBalanceCommand(Content.ItemId, Content.Qty, Content.BaseUnitId, Content.UnitCost, null));
+            Content.Saved = true;
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

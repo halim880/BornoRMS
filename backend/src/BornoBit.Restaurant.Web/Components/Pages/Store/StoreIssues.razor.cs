@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Store.Issues;
+using BornoBit.Restaurant.Domain.Store;
 using BornoBit.Restaurant.Web.Components.BornoUi.Toast;
 using MediatR;
 using Microsoft.AspNetCore.Components;
@@ -41,4 +42,24 @@ public partial class StoreIssues : ComponentBase
         catch (Exception ex) { ToastService.ShowError(ex.Message); }
         finally { _posting = false; }
     }
+
+    private async Task VoidAsync(StoreIssueListItemDto g)
+    {
+        _posting = true;
+        try
+        {
+            await Mediator.Send(new VoidStoreIssueCommand(g.Id, null));
+            ToastService.ShowSuccess($"{g.IssueNumber} voided — stock restored.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+        finally { _posting = false; }
+    }
+
+    private static string StatusTone(StoreIssueStatus status) => status switch
+    {
+        StoreIssueStatus.Posted => "success",
+        StoreIssueStatus.Voided => "neutral",
+        _ => "warning"
+    };
 }
