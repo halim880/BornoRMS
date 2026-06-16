@@ -6,6 +6,8 @@ using BornoBit.Restaurant.Infrastructure.Persistence.Seeding;
 using BornoBit.Restaurant.Reporting;
 using BornoBit.Restaurant.Web.Components;
 using BornoBit.Restaurant.Web.Endpoints;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -13,6 +15,23 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((ctx, services, cfg) =>
     cfg.ReadFrom.Configuration(ctx.Configuration).ReadFrom.Services(services));
+
+// Behind nginx/apache on Linux: trust X-Forwarded-* so Kestrel sees the real https scheme/host.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Proxy is local; clear the default loopback-only restriction so forwarded headers are honored.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Persist Data Protection keys to a stable folder so auth cookies + antiforgery tokens survive
+// restarts on Linux (default ~/.aspnet path is often not writable under systemd → keys regenerate
+// → existing cookies become undecryptable → users silently sign out).
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(
+        Path.Combine(builder.Environment.ContentRootPath, "dp-keys")))
+    .SetApplicationName("BornoBit.Restaurant.Web");
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -111,6 +130,7 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<StockSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<RecipeSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<StoreDepartmentSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AccountingSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<GeneralLedgerSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<BillingSettingsSeeder>().SeedAsync();
@@ -121,6 +141,9 @@ using (var scope = app.Services.CreateScope())
         logger.LogWarning(ex, "Startup migration/seeding failed.");
     }
 }
+
+// Must run before anything that inspects scheme/host/remote IP (auth cookies, redirects, HSTS).
+app.UseForwardedHeaders();
 
 app.UseSerilogRequestLogging();
 

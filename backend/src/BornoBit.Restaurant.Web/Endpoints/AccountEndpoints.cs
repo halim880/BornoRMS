@@ -1,4 +1,6 @@
+using BornoBit.Restaurant.Application.Modules;
 using BornoBit.Restaurant.Infrastructure.Identity;
+using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +15,8 @@ public static class AccountEndpoints
         app.MapPost("/account/login", async (
             HttpContext ctx,
             UserManager<ApplicationUser> users,
+            RoleManager<ApplicationRole> rolesMgr,
+            ISender mediator,
             [FromForm] string? userName,
             [FromForm] string? password,
             [FromForm] string? returnUrl) =>
@@ -41,10 +45,30 @@ public static class AccountEndpoints
             var identity = new ClaimsIdentity(claims, "Cookies");
             await ctx.SignInAsync("Cookies", new ClaimsPrincipal(identity));
 
-            var safeReturn = !string.IsNullOrWhiteSpace(returnUrl) && Uri.IsWellFormedUriString(returnUrl, UriKind.Relative)
-                ? returnUrl!
-                : "/orders";
-            return Results.Redirect(safeReturn);
+            // Honor an explicit deep-link returnUrl first; otherwise land on the first menu URL of the
+            // user's lowest-display-order project module (same source the sidebar/ModuleSwitcher uses).
+            // Treat "/" as no return — it only round-trips back through Home → default landing.
+            if (!string.IsNullOrWhiteSpace(returnUrl) && returnUrl != "/"
+                && Uri.IsWellFormedUriString(returnUrl, UriKind.Relative))
+                return Results.Redirect(returnUrl!);
+
+            var roleIds = new List<Guid>();
+            if (!user.IsSuperAdmin)
+            {
+                foreach (var r in roles)
+                {
+                    var role = await rolesMgr.FindByNameAsync(r);
+                    if (role is not null) roleIds.Add(role.Id);
+                }
+            }
+
+            var modules = await mediator.Send(new GetUserModulesQuery(roleIds, user.IsSuperAdmin));
+            var landing = modules
+                .OrderBy(m => m.DisplayOrder)
+                .Select(m => m.FirstAccessibleUrl)
+                .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u));
+
+            return Results.Redirect(landing ?? "/orders");
         }).DisableAntiforgery();
 
         app.MapGet("/logout", async (HttpContext ctx) =>

@@ -1,0 +1,262 @@
+@page "/system/user-manual"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<PageTitle>ইউজার ম্যানুয়াল · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page bo-manual">
+    <PageHeader Title="ইউজার ম্যানুয়াল"
+                Description="BornoBit Restaurant ব্যবস্থাপনা সিস্টেম ব্যবহারের সম্পূর্ণ নির্দেশিকা। প্রতিটি মডিউল কীভাবে কাজ করে এবং দৈনন্দিন কাজে কীভাবে ব্যবহার করবেন তা ধাপে ধাপে বর্ণনা করা হয়েছে।" />
+
+    @* ---------- সূচিপত্র ---------- *@
+    <div class="bo-card bo-manual-toc">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">সূচিপত্র</h3>
+                <p class="bo-card-subtitle">যে অংশে যেতে চান সেই লিঙ্কে ক্লিক করুন।</p>
+            </div>
+        </div>
+        <ol class="bo-manual-toclist">
+            <li><a href="#intro">১. সিস্টেম পরিচিতি ও লগইন</a></li>
+            <li><a href="#operations">২. Operations — দৈনন্দিন কার্যক্রম</a></li>
+            <li><a href="#catalog">৩. Catalog — পণ্য ও মেনু সেটআপ</a></li>
+            <li><a href="#inventory">৪. Inventory — POS স্টক</a></li>
+            <li><a href="#store">৫. Store — কেন্দ্রীয় গুদাম</a></li>
+            <li><a href="#accounts">৬. Accounts — হিসাব ও রিপোর্ট</a></li>
+            <li><a href="#administration">৭. Administration — ব্যবহারকারী ও অনুমতি</a></li>
+            <li><a href="#system">৮. System — অ্যাপ সেটিংস ও ম্যানুয়াল</a></li>
+            <li><a href="#roles">৯. ভূমিকা ভিত্তিক অ্যাক্সেস</a></li>
+            <li><a href="#tips">১০. টিপস ও সাধারণ প্রশ্ন</a></li>
+        </ol>
+    </div>
+
+    @* ---------- ১. পরিচিতি ---------- *@
+    <div id="intro" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">১. সিস্টেম পরিচিতি ও লগইন</h3>
+                <p class="bo-card-subtitle">প্রথম ধাপ — সিস্টেমে প্রবেশ।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <p>BornoBit Restaurant হলো একটি সম্পূর্ণ রেস্টুরেন্ট অর্ডারিং ও ব্যবস্থাপনা সিস্টেম। এই
+               স্টাফ কনসোল থেকে অর্ডার গ্রহণ, রান্নাঘর ব্যবস্থাপনা, বিল ও পেমেন্ট, স্টক, হিসাব এবং
+               ব্যবহারকারী নিয়ন্ত্রণ — সবকিছু পরিচালনা করা যায়।</p>
+            <p><strong>লগইন করতে:</strong></p>
+            <ol>
+                <li>ব্রাউজারে স্টাফ কনসোলের ঠিকানায় যান।</li>
+                <li>আপনার <strong>ইমেইল</strong> ও <strong>পাসওয়ার্ড</strong> দিন এবং <em>Login</em> চাপুন।</li>
+                <li>লগইনের পর আপনার ভূমিকা (role) অনুযায়ী মেনুগুলো দেখা যাবে — যে কাজের অনুমতি নেই
+                    তা সাইডবারে দেখা যাবে না।</li>
+            </ol>
+            <p>উপরে রয়েছে <strong>মডিউল বার</strong> (Operations, System, Catalog ইত্যাদি) এবং বাম পাশে
+               সক্রিয় মডিউলের <strong>সাইডবার মেনু</strong>। মডিউল বদলালে সাইডবারও বদলে যায়।</p>
+        </div>
+    </div>
+
+    @* ---------- ২. Operations ---------- *@
+    <div id="operations" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">২. Operations — দৈনন্দিন কার্যক্রম</h3>
+                <p class="bo-card-subtitle">অর্ডার, পেমেন্ট, রান্নাঘর ও রিপোর্ট।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <ul>
+                <li><strong>Dashboard</strong> — চলমান অর্ডার, টেবিলের অবস্থা ও দিনের সারসংক্ষেপ এক
+                    নজরে। লাইভ আপডেট হয়।</li>
+                <li><strong>Take Order</strong> — ওয়েটার টেবিল বেছে নিয়ে আইটেম যোগ করে অর্ডার নেয়।
+                    মডিফায়ার/অ্যাড-অন ও কম্বো নির্বাচন করা যায়; অর্ডার রান্নাঘরে পাঠানো হয়।</li>
+                <li><strong>POS</strong> — দ্রুত বিক্রয় ও কাউন্টার অর্ডার; আইটেম যোগ করে সরাসরি বিল করা।</li>
+                <li><strong>Cash Counter</strong> — ড্রয়ার শিফট খোলা/বন্ধ, পেমেন্ট গ্রহণ, ছাড় (discount)
+                    ও সেটেলমেন্ট। নগদ, কার্ড বা মোবাইল ওয়ালেটে পেমেন্ট রেকর্ড হয়।</li>
+                <li><strong>Orders</strong> — সব অর্ডারের তালিকা; স্ট্যাটাস দেখা, ইনভয়েস/রিসিট PDF প্রিন্ট।</li>
+                <li><strong>Kitchen Display (KDS)</strong> — রান্নাঘরের পর্দা; স্টেশন ও অগ্রাধিকার অনুযায়ী
+                    অর্ডার দেখায়, প্রস্তুত হলে চিহ্নিত করা যায়।</li>
+                <li><strong>Reports</strong> — Sales Report, Collection Report ও Most Selling Items।</li>
+                <li><strong>Menu</strong> — চলতি মেনু দেখা।</li>
+            </ul>
+            <p><strong>সাধারণ প্রবাহ:</strong> Take Order/POS → রান্নাঘর (KDS) → Cash Counter-এ পেমেন্ট →
+               Orders থেকে রিসিট প্রিন্ট।</p>
+        </div>
+    </div>
+
+    @* ---------- ৩. Catalog ---------- *@
+    <div id="catalog" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">৩. Catalog — পণ্য ও মেনু সেটআপ</h3>
+                <p class="bo-card-subtitle">কী বিক্রি হবে তা এখানে সাজানো হয়।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <ul>
+                <li><strong>Products</strong> — খাবার/পণ্য তৈরি ও মূল্য নির্ধারণ। প্রতিটি পণ্যে মডিফায়ার
+                    গ্রুপ, অ্যাড-অন বা কম্বো যুক্ত করা যায়।</li>
+                <li><strong>Product Categories</strong> — পণ্যের শ্রেণিবিন্যাস (যেমন ভাত, পানীয়, ডেজার্ট)।</li>
+                <li><strong>Tables</strong> — রেস্টুরেন্টের টেবিল সংজ্ঞায়িত করা, যা অর্ডার ও সেশনে ব্যবহৃত হয়।</li>
+            </ul>
+            <p>এই অংশ মূলত একবার সেটআপ করে পরে প্রয়োজনমতো হালনাগাদ করা হয়। সাধারণত Admin পরিচালনা করে।</p>
+        </div>
+    </div>
+
+    @* ---------- ৪. Inventory ---------- *@
+    <div id="inventory" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">৪. Inventory — POS স্টক</h3>
+                <p class="bo-card-subtitle">বিক্রয়ের সাথে সরাসরি যুক্ত কাঁচামাল ও স্টক।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <ul>
+                <li><strong>Stock Dashboard / Low Stock</strong> — স্টকের সারসংক্ষেপ ও কম থাকা আইটেমের সতর্কতা।</li>
+                <li><strong>Stock Items / Product SKUs</strong> — স্টক আইটেম ও তাদের একক/কোড ব্যবস্থাপনা।</li>
+                <li><strong>Recipes</strong> — প্রতিটি খাবারের রেসিপি (BOM)। অর্ডার নিশ্চিত/পেমেন্ট হলে
+                    রেসিপি অনুযায়ী কাঁচামাল স্বয়ংক্রিয়ভাবে স্টক থেকে কমে যায়।</li>
+                <li><strong>Purchase Orders / Goods Receipts</strong> — সরবরাহকারীকে ক্রয় আদেশ (PO) এবং
+                    মাল বুঝে নেওয়ার রসিদ (GRN); GRN পোস্ট করলে PO-এর সাথে গৃহীত পরিমাণ মিলিয়ে দেখা হয়।</li>
+                <li><strong>Wastage / Stock History</strong> — নষ্ট/ক্ষয় রেকর্ড এবং সব স্টক চলাচলের ইতিহাস।</li>
+                <li><strong>Suppliers</strong> — সরবরাহকারীদের তালিকা।</li>
+            </ul>
+        </div>
+    </div>
+
+    @* ---------- ৫. Store ---------- *@
+    <div id="store" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">৫. Store — কেন্দ্রীয় গুদাম</h3>
+                <p class="bo-card-subtitle">POS স্টক থেকে আলাদা একটি স্বতন্ত্র গুদাম ব্যবস্থা।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <p>Store হলো একটি পৃথক গুদাম মডিউল — এটি POS Inventory থেকে সম্পূর্ণ আলাদা।</p>
+            <ul>
+                <li><strong>Store Items / Store Categories</strong> — গুদামের পণ্য ও তাদের শ্রেণি।</li>
+                <li><strong>Store Receipts</strong> — গুদামে মাল গ্রহণ।</li>
+                <li><strong>Store Issues</strong> — গুদাম থেকে মাল ইস্যু/বিতরণ।</li>
+                <li><strong>Store Suppliers</strong> — গুদামের সরবরাহকারী।</li>
+            </ul>
+        </div>
+    </div>
+
+    @* ---------- ৬. Accounts ---------- *@
+    <div id="accounts" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">৬. Accounts — হিসাব ও রিপোর্ট</h3>
+                <p class="bo-card-subtitle">আয়-ব্যয়, দেনা ও আর্থিক প্রতিবেদন।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <ul>
+                <li><strong>Transactions</strong> — আয় ও ব্যয়ের লেনদেন এন্ট্রি।</li>
+                <li><strong>Supplier Payables</strong> — সরবরaহকারীদের কাছে বকেয়া পরিশোধ।</li>
+                <li><strong>Cash Accounts</strong> — নগদ ড্রয়ার, ব্যাংক ও মোবাইল ওয়ালেট। ব্যালেন্স =
+                    প্রারম্ভিক জমা + আয় − ব্যয়।</li>
+                <li><strong>Categories</strong> — আয়/ব্যয়ের খাত।</li>
+                <li><strong>Reporting</strong> — Profit &amp; Loss, Day-End Close, VAT Report, Cash Book ও
+                    Account Ledger।</li>
+                <li><strong>General Ledger</strong> — Chart of Accounts, Journal, Trial Balance,
+                    P&amp;L (GL) ও Balance Sheet (ডাবল-এন্ট্রি হিসাব)।</li>
+            </ul>
+            <p>Accounts মডিউল সাধারণত Admin ব্যবহার করে; দিন শেষে Day-End Close দিয়ে দিনের হিসাব বন্ধ করা হয়।</p>
+        </div>
+    </div>
+
+    @* ---------- ৭. Administration ---------- *@
+    <div id="administration" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">৭. Administration — ব্যবহারকারী ও অনুমতি</h3>
+                <p class="bo-card-subtitle">কে কী দেখবে ও করতে পারবে তা নিয়ন্ত্রণ।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <ul>
+                <li><strong>Users &amp; Roles / Roles</strong> — ব্যবহারকারী তৈরি, ভূমিকা নির্ধারণ ও
+                    ভূমিকা ব্যবস্থাপনা।</li>
+                <li><strong>Menu Permissions</strong> — কোন ভূমিকা কোন মেনু দেখবে তা নির্ধারণ।</li>
+                <li><strong>Module Permissions</strong> — কোন ভূমিকা কোন মডিউল (উপরের বার) দেখবে।</li>
+                <li><strong>Numbering Scopes</strong> — অর্ডার/ডকুমেন্ট নম্বরের ধরন নিয়ন্ত্রণ
+                    (যেমন <code>ORD-yyyyMMdd-NNNN</code>)।</li>
+                <li><strong>Tenants / Modules</strong> — সিস্টেম-স্তরের তালিকা (শুধু SuperAdmin)।</li>
+            </ul>
+            <p>সাইডবারের পুরো মেনু এই অনুমতিগুলোর উপর নির্ভর করে তৈরি হয়, তাই কোনো কর্মী মেনু না দেখলে
+               এখানে তার ভূমিকার অনুমতি পরীক্ষা করুন।</p>
+        </div>
+    </div>
+
+    @* ---------- ৮. System ---------- *@
+    <div id="system" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">৮. System — অ্যাপ সেটিংস ও ম্যানুয়াল</h3>
+                <p class="bo-card-subtitle">ব্যক্তিগত পছন্দ ও সহায়িকা।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <ul>
+                <li><strong>App Settings</strong> — থিম রঙ পরিবর্তনসহ ব্যক্তিগত পছন্দ। এই সেটিংস শুধু
+                    আপনার ব্রাউজারে সংরক্ষিত হয়, অন্য ব্যবহারকারীদের প্রভাবিত করে না।</li>
+                <li><strong>User Manual</strong> — এই সহায়িকা পাতা।</li>
+            </ul>
+        </div>
+    </div>
+
+    @* ---------- ৯. Roles ---------- *@
+    <div id="roles" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">৯. ভূমিকা ভিত্তিক অ্যাক্সেস</h3>
+                <p class="bo-card-subtitle">প্রতিটি ভূমিকা কী কাজ করতে পারে।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <ul>
+                <li><strong>SuperAdmin</strong> — সবকিছুতে পূর্ণ অ্যাক্সেস; সিস্টেম-স্তরের সেটআপ।</li>
+                <li><strong>Admin</strong> — Catalog, Inventory, Store, Accounts ও Administration সহ
+                    প্রায় সব ব্যবস্থাপনা।</li>
+                <li><strong>Manager</strong> — Operations রিপোর্ট, ড্যাশবোর্ড ও স্টক তদারকি।</li>
+                <li><strong>Waiter</strong> — অর্ডার গ্রহণ (Take Order)।</li>
+                <li><strong>Chef</strong> — Kitchen Display ব্যবহার করে রান্নাঘর পরিচালনা।</li>
+                <li><strong>Cashier</strong> — Cash Counter-এ বিল ও পেমেন্ট।</li>
+            </ul>
+            <p>প্রকৃত অনুমতি Administration → Menu/Module Permissions থেকে পরিবর্তন করা যায়।</p>
+        </div>
+    </div>
+
+    @* ---------- ১০. Tips ---------- *@
+    <div id="tips" class="bo-card">
+        <div class="bo-card-header">
+            <div>
+                <h3 class="bo-card-title">১০. টিপস ও সাধারণ প্রশ্ন</h3>
+                <p class="bo-card-subtitle">দ্রুত সমাধান।</p>
+            </div>
+        </div>
+        <div class="bo-manual-body">
+            <ul>
+                <li><strong>মেনু দেখা যাচ্ছে না?</strong> — আপনার ভূমিকায় ওই মেনুর অনুমতি নেই; Admin-কে
+                    Menu/Module Permissions চেক করতে বলুন।</li>
+                <li><strong>স্টক কমছে না?</strong> — সংশ্লিষ্ট পণ্যের Recipe (BOM) ঠিকভাবে সেট আছে কিনা দেখুন।</li>
+                <li><strong>রিসিট প্রিন্ট</strong> — Orders তালিকা থেকে যেকোনো অর্ডারের রিসিট PDF ডাউনলোড করা যায়।</li>
+                <li><strong>থিম বদলাতে</strong> — System → App Settings-এ যান।</li>
+                <li><strong>দিনের হিসাব বন্ধ</strong> — দিন শেষে Accounts → Reporting → Day-End Close ব্যবহার করুন।</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bo-manual .bo-card { margin-bottom: var(--bo-space-4, 1rem); scroll-margin-top: 1rem; }
+    .bo-manual-body { font-size: var(--bo-font-sm); line-height: 1.8; color: var(--bo-text); }
+    .bo-manual-body ul, .bo-manual-body ol { padding-left: 1.25rem; margin: .5rem 0; }
+    .bo-manual-body li { margin-bottom: .4rem; }
+    .bo-manual-body p { margin: .5rem 0; }
+    .bo-manual-body code { background: var(--bo-surface-2, rgba(0,0,0,.06)); padding: .1rem .35rem; border-radius: 4px; }
+    .bo-manual-toclist { columns: 2; column-gap: 2rem; padding-left: 1.25rem; line-height: 2; }
+    .bo-manual-toclist a { color: var(--bo-primary, inherit); text-decoration: none; }
+    .bo-manual-toclist a:hover { text-decoration: underline; }
+    @@media (max-width: 720px) { .bo-manual-toclist { columns: 1; } }
+</style>

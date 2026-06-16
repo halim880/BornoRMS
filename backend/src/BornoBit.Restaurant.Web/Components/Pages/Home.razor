@@ -1,6 +1,48 @@
 @page "/"
+@using BornoBit.Restaurant.Application.Modules
+@using BornoBit.Restaurant.Domain.Identity
+@using BornoBit.Restaurant.Infrastructure.Persistence
+@using MediatR
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
 @inject NavigationManager Nav
+@inject ISender Mediator
+@inject AuthenticationStateProvider AuthState
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 @code {
-    protected override void OnInitialized() => Nav.NavigateTo("/orders");
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        var isSuperAdmin = state.User.IsInRole(Roles.SuperAdmin);
+        var roleIds = new List<Guid>();
+        if (!isSuperAdmin)
+        {
+            var roleNames = state.User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+            if (roleNames.Count > 0)
+            {
+                // Short-lived context (not the scoped Identity one) to dodge concurrent-DbContext errors.
+                await using var db = await DbFactory.CreateDbContextAsync();
+                roleIds = await db.Roles
+                    .Where(r => r.Name != null && roleNames.Contains(r.Name))
+                    .Select(r => r.Id)
+                    .ToListAsync();
+            }
+        }
+
+        var modules = await Mediator.Send(new GetUserModulesQuery(roleIds, isSuperAdmin));
+        var landing = modules
+            .OrderBy(m => m.DisplayOrder)
+            .Select(m => m.FirstAccessibleUrl)
+            .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "/orders";
+
+        Nav.NavigateTo(landing);
+    }
 }
