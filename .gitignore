@@ -4,6 +4,12 @@ obj/
 *.user
 backend/src/**/logs/
 
+# Visual Studio
+.vs/
+
+# ASP.NET DataProtection keys (machine-local, secret)
+dp-keys/
+
 # Node / Next.js
 node_modules/
 .next/

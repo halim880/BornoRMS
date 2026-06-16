@@ -9,46 +9,47 @@
 @using MediatR
 @inject ISender Mediator
 @inject IImageUploadService ImageUploadService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <BoDialogBody>
-    <div style="display:flex; flex-direction:column; gap:12px;">
+    <div @ref="_root" style="display:flex; flex-direction:column; gap:12px;">
         @if (!string.IsNullOrEmpty(_error))
         {
             <BoMessageBar Intent="error">@_error</BoMessageBar>
         }
 
+        <BoInput Value="Content.Name" ValueChanged="OnNameChanged" Immediate="true" Label="Name" Required="true" Style="width:100%;" Maxlength="200" />
+        <BoInput @bind-Value="Content.BanglaName" Label="Bangla name (বাংলা নাম)" Style="width:100%;" Maxlength="200" />
+
         <div style="display:flex; gap:12px;">
-            <BoInput @bind-Value="Content.Code" Label="Code" Required="true" Style="flex:1;" Maxlength="40" />
+            <BoInput Value="Content.Code" ValueChanged="OnCodeChanged" Immediate="true" Label="Code / SKU" Required="true" Style="flex:1;" Maxlength="40"
+                     Hint="Unique product code. Auto-filled from the name — edit if you prefer your own." />
             <BoNumeric T="int" @bind-Value="Content.DisplayOrder" Label="Display order" Style="width:140px;" Min="0" Step="1" />
         </div>
 
-        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="200" />
-        <BoInput @bind-Value="Content.BanglaName" Label="Bangla name (বাংলা নাম)" Style="width:100%;" Maxlength="200" />
-
-        <BoSelect TOption="ProductCategoryDto"
-                  Items="@_categories"
-                  OptionValue="@(c => c.Id.ToString())"
-                  OptionText="@(c => c.Name)"
-                  SelectedOption="@_selectedCategory"
-                  SelectedOptionChanged="@(c => Content.ProductCategoryId = c?.Id ?? Guid.Empty)"
-                  Label="Category"
-                  Placeholder="Select a category"
-                  Required="true"
-                  Style="width:100%;" />
+        <BoAutocomplete TOption="ProductCategoryDto"
+                        Items="@_categories"
+                        OptionValue="@(c => c.Id.ToString())"
+                        OptionText="@(c => c.Name)"
+                        SelectedOption="@_selectedCategory"
+                        SelectedOptionChanged="@(c => Content.ProductCategoryId = c?.Id ?? Guid.Empty)"
+                        Label="Category"
+                        Placeholder="Search a category…"
+                        Required="true" />
 
         <BoNumeric T="decimal" @bind-Value="Content.Price" Label="Price (Tk)" Style="width:100%;" Min="0" Step="0.01" />
 
-        <BoSelect TOption="KitchenStationDto"
-                  Items="@_stations"
-                  OptionValue="@(s => s.Id.ToString())"
-                  OptionText="@(s => s.Name)"
-                  SelectedOption="@_selectedStation"
-                  SelectedOptionChanged="@(s => Content.KitchenStationId = s?.Id)"
-                  Label="Kitchen station"
-                  Placeholder="All stations (unassigned)"
-                  Style="width:100%;" />
+        <BoAutocomplete TOption="KitchenStationDto"
+                        Items="@_stations"
+                        OptionValue="@(s => s.Id.ToString())"
+                        OptionText="@(s => s.Name)"
+                        SelectedOption="@_selectedStation"
+                        SelectedOptionChanged="@(s => Content.KitchenStationId = s?.Id)"
+                        Label="Kitchen station"
+                        Placeholder="All stations (unassigned)" />
 
-        <BoInput @bind-Value="Content.Description" Label="Description" Style="width:100%;" Maxlength="1000" />
+        <BoTextArea @bind-Value="Content.Description" Label="Description" Rows="2" Maxlength="1000" />
 
         <div style="display:flex; gap:12px; align-items:flex-end;">
             <BoSelect TOption="MethodOption"
@@ -61,13 +62,19 @@
 
             @if (Content.InventoryMethod == InventoryMethod.DirectStock && Content.Variants.Count == 0)
             {
-                <BoSelect TOption="InventoryItemDto"
-                          Items="@_stockItems"
-                          OptionValue="@(i => i.Id.ToString())"
-                          OptionText="@(i => $"{i.Name} ({i.UnitCode})")"
-                          SelectedOption="@_stockItems.FirstOrDefault(i => i.Id == Content.LinkedInventoryItemId)"
-                          SelectedOptionChanged="@(i => Content.LinkedInventoryItemId = i?.Id)"
-                          Label="Stock item" Placeholder="Select item" Style="flex:1;" />
+                <div style="flex:1;">
+                    <BoAutocomplete TOption="InventoryItemDto"
+                                    Items="@_stockItems"
+                                    OptionValue="@(i => i.Id.ToString())"
+                                    OptionText="@(i => $"{i.Name} ({i.UnitCode})")"
+                                    OptionSearch="@(i => $"{i.Name} {i.UnitCode}")"
+                                    SelectedOption="@_stockItems.FirstOrDefault(i => i.Id == Content.LinkedInventoryItemId)"
+                                    SelectedOptionChanged="@(i => Content.LinkedInventoryItemId = i?.Id)"
+                                    Label="Stock item"
+                                    Placeholder="Optional — leave blank to auto-create"
+                                    Hint="Optional. Leave empty and a stock SKU is created automatically on save."
+                                    DropUp="true" />
+                </div>
             }
         </div>
         @if (Content.InventoryMethod == InventoryMethod.DirectStock && Content.Variants.Count > 0)
@@ -92,13 +99,17 @@
                     <BoNumeric T="decimal" @bind-Value="row.Price" Style="width:130px;" Min="0" Step="0.01" />
                     @if (Content.InventoryMethod == InventoryMethod.DirectStock)
                     {
-                        <BoSelect TOption="InventoryItemDto"
-                                  Items="@_stockItems"
-                                  OptionValue="@(i => i.Id.ToString())"
-                                  OptionText="@(i => $"{i.Name} ({i.UnitCode})")"
-                                  SelectedOption="@_stockItems.FirstOrDefault(i => i.Id == row.LinkedInventoryItemId)"
-                                  SelectedOptionChanged="@(i => row.LinkedInventoryItemId = i?.Id)"
-                                  Placeholder="Stock item" Style="width:190px;" />
+                        <div style="width:220px;">
+                            <BoAutocomplete TOption="InventoryItemDto"
+                                            Items="@_stockItems"
+                                            OptionValue="@(i => i.Id.ToString())"
+                                            OptionText="@(i => $"{i.Name} ({i.UnitCode})")"
+                                            OptionSearch="@(i => $"{i.Name} {i.UnitCode}")"
+                                            SelectedOption="@_stockItems.FirstOrDefault(i => i.Id == row.LinkedInventoryItemId)"
+                                            SelectedOptionChanged="@(i => row.LinkedInventoryItemId = i?.Id)"
+                                            Placeholder="Stock item (optional)"
+                                            DropUp="true" />
+                        </div>
                     }
                     <button type="button" class="bo-btn bo-btn-ghost" title="Remove variant"
                             @onclick="@(() => Content.Variants.Remove(row))">✕</button>
@@ -145,6 +156,10 @@
     private List<KitchenStationDto> _stations = new();
     private List<InventoryItemDto> _stockItems = new();
 
+    private ElementReference _root;
+    private IJSObjectReference? _flow;
+    private bool _codeTouched;
+
     public record MethodOption(InventoryMethod Value, string Label);
     private readonly List<MethodOption> _methods = new()
     {
@@ -163,6 +178,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _codeTouched = Content.Id is not null; // editing: never auto-rewrite an existing code
         try
         {
             var all = await Mediator.Send(new GetProductCategoriesQuery());
@@ -196,6 +212,62 @@
     }
 
     private void AddVariantRow() => Content.Variants.Add(new VariantFormRow());
+
+    private void OnCodeChanged(string? value)
+    {
+        Content.Code = value;
+        _codeTouched = true; // user typed in Code — stop auto-filling from Name
+    }
+
+    private void OnNameChanged(string? value)
+    {
+        Content.Name = value;
+        // New products only: keep Code in sync with the name until the user edits Code.
+        if (Content.Id is null && !_codeTouched)
+            Content.Code = Slugify(value);
+    }
+
+    /// <summary>"Chicken Biryani" → "CHICKEN-BIRYANI". Upper, alphanumeric runs joined by '-', max 40.</summary>
+    private static string Slugify(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+        var sb = new System.Text.StringBuilder(name.Length);
+        var prevDash = false;
+        foreach (var ch in name.Trim())
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                sb.Append(char.ToUpperInvariant(ch));
+                prevDash = false;
+            }
+            else if (!prevDash && sb.Length > 0)
+            {
+                sb.Append('-');
+                prevDash = true;
+            }
+        }
+        var slug = sb.ToString().Trim('-');
+        return slug.Length > 40 ? slug[..40].Trim('-') : slug;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            _flow = await JS.InvokeAsync<IJSObjectReference>("boEnterFlow.attach", _root);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_flow is not null)
+        {
+            try
+            {
+                await _flow.InvokeVoidAsync("dispose");
+                await _flow.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { /* circuit gone — nothing to clean up */ }
+        }
+    }
 
     private async Task SaveAsync()
     {
