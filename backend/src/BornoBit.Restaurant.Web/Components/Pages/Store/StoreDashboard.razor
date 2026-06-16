@@ -1,0 +1,85 @@
+@page "/store/dashboard"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Dashboard
+
+<PageTitle>Store Dashboard · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Store Dashboard"
+                Description="Warehouse valuation, item counts and pending drafts at a glance.">
+        <Actions>
+            <a class="bo-btn bo-btn-ghost" href="/reports/store/valuation.pdf" target="_blank">Valuation PDF</a>
+            <a class="bo-btn bo-btn-ghost" href="/reports/store/valuation.pdf?lowStockOnly=true" target="_blank">Low-stock PDF</a>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading dashboard…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else
+    {
+        <div class="bo-grid-4" style="margin-bottom:16px;">
+            <div class="bo-panel" style="padding:16px;">
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Total stock value</div>
+                <div style="font-size:1.6rem; font-weight:700; margin-top:8px;">@Money(_summary!.TotalStockValue)</div>
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Active items</div>
+                <div style="font-size:1.6rem; font-weight:700; margin-top:8px;">@_summary.ActiveItemCount</div>
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Low stock</div>
+                <div style="font-size:1.6rem; font-weight:700; margin-top:8px; color:@(_summary.LowStockItemCount > 0 ? "var(--bo-danger)" : "inherit");">@_summary.LowStockItemCount</div>
+            </div>
+            <div class="bo-panel" style="padding:16px;">
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Open drafts</div>
+                <div style="display:flex; gap:8px; align-items:center; margin-top:10px;">
+                    <a href="/store/grn" style="text-decoration:none;"><BoBadge Tone="info">GRN: @_summary.DraftGrnCount</BoBadge></a>
+                    <a href="/store/issues" style="text-decoration:none;"><BoBadge Tone="warning">Issues: @_summary.DraftIssueCount</BoBadge></a>
+                </div>
+            </div>
+        </div>
+
+        <div class="bo-card" style="padding:16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <strong>Low-stock items</strong>
+                <a class="bo-btn bo-btn-ghost" href="/store/items">Open items</a>
+            </div>
+            @if (_lowStock.Count == 0)
+            {
+                <EmptyState Description="No low-stock items — everything is above its reorder level." />
+            }
+            else
+            {
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Item</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">On hand</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Reorder level</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Suggested qty</th>
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Stock value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _lowStock)
+                        {
+                            <tr style="border-top:1px solid var(--bo-border-soft);">
+                                <td style="padding:8px 12px;"><strong>@r.Name</strong><div style="font-size:var(--bo-font-xs); color:var(--bo-text-subtle);">@r.Code</div></td>
+                                <td style="padding:8px 12px; text-align:right;">@r.QtyOnHand.ToString("0.###") @r.UnitCode <BoBadge Tone="danger">Low</BoBadge></td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--bo-text-muted);">@r.ReorderLevel.ToString("0.###")</td>
+                                <td style="padding:8px 12px; text-align:right; color:var(--bo-text-muted);">@r.ReorderQty.ToString("0.###")</td>
+                                <td style="padding:8px 12px; text-align:right;">@Money(r.StockValue)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    }
+</div>

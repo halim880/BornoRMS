@@ -195,7 +195,11 @@ public class AppMenuSeeder
                 new("Most Selling Items", Url: "/operations/reports/top-items",  Icon: "ArrowTrendingLines", RequiredRole: Roles.Manager),
             }),
             new("Menu", Url: "/operations/menu", Icon: "Receipt"),
+        }),
+        new("System", Icon: "Settings", Children: new()
+        {
             new("App Settings", Url: "/settings/app", Icon: "PaintBrush"),
+            new("User Manual",  Url: "/system/user-manual", Icon: "BookOpenMicroscope"),
         }),
         new("Catalog", Icon: "BoxMultiple", RequiredRole: Roles.Admin, Children: new()
         {
@@ -218,6 +222,7 @@ public class AppMenuSeeder
         }),
         new("Store", Icon: "Building", RequiredRole: Roles.Manager, Children: new()
         {
+            new("Store Dashboard", Url: "/store/dashboard", Icon: "DataPie", RequiredRole: Roles.Manager),
             new("Store Items", Url: "/store/items", Icon: "BoxMultiple", RequiredRole: Roles.Manager),
             new("Store Categories", Url: "/store/categories", Icon: "FolderList", RequiredRole: Roles.Manager),
             new("Store Receipts", Url: "/store/grn", Icon: "ReceiptMoney", RequiredRole: Roles.Manager),

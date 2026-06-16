@@ -55,6 +55,7 @@
                                 <BoBadge Tone="@StatusTone(g.Status)">@g.Status</BoBadge>
                             </td>
                             <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
+                                <a class="bo-btn bo-btn-ghost" href="@($"/reports/store/grn/{g.Id}/receipt.pdf")" target="_blank">Print</a>
                                 @if (g.Status == StoreGoodsReceiptStatus.Draft)
                                 {
                                     <a class="bo-btn bo-btn-ghost" href="@($"/store/grn/{g.Id}/edit")">Edit</a>

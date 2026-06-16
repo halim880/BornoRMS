@@ -1,6 +1,9 @@
 using BornoBit.Restaurant.Application.Inventory.Items;
 using BornoBit.Restaurant.Application.Inventory.Purchases;
 using BornoBit.Restaurant.Application.Ordering.Queries;
+using BornoBit.Restaurant.Application.Store.Issues;
+using BornoBit.Restaurant.Application.Store.Items;
+using BornoBit.Restaurant.Application.Store.Purchases;
 using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Reporting;
 using BornoBit.Restaurant.Reporting.Models;
@@ -147,6 +150,105 @@ public static class ReportEndpoints
                 return Results.NotFound(new { message = ex.Message });
             }
         }).RequireAuthorization("Inventory");
+
+        // ---- Store (warehouse) reports ----
+
+        // Store goods-receipt print (reuses the goods-receipt document).
+        app.MapGet("/reports/store/grn/{id:guid}/receipt.pdf", async (
+            Guid id, ISender sender, IReportRenderer renderer,
+            IOptions<ReceiptBranding> branding, CancellationToken ct) =>
+        {
+            try
+            {
+                var grn = await sender.Send(new GetStoreGoodsReceiptQuery(id), ct);
+                var data = new GoodsReceiptReportData(
+                    RestaurantName: branding.Value.Name,
+                    GrnNumber: grn.GrnNumber,
+                    SupplierName: grn.SupplierName,
+                    InvoiceNo: grn.InvoiceNo,
+                    ReceivedAtUtc: grn.ReceivedAtUtc,
+                    Status: grn.Status.ToString(),
+                    Currency: grn.Currency,
+                    Notes: grn.Notes,
+                    Subtotal: grn.Subtotal,
+                    GeneratedAtUtc: DateTime.UtcNow,
+                    Lines: grn.Lines
+                        .Select(l => new GoodsReceiptReportLine(l.ItemName, l.Qty, l.UnitCode, l.UnitCost, l.LineTotal))
+                        .ToList());
+
+                var pdf = await renderer.RenderGoodsReceiptAsync(data, ct);
+                return Results.File(pdf, "application/pdf", $"{grn.GrnNumber}.pdf");
+            }
+            catch (NotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
+        }).RequireAuthorization("Store");
+
+        // Store issue voucher.
+        app.MapGet("/reports/store/issue/{id:guid}/voucher.pdf", async (
+            Guid id, ISender sender, IReportRenderer renderer,
+            IOptions<ReceiptBranding> branding, CancellationToken ct) =>
+        {
+            try
+            {
+                var issue = await sender.Send(new GetStoreIssueQuery(id), ct);
+                var data = new StoreIssueVoucherReportData(
+                    RestaurantName: branding.Value.Name,
+                    IssueNumber: issue.IssueNumber,
+                    Destination: issue.Destination,
+                    IssuedAtUtc: issue.IssuedAtUtc,
+                    Status: issue.Status.ToString(),
+                    Notes: issue.Notes,
+                    GeneratedAtUtc: DateTime.UtcNow,
+                    Lines: issue.Lines
+                        .Select(l => new StoreIssueVoucherLine(l.ItemName, l.Qty, l.UnitCode))
+                        .ToList());
+
+                var pdf = await renderer.RenderStoreIssueVoucherAsync(data, ct);
+                return Results.File(pdf, "application/pdf", $"{issue.IssueNumber}.pdf");
+            }
+            catch (NotFoundException ex)
+            {
+                return Results.NotFound(new { message = ex.Message });
+            }
+        }).RequireAuthorization("Store");
+
+        // Store stock valuation (also serves the low-stock report via lowStockOnly=true).
+        app.MapGet("/reports/store/valuation.pdf", async (
+            string? search, Guid? categoryId, bool? lowStockOnly, bool? includeInactive,
+            ISender sender, IReportRenderer renderer, IOptions<ReceiptBranding> branding, CancellationToken ct) =>
+        {
+            var result = await sender.Send(new GetStoreItemsQuery(
+                Search: search,
+                CategoryId: categoryId,
+                LowStockOnly: lowStockOnly ?? false,
+                IncludeInactive: includeInactive ?? false,
+                Page: 1, PageSize: 1000), ct);
+
+            var lines = result.Items
+                .Select(i => new StockValuationLine(
+                    i.CategoryName, i.Code, i.Name,
+                    i.IsPerishable ? "Perishable" : "Standard",
+                    i.QtyOnHand, i.UnitCode, i.ReorderLevel, i.AvgCost, i.StockValue, i.IsLowStock))
+                .ToList();
+
+            var filters = new List<string>();
+            if (!string.IsNullOrWhiteSpace(search)) filters.Add($"search=\"{search}\"");
+            if (lowStockOnly == true) filters.Add("low stock only");
+            if (includeInactive == true) filters.Add("incl. inactive");
+
+            var data = new StockValuationReportData(
+                RestaurantName: branding.Value.Name,
+                GeneratedAtUtc: DateTime.UtcNow,
+                Currency: result.Items.Select(i => i.Currency).FirstOrDefault() ?? "Tk",
+                GrandTotal: lines.Sum(l => l.StockValue),
+                Lines: lines,
+                FilterNote: filters.Count > 0 ? "Store · " + string.Join(", ", filters) : "Store");
+
+            var pdf = await renderer.RenderStockValuationAsync(data, ct);
+            return Results.File(pdf, "application/pdf", lowStockOnly == true ? "store-low-stock.pdf" : "store-valuation.pdf");
+        }).RequireAuthorization("Store");
 
         return app;
     }
