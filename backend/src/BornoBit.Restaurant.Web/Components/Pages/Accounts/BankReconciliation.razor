@@ -1,0 +1,160 @@
+@page "/accounts/bank-rec"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.BankRec
+@using BornoBit.Restaurant.Application.Accounting.CashAccounts
+@using BornoBit.Restaurant.Domain.Accounting
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+
+<PageTitle>Bank Reconciliation · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Bank Reconciliation"
+                Description="Match cash-account transactions to a bank statement. Tick items that have cleared; complete when the cleared balance matches the statement." />
+
+    @if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+
+    <div class="bo-card" style="padding:16px; margin-bottom:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <BoSelect TOption="CashAccountDto"
+                  Items="@_accounts"
+                  OptionValue="@(a => a.Id.ToString())"
+                  OptionText="@(a => a.Name)"
+                  SelectedOption="@_accounts.FirstOrDefault(a => a.Id == _cashAccountId)"
+                  SelectedOptionChanged="@(a => _cashAccountId = a?.Id)"
+                  Label="Bank account" Placeholder="(select)" Style="width:220px;" />
+        <BoDatePicker DateTimeValue="_statementDate" DateTimeValueChanged="@(d => { if (d.HasValue) _statementDate = d.Value.Date; })" Label="Statement date" />
+        <BoNumberInput T="decimal" @bind-Value="_statementBalance" Label="Statement balance" Step="0.01" Style="width:180px;" />
+        <BoButton Variant="primary" OnClick="StartAsync" Loading="_busy" Disabled="_reconId != null">Start</BoButton>
+    </div>
+
+    @if (_reconId is not null)
+    {
+        <div class="bo-card" style="padding:16px; margin-bottom:16px; display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+            <div>
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Cleared balance</div>
+                <div style="font-size:var(--bo-font-lg); font-weight:700;">@_cleared.ToString("#,##0.00")</div>
+            </div>
+            <div>
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Statement balance</div>
+                <div style="font-size:var(--bo-font-lg); font-weight:700;">@_statementBalance.ToString("#,##0.00")</div>
+            </div>
+            <div>
+                <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Difference</div>
+                <div style="font-size:var(--bo-font-lg); font-weight:700; color:@(Math.Abs(_cleared - _statementBalance) <= 0.01m ? "var(--bo-success, #16a34a)" : "var(--bo-danger, #dc2626)");">@((_cleared - _statementBalance).ToString("#,##0.00"))</div>
+            </div>
+            <BoButton Variant="primary" OnClick="CompleteAsync" Loading="_busy" Style="margin-left:auto;"
+                      Disabled="@(Math.Abs(_cleared - _statementBalance) > 0.01m)">Complete</BoButton>
+        </div>
+
+        @if (_txns.Count == 0)
+        {
+            <EmptyState Description="No transactions on this account." />
+        }
+        else
+        {
+            <div class="bo-card" style="padding:0; overflow:hidden;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:var(--bo-bg-soft); text-align:left;">
+                            <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Cleared</th>
+                            <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Date</th>
+                            <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Number</th>
+                            <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Reference</th>
+                            <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in _txns)
+                        {
+                            <tr style="border-top:1px solid var(--bo-border-soft);">
+                                <td style="padding:10px 14px;">
+                                    <BoCheckbox Value="t.IsCleared" ValueChanged="@(v => ToggleAsync(t, v))" />
+                                </td>
+                                <td style="padding:10px 14px; color:var(--bo-text-muted); white-space:nowrap;">@t.OccurredOn.ToString("yyyy-MM-dd")</td>
+                                <td style="padding:10px 14px;">@t.Number</td>
+                                <td style="padding:10px 14px; color:var(--bo-text-muted);">@(t.Reference ?? "—")</td>
+                                <td style="padding:10px 14px; text-align:right; font-weight:600; color:@(t.Type == TransactionType.Income ? "var(--bo-success, #16a34a)" : "var(--bo-danger, #dc2626)");">
+                                    @((t.Type == TransactionType.Income ? t.Amount : -t.Amount).ToString("#,##0.00"))
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private List<CashAccountDto> _accounts = new();
+    private List<ReconTransactionDto> _txns = new();
+
+    private Guid? _cashAccountId;
+    private DateTime _statementDate = DateTime.UtcNow.Date;
+    private decimal _statementBalance;
+
+    private Guid? _reconId;
+    private decimal _cleared;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _accounts = (await Mediator.Send(new GetCashAccountsQuery(ActiveOnly: true))).ToList(); }
+        catch (Exception ex) { _error = $"Failed to load accounts: {ex.Message}"; }
+    }
+
+    private async Task StartAsync()
+    {
+        _error = null;
+        if (_cashAccountId is null) { _error = "Select a bank account."; return; }
+
+        _busy = true;
+        try
+        {
+            _reconId = await Mediator.Send(new StartBankReconciliationCommand(_cashAccountId.Value, _statementDate, _statementBalance));
+            await LoadTxnsAsync();
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task LoadTxnsAsync()
+    {
+        _txns = (await Mediator.Send(new GetReconTransactionsQuery(_cashAccountId!.Value))).ToList();
+        _cleared = _txns.Where(t => t.IsCleared).Sum(t => t.Type == TransactionType.Income ? t.Amount : -t.Amount)
+                   + (_accounts.FirstOrDefault(a => a.Id == _cashAccountId)?.OpeningBalance ?? 0m);
+    }
+
+    private async Task ToggleAsync(ReconTransactionDto t, bool cleared)
+    {
+        if (_reconId is null) return;
+        _error = null;
+        try
+        {
+            _cleared = await Mediator.Send(new ToggleTransactionClearedCommand(_reconId.Value, t.Id, cleared));
+            await LoadTxnsAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task CompleteAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Mediator.Send(new CompleteBankReconciliationCommand(_reconId!.Value));
+            ToastService.ShowSuccess("Reconciliation completed.");
+            _reconId = null; _txns = new(); _cleared = 0m;
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

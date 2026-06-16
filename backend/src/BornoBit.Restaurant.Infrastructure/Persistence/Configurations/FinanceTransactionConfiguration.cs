@@ -22,6 +22,7 @@ public class FinanceTransactionConfiguration : IEntityTypeConfiguration<FinanceT
         builder.HasIndex(t => t.Type);
         builder.HasIndex(t => t.CashAccountId);
         builder.HasIndex(t => t.CategoryId);
+        builder.HasIndex(t => t.BankReconciliationId);
 
         builder.HasOne<CashAccount>()
             .WithMany()

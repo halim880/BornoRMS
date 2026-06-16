@@ -56,6 +56,7 @@ public class GeneralLedgerSeeder
         ("1330", "POS Equipment", As, "1300", true),
         ("1340", "Computers", As, "1300", true),
         ("1350", "Vehicles", As, "1300", true),
+        ("1390", "Accumulated Depreciation", As, "1300", true), // contra-asset (credit balance)
 
         // ----- Liabilities -----
         ("2000", "Liabilities", Li, null, false),

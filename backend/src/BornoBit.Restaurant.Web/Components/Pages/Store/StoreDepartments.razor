@@ -1,0 +1,75 @@
+@page "/store/departments"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Departments
+
+<PageTitle>Store Departments · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Store Departments"
+                Description="Departments the store issues stock to (Kitchen, Bar, Bakery…). A cost centre, not a sub-store.">
+        <Actions>
+            <button type="button" class="bo-btn bo-btn-primary" @onclick="ShowCreateAsync">+ New Department</button>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading departments…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_departments.Count == 0)
+    {
+        <EmptyState Description="No store departments yet. Click '+ New Department' to add one." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Order</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Code</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Name</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Description</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:center;">Status</th>
+                        <th style="padding:10px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var d in _departments)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft); @(d.IsActive ? "" : "opacity:0.55;")">
+                            <td style="padding:10px 14px;">@d.DisplayOrder</td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@d.Code</td>
+                            <td style="padding:10px 14px;">
+                                <strong>@d.Name</strong>
+                                @if (!string.IsNullOrEmpty(d.BanglaName))
+                                {
+                                    <div style="color: var(--bo-text-subtle); font-size: var(--bo-font-xs);">@d.BanglaName</div>
+                                }
+                            </td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@(d.Description ?? "—")</td>
+                            <td style="padding:10px 14px; text-align:center;">
+                                <span class="bo-pill @(d.IsActive ? "bo-pill-active" : "bo-pill-inactive")">@(d.IsActive ? "Active" : "Inactive")</span>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right; white-space:nowrap;">
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowEditAsync(d))">Edit</button>
+                                @if (d.IsActive)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(d, false))">Deactivate</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(d, true))">Activate</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

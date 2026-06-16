@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Accounting.Audit;
+using BornoBit.Restaurant.Application.Accounting.Posting;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Accounting;
@@ -21,13 +22,15 @@ public record CashImportResultDto(int Count, decimal Total, IReadOnlyList<string
 public class ImportCashCounterCommandHandler : IRequestHandler<ImportCashCounterCommand, CashImportResultDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IGeneralLedgerService _gl;
     private readonly TimeProvider _timeProvider;
     private readonly ICurrentUser _currentUser;
     private readonly IBusinessClock _clock;
 
-    public ImportCashCounterCommandHandler(IAppDbContext db, TimeProvider timeProvider, ICurrentUser currentUser, IBusinessClock clock)
+    public ImportCashCounterCommandHandler(IAppDbContext db, IGeneralLedgerService gl, TimeProvider timeProvider, ICurrentUser currentUser, IBusinessClock clock)
     {
         _db = db;
+        _gl = gl;
         _timeProvider = timeProvider;
         _currentUser = currentUser;
         _clock = clock;
@@ -109,8 +112,27 @@ public class ImportCashCounterCommandHandler : IRequestHandler<ImportCashCounter
 
         // If every method posted (nothing skipped), the orders are fully accounted.
         if (posted && skipped.Count == 0)
+        {
             foreach (var order in orders)
                 order.MarkAccounted();
+
+            // VAT accrual (hybrid): the cash mirror booked the FULL takings (VAT-inclusive) to Sales income.
+            // Reclass the output-VAT portion out of Sales into the VAT Payable liability (2200) so the balance
+            // sheet shows what is owed to NBR. Single correcting entry: Dr Sales-income / Cr VAT Payable.
+            var vat = await _db.OrderLines
+                .Where(l => orderIds.Contains(l.OrderId))
+                .SumAsync(l => (decimal?)l.TaxAmountSnapshot, cancellationToken) ?? 0m;
+
+            if (vat > 0m)
+            {
+                var salesGl = await ChartOfAccountsMapper.EnsureCategoryGlAsync(_db, salesCategory, cancellationToken);
+                await _gl.PostAsync(_db, occurredOn, VoucherType.Journal, new[]
+                {
+                    GlPostingLine.DrId(salesGl, vat, "Output VAT reclassified out of sales"),
+                    GlPostingLine.Cr(GlCodes.VatPayable, vat, $"Output VAT on {date:yyyy-MM-dd} takings")
+                }, reference: $"VAT-{date:yyyyMMdd}", narration: $"Output VAT accrual {date:yyyy-MM-dd}", cancellationToken);
+            }
+        }
 
         if (posted)
         {

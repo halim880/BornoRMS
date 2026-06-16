@@ -1,0 +1,114 @@
+@page "/store/reports/department-issues"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Departments
+@using BornoBit.Restaurant.Application.Store.Reports
+@using MediatR
+@inject ISender Mediator
+
+<PageTitle>Department Issues · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Department Consumption"
+                Description="What the store issued to each department over a date range. Excludes voided issues; value uses cost at post time." />
+
+    <div class="bo-card" style="padding:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <BoDatePicker @bind-Value="_from" Label="From" />
+        <BoDatePicker @bind-Value="_to" Label="To" />
+        <BoSelect TOption="StoreDepartmentDto"
+                  Items="@_departments"
+                  OptionValue="@(d => d.Id.ToString())"
+                  OptionText="@(d => d.Name)"
+                  SelectedOption="@_departments.FirstOrDefault(d => d.Id == _departmentId)"
+                  SelectedOptionChanged="@(d => _departmentId = d?.Id)"
+                  Label="Department" Placeholder="All departments" Style="min-width:200px;" />
+        <BoButton Variant="primary" OnClick="RunAsync" Loading="_loading">Run</BoButton>
+        <a class="bo-btn bo-btn-ghost" href="@PdfUrl()" target="_blank">Export PDF</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_result is not null)
+    {
+        @if (_result.Rows.Count == 0)
+        {
+            <EmptyState Description="No consumption in this period." />
+        }
+        else
+        {
+            <div class="bo-card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;">
+                <strong>Grand total</strong>
+                <strong>Tk @_result.GrandTotalValue.ToString("0.00")</strong>
+            </div>
+
+            @foreach (var row in _result.Rows)
+            {
+                <div class="bo-card" style="padding:0; overflow:hidden; margin-top:12px;">
+                    <div style="padding:12px 14px; display:flex; justify-content:space-between; align-items:center; background:var(--bo-bg-soft);">
+                        <strong>@row.DepartmentName</strong>
+                        <strong>Tk @row.TotalValue.ToString("0.00")</strong>
+                    </div>
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="text-align:left;">
+                                <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                                <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Qty</th>
+                                <th style="padding:8px 14px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in row.Items)
+                            {
+                                <tr style="border-top:1px solid var(--bo-border-soft);">
+                                    <td style="padding:8px 14px;">@item.ItemName</td>
+                                    <td style="padding:8px 14px; text-align:right;">@($"{item.QtyBase:0.###} {item.BaseUnitCode}")</td>
+                                    <td style="padding:8px 14px; text-align:right;">@item.Value.ToString("0.00")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private List<StoreDepartmentDto> _departments = new();
+    private DateOnly? _from = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-7);
+    private DateOnly? _to = DateOnly.FromDateTime(DateTime.UtcNow);
+    private Guid? _departmentId;
+
+    private bool _loading;
+    private string? _error;
+    private StoreDepartmentConsumptionResultDto? _result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _departments = (await Mediator.Send(new GetStoreDepartmentsQuery(IncludeInactive: true))).ToList();
+        await RunAsync();
+    }
+
+    private async Task RunAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            var from = (_from ?? DateOnly.FromDateTime(DateTime.UtcNow)).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var to = (_to ?? DateOnly.FromDateTime(DateTime.UtcNow)).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc).AddDays(1);
+            _result = await Mediator.Send(new GetStoreDepartmentConsumptionQuery(from, to, _departmentId));
+        }
+        catch (Exception ex) { _error = $"Failed to run report: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private string PdfUrl()
+    {
+        var from = (_from ?? DateOnly.FromDateTime(DateTime.UtcNow)).ToString("yyyy-MM-dd");
+        var to = (_to ?? DateOnly.FromDateTime(DateTime.UtcNow)).ToString("yyyy-MM-dd");
+        var url = $"/reports/store/department-issues.pdf?fromUtc={from}&toUtc={to}";
+        if (_departmentId is { } d) url += $"&departmentId={d}";
+        return url;
+    }
+}

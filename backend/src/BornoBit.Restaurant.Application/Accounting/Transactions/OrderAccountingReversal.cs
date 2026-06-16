@@ -1,3 +1,4 @@
+using BornoBit.Restaurant.Application.Accounting.Posting;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -27,7 +28,7 @@ public static class OrderAccountingReversal
     /// Call BEFORE applying the refund/void so the reversed net reflects what was originally booked.
     /// Does not call SaveChanges — the caller's single save commits the reversal + the refund/void atomically.
     /// </summary>
-    public static async Task ReverseIfAccountedAsync(IAppDbContext db, Order order, TimeProvider time, CancellationToken ct)
+    public static async Task ReverseIfAccountedAsync(IAppDbContext db, IGeneralLedgerService gl, Order order, TimeProvider time, CancellationToken ct)
     {
         if (order.AccountedAtUtc is null) return; // never imported → import nets the refund on its own
 
@@ -60,6 +61,29 @@ public static class OrderAccountingReversal
                     $"Order {order.OrderNumber}", $"Reversal of accounted {group.Method} takings (refund/void)");
                 db.FinanceTransactions.Add(txn);
                 await Posting.GeneralLedgerPoster.PostMirrorAsync(db, txn, nowUtc, ct);
+            }
+        }
+
+        // Reverse the output-VAT accrual booked for this order at import (Dr VAT Payable / Cr Sales-income).
+        // The order is being reopened; the next import re-accrues VAT from the (still-frozen) line snapshots.
+        var vat = await db.OrderLines
+            .Where(l => l.OrderId == order.Id)
+            .SumAsync(l => (decimal?)l.TaxAmountSnapshot, ct) ?? 0m;
+        if (vat > 0m)
+        {
+            var salesCategory = await db.FinanceCategories
+                .Where(c => c.Type == TransactionType.Income && c.IsActive)
+                .OrderByDescending(c => c.Name == "Sales")
+                .FirstOrDefaultAsync(ct);
+            if (salesCategory is not null)
+            {
+                var salesGl = await ChartOfAccountsMapper.EnsureCategoryGlAsync(db, salesCategory, ct);
+                var nowUtc2 = time.GetUtcNow().UtcDateTime;
+                await gl.PostAsync(db, nowUtc2, VoucherType.Journal, new[]
+                {
+                    GlPostingLine.Dr(GlCodes.VatPayable, vat, $"Reverse VAT on {order.OrderNumber} (refund/void)"),
+                    GlPostingLine.CrId(salesGl, vat, "Reverse output VAT into sales")
+                }, reference: $"VAT-REV-{order.OrderNumber}", narration: $"Reverse output VAT for {order.OrderNumber}", ct);
             }
         }
 

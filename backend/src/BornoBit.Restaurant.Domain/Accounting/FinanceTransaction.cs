@@ -17,6 +17,11 @@ public class FinanceTransaction : AuditableEntity
     public string? Reference { get; private set; }
     public string? Notes { get; private set; }
 
+    // Bank reconciliation: whether this transaction has been matched against a bank statement.
+    public bool IsCleared { get; private set; }
+    public DateTime? ClearedOn { get; private set; }
+    public Guid? BankReconciliationId { get; private set; }
+
     private FinanceTransaction() { }
 
     public static FinanceTransaction Create(
@@ -67,5 +72,19 @@ public class FinanceTransaction : AuditableEntity
         Amount = amount;
         Reference = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim();
         Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+    }
+
+    public void MarkCleared(Guid reconciliationId, DateTime clearedOn)
+    {
+        IsCleared = true;
+        ClearedOn = clearedOn.Date;
+        BankReconciliationId = reconciliationId;
+    }
+
+    public void Unclear()
+    {
+        IsCleared = false;
+        ClearedOn = null;
+        BankReconciliationId = null;
     }
 }

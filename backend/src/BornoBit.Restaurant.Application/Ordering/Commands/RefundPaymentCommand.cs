@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Accounting.Audit;
+using BornoBit.Restaurant.Application.Accounting.Posting;
 using BornoBit.Restaurant.Application.Accounting.Transactions;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Common.Security;
@@ -37,6 +38,7 @@ public class RefundPaymentCommandValidator : AbstractValidator<RefundPaymentComm
 public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand, SettlementResultDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IGeneralLedgerService _gl;
     private readonly ICurrentUser _currentUser;
     private readonly IManagerApprovalService _approvals;
     private readonly IStockConsumptionService _consumption;
@@ -44,10 +46,11 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
     private readonly ILogger<RefundPaymentCommandHandler> _logger;
 
     public RefundPaymentCommandHandler(
-        IAppDbContext db, ICurrentUser currentUser, IManagerApprovalService approvals,
+        IAppDbContext db, IGeneralLedgerService gl, ICurrentUser currentUser, IManagerApprovalService approvals,
         IStockConsumptionService consumption, TimeProvider timeProvider, ILogger<RefundPaymentCommandHandler> logger)
     {
         _db = db;
+        _gl = gl;
         _currentUser = currentUser;
         _approvals = approvals;
         _consumption = consumption;
@@ -78,7 +81,7 @@ public class RefundPaymentCommandHandler : IRequestHandler<RefundPaymentCommand,
         {
             // If already imported to the books, reverse the booked takings + reopen for re-accounting
             // (snapshots the pre-refund net, so this must run before RefundPayment mutates the ledger).
-            await OrderAccountingReversal.ReverseIfAccountedAsync(_db, order, _timeProvider, cancellationToken);
+            await OrderAccountingReversal.ReverseIfAccountedAsync(_db, _gl, order, _timeProvider, cancellationToken);
 
             order.RefundPayment(request.PaymentId, request.Amount, reason,
                 _currentUser.UserId, _currentUser.UserName, drawer?.Id);

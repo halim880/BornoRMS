@@ -1,0 +1,139 @@
+@page "/accounts/periods"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.Periods
+@using BornoBit.Restaurant.Domain.Accounting
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+
+<PageTitle>Period Close · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Period Close"
+                Description="Close a calendar month to lock it against back-dated postings. Run year-end to roll net profit into Retained Earnings." />
+
+    @if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="bo-card" style="padding:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            <BoNumberInput T="int" @bind-Value="_year" Label="Year" Min="2000" Max="9999" Style="width:110px;" />
+            <BoNumberInput T="int" @bind-Value="_month" Label="Month" Min="1" Max="12" Style="width:90px;" />
+            <BoButton Variant="primary" OnClick="CloseMonthAsync" Loading="_busy">Close month</BoButton>
+        </div>
+        <div class="bo-card" style="padding:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            <BoNumberInput T="int" @bind-Value="_closeYear" Label="Year-end close" Min="2000" Max="9999" Style="width:140px;" />
+            <BoButton Variant="danger" OnClick="CloseYearAsync" Loading="_busy">Run year-end</BoButton>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading periods…" />
+    }
+    else if (_periods.Count == 0)
+    {
+        <EmptyState Description="No periods closed yet. Every month is open by default." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Period</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Status</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Closed</th>
+                        <th style="padding:10px 14px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _periods)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px; font-weight:600;">@p.Name</td>
+                            <td style="padding:10px 14px;">
+                                <span style="color:@(p.Status == FiscalPeriodStatus.Closed ? "var(--bo-danger, #dc2626)" : "var(--bo-success, #16a34a)");">@p.Status</span>
+                            </td>
+                            <td style="padding:10px 14px; color:var(--bo-text-muted);">@(p.ClosedAtUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—") @(p.ClosedBy is null ? "" : $"by {p.ClosedBy}")</td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                @if (p.Status == FiscalPeriodStatus.Closed)
+                                {
+                                    <BoButton Variant="ghost" Size="sm" OnClick="@(() => ReopenAsync(p))">Reopen</BoButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private List<FiscalPeriodDto> _periods = new();
+
+    private int _year = DateTime.UtcNow.Year;
+    private int _month = DateTime.UtcNow.Month;
+    private int _closeYear = DateTime.UtcNow.Year - 1;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try { _periods = (await Mediator.Send(new GetPeriodsQuery())).ToList(); }
+        catch (Exception ex) { _error = $"Failed to load periods: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task CloseMonthAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Mediator.Send(new ClosePeriodCommand(_year, _month));
+            ToastService.ShowSuccess($"Period {_year}-{_month:00} closed.");
+            await ReloadAsync();
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task ReopenAsync(FiscalPeriodDto p)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Mediator.Send(new ReopenPeriodCommand(p.Year, p.Month));
+            ToastService.ShowSuccess($"Period {p.Name} reopened.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CloseYearAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var result = await Mediator.Send(new CloseYearCommand(_closeYear));
+            if (result.AlreadyClosed)
+                ToastService.ShowInfo($"Year {_closeYear} is already closed.");
+            else
+                ToastService.ShowSuccess($"Year {_closeYear} closed. Net profit {result.NetProfit:#,##0.00} → Retained Earnings ({result.JournalEntryNumber}).");
+            await ReloadAsync();
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

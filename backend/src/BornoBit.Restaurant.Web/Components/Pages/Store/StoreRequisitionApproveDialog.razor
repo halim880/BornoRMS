@@ -1,0 +1,67 @@
+@using BornoBit.Restaurant.Application.Store.Requisitions
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+        <p style="margin:0; color: var(--bo-text-muted);">Set the approved quantity per line (in base units). Reduce a quantity to approve less than requested; it cannot exceed the requested amount.</p>
+
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr style="background:var(--bo-bg-soft); text-align:left;">
+                    <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                    <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:120px; text-align:right;">Requested</th>
+                    <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); width:150px;">Approved</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Content.Lines)
+                {
+                    <tr style="border-top:1px solid var(--bo-border-soft);">
+                        <td style="padding:6px 10px;">@line.ItemName</td>
+                        <td style="padding:6px 10px; text-align:right; color: var(--bo-text-muted);">@($"{line.RequestedQtyBase:0.###} {line.BaseUnitCode}")</td>
+                        <td style="padding:6px 10px;">
+                            <BoNumeric T="decimal" Value="line.ApprovedQtyBase" ValueChanged="@(v => line.ApprovedQtyBase = v)" Min="0" Max="line.RequestedQtyBase" Step="0.001" Decimals="3" Style="width:100%;" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="ApproveAsync" Loading="_busy">Approve</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public StoreRequisitionApproveModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+
+    private async Task ApproveAsync()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var approved = Content.Lines.ToDictionary(l => l.LineId, l => l.ApprovedQtyBase);
+            await Mediator.Send(new ApproveStoreRequisitionCommand(Content.RequisitionId, approved));
+            Content.Approved = true;
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

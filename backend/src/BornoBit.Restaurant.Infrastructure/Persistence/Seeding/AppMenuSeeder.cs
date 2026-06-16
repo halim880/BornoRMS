@@ -225,9 +225,14 @@ public class AppMenuSeeder
             new("Store Dashboard", Url: "/store/dashboard", Icon: "DataPie", RequiredRole: Roles.Manager),
             new("Store Items", Url: "/store/items", Icon: "BoxMultiple", RequiredRole: Roles.Manager),
             new("Store Categories", Url: "/store/categories", Icon: "FolderList", RequiredRole: Roles.Manager),
+            new("Store Departments", Url: "/store/departments", Icon: "PeopleTeam", RequiredRole: Roles.Manager),
             new("Store Receipts", Url: "/store/grn", Icon: "ReceiptMoney", RequiredRole: Roles.Manager),
+            new("Store Requisitions", Url: "/store/requisitions", Icon: "ClipboardTask", RequiredRole: Roles.Manager),
             new("Store Issues", Url: "/store/issues", Icon: "DocumentBulletList", RequiredRole: Roles.Manager),
+            new("Department Issues", Url: "/store/reports/department-issues", Icon: "ChartMultiple", RequiredRole: Roles.Manager),
+            new("Store Ledger", Url: "/store/ledger", Icon: "History", RequiredRole: Roles.Manager),
             new("Store Suppliers", Url: "/store/suppliers", Icon: "PeopleTeam", RequiredRole: Roles.Admin),
+            new("Store Payables", Url: "/store/payables", Icon: "ReceiptMoney", RequiredRole: Roles.Admin),
         }),
         new("Accounts", Icon: "Money", RequiredRole: Roles.Admin, Children: new()
         {
@@ -235,11 +240,21 @@ public class AppMenuSeeder
             new("Supplier Payables", Url: "/accounts/payables",  Icon: "PeopleTeam",   RequiredRole: Roles.Admin),
             new("Cash Accounts", Url: "/accounts/cash-accounts",  Icon: "Wallet",       RequiredRole: Roles.Admin),
             new("Categories",    Url: "/accounts/categories",     Icon: "FolderList",   RequiredRole: Roles.Admin),
+            new("Period Close",  Url: "/accounts/periods",        Icon: "CalculatorMultiple", RequiredRole: Roles.Admin),
+            new("Fixed Assets",  Url: "/accounts/fixed-assets",   Icon: "Building",     RequiredRole: Roles.Admin),
+            new("Bank Reconciliation", Url: "/accounts/bank-rec",  Icon: "Wallet",      RequiredRole: Roles.Admin),
+            new("Payroll", Icon: "PeopleTeam", RequiredRole: Roles.Admin, Children: new()
+            {
+                new("Employees",    Url: "/accounts/payroll/employees", Icon: "Person",            RequiredRole: Roles.Admin),
+                new("Payroll Runs", Url: "/accounts/payroll/runs",      Icon: "DocumentBulletList", RequiredRole: Roles.Admin),
+            }),
             new("Reporting", Icon: "ChartMultiple", RequiredRole: Roles.Admin, Children: new()
             {
                 new("Profit & Loss",  Url: "/accounts/reports/profit-loss", Icon: "ChartMultiple",      RequiredRole: Roles.Admin),
                 new("Day-End Close",  Url: "/accounts/reports/day-end",     Icon: "CalculatorMultiple", RequiredRole: Roles.Admin),
+                new("Food Cost",      Url: "/accounts/reports/food-cost",   Icon: "ChartMultiple",      RequiredRole: Roles.Manager),
                 new("VAT Report",     Url: "/accounts/reports/vat",         Icon: "ReceiptMoney",       RequiredRole: Roles.Admin),
+                new("VAT Remittance", Url: "/accounts/reports/vat-remittance", Icon: "ReceiptMoney",    RequiredRole: Roles.Admin),
                 new("Cash Book",      Url: "/accounts/reports/cash-book",   Icon: "BookOpenMicroscope", RequiredRole: Roles.Admin),
                 new("Account Ledger", Url: "/accounts/reports/ledger",      Icon: "DocumentTable",      RequiredRole: Roles.Admin),
             }),

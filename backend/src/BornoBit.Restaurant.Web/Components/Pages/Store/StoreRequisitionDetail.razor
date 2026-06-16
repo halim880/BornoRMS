@@ -1,0 +1,86 @@
+@page "/store/requisitions/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Requisitions
+@using BornoBit.Restaurant.Domain.Store
+
+<PageTitle>Requisition · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    @if (_loading)
+    {
+        <LoadingState Message="Loading requisition…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_req is not null)
+    {
+        <PageHeader Title="@_req.RequisitionNumber"
+                    Description="@($"Department: {_req.DepartmentName}")">
+            <Actions>
+                <a class="bo-btn bo-btn-ghost" href="/store/requisitions">Back</a>
+                @if (_req.Status == StoreRequisitionStatus.Draft)
+                {
+                    <a class="bo-btn bo-btn-ghost" href="@($"/store/requisitions/{_req.Id}/edit")">Edit</a>
+                    <button type="button" class="bo-btn bo-btn-primary" @onclick="SubmitAsync" disabled="@_busy">Submit</button>
+                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="CancelAsync" disabled="@_busy">Cancel requisition</button>
+                }
+                else if (_req.Status == StoreRequisitionStatus.Submitted)
+                {
+                    <button type="button" class="bo-btn bo-btn-primary" @onclick="ShowApproveAsync" disabled="@_busy">Approve</button>
+                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="ShowRejectAsync" disabled="@_busy">Reject</button>
+                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="CancelAsync" disabled="@_busy">Cancel requisition</button>
+                }
+                else if (_req.Status is StoreRequisitionStatus.Approved or StoreRequisitionStatus.PartiallyIssued)
+                {
+                    <a class="bo-btn bo-btn-primary" href="@($"/store/issues/new?requisitionId={_req.Id}")">Fulfil → Issue</a>
+                }
+            </Actions>
+        </PageHeader>
+
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center;">
+                <div><span style="color: var(--bo-text-muted);">Status:</span> <BoBadge Tone="@StatusTone(_req.Status)">@StatusLabel(_req.Status)</BoBadge></div>
+                <div><span style="color: var(--bo-text-muted);">Requested:</span> @_req.RequestedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC</div>
+                @if (_req.RequiredByUtc is { } rb)
+                {
+                    <div><span style="color: var(--bo-text-muted);">Required by:</span> @rb.ToString("yyyy-MM-dd")</div>
+                }
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_req.Notes))
+            {
+                <div><span style="color: var(--bo-text-muted);">Notes:</span> @_req.Notes</div>
+            }
+            @if (_req.Status == StoreRequisitionStatus.Rejected && !string.IsNullOrWhiteSpace(_req.RejectedReason))
+            {
+                <BoMessageBar Intent="error">Rejected: @_req.RejectedReason</BoMessageBar>
+            }
+
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted);">Item</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Requested</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Approved</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Issued</th>
+                        <th style="padding:8px 10px; font-size: var(--bo-font-xs); text-transform:uppercase; color: var(--bo-text-muted); text-align:right;">Outstanding</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in _req.Lines)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:8px 10px;">@l.ItemName</td>
+                            <td style="padding:8px 10px; text-align:right;">@($"{l.RequestedQty:0.###} {l.UnitCode}")</td>
+                            <td style="padding:8px 10px; text-align:right;">@($"{l.ApprovedQtyBase:0.###} {l.BaseUnitCode}")</td>
+                            <td style="padding:8px 10px; text-align:right;">@($"{l.IssuedQtyBase:0.###} {l.BaseUnitCode}")</td>
+                            <td style="padding:8px 10px; text-align:right;">@($"{l.OutstandingQtyBase:0.###} {l.BaseUnitCode}")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

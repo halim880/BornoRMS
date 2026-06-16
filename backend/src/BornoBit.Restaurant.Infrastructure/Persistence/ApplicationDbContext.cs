@@ -4,11 +4,13 @@ using BornoBit.Restaurant.Domain.Catalog;
 using BornoBit.Restaurant.Domain.Common;
 using BornoBit.Restaurant.Domain.Customers;
 using BornoBit.Restaurant.Domain.Dining;
+using BornoBit.Restaurant.Domain.FixedAssets;
 using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Domain.Kitchen;
 using BornoBit.Restaurant.Domain.Menus;
 using BornoBit.Restaurant.Domain.Numbering;
 using BornoBit.Restaurant.Domain.Ordering;
+using BornoBit.Restaurant.Domain.Payroll;
 using BornoBit.Restaurant.Domain.Settings;
 using BornoBit.Restaurant.Domain.Store;
 using BornoBit.Restaurant.Domain.Tenants;
@@ -68,6 +70,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
 
     public DbSet<StoreUnit> StoreUnits => Set<StoreUnit>();
     public DbSet<StoreCategory> StoreCategories => Set<StoreCategory>();
+    public DbSet<StoreDepartment> StoreDepartments => Set<StoreDepartment>();
     public DbSet<StoreItem> StoreItems => Set<StoreItem>();
     public DbSet<StoreSupplier> StoreSuppliers => Set<StoreSupplier>();
     public DbSet<StoreGoodsReceipt> StoreGoodsReceipts => Set<StoreGoodsReceipt>();
@@ -75,6 +78,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<StoreIssue> StoreIssues => Set<StoreIssue>();
     public DbSet<StoreIssueLine> StoreIssueLines => Set<StoreIssueLine>();
     public DbSet<StoreStockMovement> StoreStockMovements => Set<StoreStockMovement>();
+    public DbSet<StorePayment> StorePayments => Set<StorePayment>();
+    public DbSet<StoreRequisition> StoreRequisitions => Set<StoreRequisition>();
+    public DbSet<StoreRequisitionLine> StoreRequisitionLines => Set<StoreRequisitionLine>();
 
     public DbSet<CashAccount> CashAccounts => Set<CashAccount>();
     public DbSet<FinanceCategory> FinanceCategories => Set<FinanceCategory>();
@@ -85,6 +91,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<JournalLine> JournalLines => Set<JournalLine>();
+    public DbSet<FiscalPeriod> FiscalPeriods => Set<FiscalPeriod>();
+    public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
+
+    public DbSet<FixedAsset> FixedAssets => Set<FixedAsset>();
+    public DbSet<DepreciationEntry> DepreciationEntries => Set<DepreciationEntry>();
+
+    public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<PayrollRun> PayrollRuns => Set<PayrollRun>();
+    public DbSet<PayrollRunLine> PayrollRunLines => Set<PayrollRunLine>();
 
     public DbSet<RestaurantBillingSettings> RestaurantBillingSettings => Set<RestaurantBillingSettings>();
 

@@ -56,9 +56,18 @@ public class StoreIssueVoucherDocument : IDocument
 
             col.Item().PaddingTop(6).Text(t =>
             {
-                t.Span("Destination: ").SemiBold();
+                t.Span("Department: ").SemiBold();
                 t.Span(_data.Destination);
             });
+
+            if (!string.IsNullOrWhiteSpace(_data.RequisitionNumber))
+            {
+                col.Item().Text(t =>
+                {
+                    t.Span("Requisition: ").SemiBold();
+                    t.Span(_data.RequisitionNumber);
+                });
+            }
 
             col.Item().PaddingVertical(6).LineHorizontal(0.7f).LineColor(Colors.Grey.Lighten1);
         });

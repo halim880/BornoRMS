@@ -3,7 +3,9 @@ using BornoBit.Restaurant.Application.Inventory.Purchases;
 using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Application.Store.Issues;
 using BornoBit.Restaurant.Application.Store.Items;
+using BornoBit.Restaurant.Application.Store.Ledger;
 using BornoBit.Restaurant.Application.Store.Purchases;
+using BornoBit.Restaurant.Application.Store.Reports;
 using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Reporting;
 using BornoBit.Restaurant.Reporting.Models;
@@ -203,7 +205,8 @@ public static class ReportEndpoints
                     GeneratedAtUtc: DateTime.UtcNow,
                     Lines: issue.Lines
                         .Select(l => new StoreIssueVoucherLine(l.ItemName, l.Qty, l.UnitCode))
-                        .ToList());
+                        .ToList(),
+                    RequisitionNumber: issue.RequisitionNumber);
 
                 var pdf = await renderer.RenderStoreIssueVoucherAsync(data, ct);
                 return Results.File(pdf, "application/pdf", $"{issue.IssueNumber}.pdf");
@@ -248,6 +251,59 @@ public static class ReportEndpoints
 
             var pdf = await renderer.RenderStockValuationAsync(data, ct);
             return Results.File(pdf, "application/pdf", lowStockOnly == true ? "store-low-stock.pdf" : "store-valuation.pdf");
+        }).RequireAuthorization("Store");
+
+        // Store stock-movement ledger (running balance when itemId is set).
+        app.MapGet("/reports/store/ledger.pdf", async (
+            Guid? itemId, DateTime? fromUtc, DateTime? toUtc,
+            ISender sender, IReportRenderer renderer, IOptions<ReceiptBranding> branding, CancellationToken ct) =>
+        {
+            var ledger = await sender.Send(new GetStoreMovementLedgerQuery(itemId, fromUtc, toUtc), ct);
+
+            var data = new StoreMovementLedgerReportData(
+                RestaurantName: branding.Value.Name,
+                ItemName: ledger.ItemName,
+                FromUtc: ledger.FromUtc,
+                ToUtc: ledger.ToUtc,
+                OpeningBalance: ledger.OpeningBalance,
+                ClosingBalance: ledger.ClosingBalance,
+                UnitCode: ledger.UnitCode,
+                GeneratedAtUtc: DateTime.UtcNow,
+                Lines: ledger.Rows
+                    .Select(r => new StoreMovementLedgerLine(
+                        r.OccurredAtUtc, r.ItemName, r.UnitCode, r.MovementType.ToString(),
+                        r.QtyBase, r.Reason, r.RunningBalance))
+                    .ToList());
+
+            var pdf = await renderer.RenderStoreMovementLedgerAsync(data, ct);
+            return Results.File(pdf, "application/pdf", "store-ledger.pdf");
+        }).RequireAuthorization("Store");
+
+        // Department-wise consumption report (what the store issued to each department over a date range).
+        app.MapGet("/reports/store/department-issues.pdf", async (
+            DateTime? fromUtc, DateTime? toUtc, Guid? departmentId,
+            ISender sender, IReportRenderer renderer, IOptions<ReceiptBranding> branding, CancellationToken ct) =>
+        {
+            var from = (fromUtc ?? DateTime.UtcNow.Date).Date;
+            var to = (toUtc ?? DateTime.UtcNow.Date).Date.AddDays(1);
+
+            var result = await sender.Send(new GetStoreDepartmentConsumptionQuery(from, to, departmentId), ct);
+
+            var data = new StoreDepartmentConsumptionReportData(
+                RestaurantName: branding.Value.Name,
+                FromUtc: result.FromUtc,
+                ToUtc: result.ToUtc,
+                Currency: "Tk",
+                GrandTotalValue: result.GrandTotalValue,
+                GeneratedAtUtc: DateTime.UtcNow,
+                Rows: result.Rows
+                    .Select(r => new StoreDepartmentConsumptionReportRow(
+                        r.DepartmentName, r.TotalValue,
+                        r.Items.Select(i => new StoreDepartmentConsumptionReportItem(i.ItemName, i.BaseUnitCode, i.QtyBase, i.Value)).ToList()))
+                    .ToList());
+
+            var pdf = await renderer.RenderStoreDepartmentConsumptionAsync(data, ct);
+            return Results.File(pdf, "application/pdf", "store-department-consumption.pdf");
         }).RequireAuthorization("Store");
 
         return app;

@@ -10,4 +10,6 @@ public interface IReportRenderer
     Task<byte[]> RenderStockValuationAsync(StockValuationReportData data, CancellationToken cancellationToken = default);
     Task<byte[]> RenderGoodsReceiptAsync(GoodsReceiptReportData data, CancellationToken cancellationToken = default);
     Task<byte[]> RenderStoreIssueVoucherAsync(StoreIssueVoucherReportData data, CancellationToken cancellationToken = default);
+    Task<byte[]> RenderStoreMovementLedgerAsync(StoreMovementLedgerReportData data, CancellationToken cancellationToken = default);
+    Task<byte[]> RenderStoreDepartmentConsumptionAsync(StoreDepartmentConsumptionReportData data, CancellationToken cancellationToken = default);
 }

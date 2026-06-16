@@ -1,3 +1,4 @@
+using BornoBit.Restaurant.Application.Store.Departments;
 using BornoBit.Restaurant.Application.Store.Issues;
 using BornoBit.Restaurant.Domain.Store;
 using BornoBit.Restaurant.Web.Components.BornoUi.Toast;
@@ -15,19 +16,31 @@ public partial class StoreIssues : ComponentBase
     private bool _posting;
     private string? _error;
     private List<StoreIssueListItemDto> _rows = new();
+    private List<StoreDepartmentDto> _departments = new();
+    private Guid? _filterDepartmentId;
 
-    protected override Task OnInitializedAsync() => ReloadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _departments = (await Mediator.Send(new GetStoreDepartmentsQuery(IncludeInactive: true))).ToList();
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
         _loading = true; _error = null;
         try
         {
-            var result = await Mediator.Send(new GetStoreIssuesQuery(PageSize: 100));
+            var result = await Mediator.Send(new GetStoreIssuesQuery(StoreDepartmentId: _filterDepartmentId, PageSize: 100));
             _rows = result.Items.ToList();
         }
         catch (Exception ex) { _error = $"Failed to load issues: {ex.Message}"; }
         finally { _loading = false; }
+    }
+
+    private async Task OnFilterDepartmentChanged(StoreDepartmentDto? d)
+    {
+        _filterDepartmentId = d?.Id;
+        await ReloadAsync();
     }
 
     private async Task PostAsync(StoreIssueListItemDto g)

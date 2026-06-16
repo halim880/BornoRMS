@@ -1,3 +1,4 @@
+using BornoBit.Restaurant.Application.Accounting.Periods;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Domain.Accounting;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,8 @@ public static class GeneralLedgerPoster
     /// keeps the number unique when re-posting after an edit (the prior mirror is voided, not replaced).</summary>
     public static async Task PostMirrorAsync(IAppDbContext db, FinanceTransaction txn, DateTime nowUtc, CancellationToken cancellationToken, string? entryNumberSuffix = null)
     {
+        await FiscalPeriodGuard.EnsureOpenAsync(db, txn.OccurredOn, cancellationToken);
+
         var cashGl = await ResolveCashAccountGlAsync(db, txn.CashAccountId, cancellationToken);
         var categoryGl = await ResolveCategoryGlAsync(db, txn.CategoryId, cancellationToken);
 

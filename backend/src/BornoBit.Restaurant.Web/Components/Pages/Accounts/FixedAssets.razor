@@ -1,0 +1,163 @@
+@page "/accounts/fixed-assets"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.Accounts
+@using BornoBit.Restaurant.Application.Accounting.FixedAssets
+@using BornoBit.Restaurant.Domain.Accounting
+@using BornoBit.Restaurant.Domain.FixedAssets
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+
+<PageTitle>Fixed Assets · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Fixed Assets"
+                Description="Asset register and straight-line depreciation. Running depreciation posts Dr Depreciation Expense / Cr Accumulated Depreciation." />
+
+    @if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:10px; min-width:340px;">
+            <strong>New asset</strong>
+            <BoInput @bind-Value="_name" Label="Name" Maxlength="200" />
+            <BoSelect TOption="AccountDto"
+                      Items="@_assetAccounts"
+                      OptionValue="@(a => a.Id.ToString())"
+                      OptionText="@(a => $"{a.Code} · {a.Name}")"
+                      SelectedOption="@_assetAccounts.FirstOrDefault(a => a.Id == _glAccountId)"
+                      SelectedOptionChanged="@(a => _glAccountId = a?.Id)"
+                      Label="GL asset account" Placeholder="(select)" />
+            <div style="display:flex; gap:8px;">
+                <BoNumberInput T="decimal" @bind-Value="_cost" Label="Cost" Min="0" Step="0.01" Style="width:120px;" />
+                <BoNumberInput T="decimal" @bind-Value="_salvage" Label="Salvage" Min="0" Step="0.01" Style="width:120px;" />
+                <BoNumberInput T="int" @bind-Value="_lifeMonths" Label="Life (months)" Min="1" Style="width:120px;" />
+            </div>
+            <BoDatePicker DateTimeValue="_acquired" DateTimeValueChanged="@(d => { if (d.HasValue) _acquired = d.Value.Date; })" Label="Acquired" />
+            <div><BoButton Variant="primary" OnClick="CreateAsync" Loading="_busy">Add asset</BoButton></div>
+        </div>
+
+        <div class="bo-card" style="padding:16px; display:flex; flex-direction:column; gap:10px; align-self:flex-start;">
+            <strong>Run depreciation</strong>
+            <div style="display:flex; gap:8px; align-items:flex-end;">
+                <BoNumberInput T="int" @bind-Value="_depYear" Label="Year" Min="2000" Max="9999" Style="width:110px;" />
+                <BoNumberInput T="int" @bind-Value="_depMonth" Label="Month" Min="1" Max="12" Style="width:90px;" />
+                <BoButton Variant="primary" OnClick="RunDepreciationAsync" Loading="_busy">Run</BoButton>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading assets…" />
+    }
+    else if (_assets.Count == 0)
+    {
+        <EmptyState Description="No fixed assets registered yet." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Asset</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Cost</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Accum. dep.</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Net book value</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _assets)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px;">
+                                <div style="font-weight:600;">@a.Name</div>
+                                <div style="font-size:var(--bo-font-xs); color:var(--bo-text-muted);">@a.AssetNumber · @a.GlAccountName</div>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right;">@a.Cost.ToString("#,##0.00")</td>
+                            <td style="padding:10px 14px; text-align:right;">@a.AccumulatedDepreciation.ToString("#,##0.00")</td>
+                            <td style="padding:10px 14px; text-align:right; font-weight:600;">@a.NetBookValue.ToString("#,##0.00")</td>
+                            <td style="padding:10px 14px;">@a.Status</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private List<FixedAssetDto> _assets = new();
+    private List<AccountDto> _assetAccounts = new();
+
+    private string _name = "";
+    private Guid? _glAccountId;
+    private decimal _cost;
+    private decimal _salvage;
+    private int _lifeMonths = 60;
+    private DateTime _acquired = DateTime.UtcNow.Date;
+
+    private int _depYear = DateTime.UtcNow.Year;
+    private int _depMonth = DateTime.UtcNow.Month;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            _assets = (await Mediator.Send(new GetFixedAssetsQuery())).ToList();
+            _assetAccounts = (await Mediator.Send(new GetAccountsQuery(PostableOnly: true, ActiveOnly: true)))
+                .Where(a => a.AccountType == AccountType.Asset).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task CreateAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_name)) { _error = "Name is required."; return; }
+        if (_glAccountId is null) { _error = "GL asset account is required."; return; }
+
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new CreateFixedAssetCommand(_name.Trim(), _glAccountId.Value, _acquired, _cost, _salvage, _lifeMonths));
+            ToastService.ShowSuccess($"Asset '{_name}' registered.");
+            _name = ""; _cost = 0m; _salvage = 0m; _glAccountId = null;
+            await ReloadAsync();
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task RunDepreciationAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var result = await Mediator.Send(new RunDepreciationCommand(_depYear, _depMonth));
+            if (result.AlreadyRun)
+                ToastService.ShowInfo($"Depreciation for {_depYear}-{_depMonth:00} was already run.");
+            else if (result.AssetCount == 0)
+                ToastService.ShowInfo("No active assets had depreciation to post.");
+            else
+                ToastService.ShowSuccess($"Depreciated {result.AssetCount} asset(s), total {result.Total:#,##0.00} ({result.JournalEntryNumber}).");
+            await ReloadAsync();
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

@@ -52,6 +52,8 @@ public static class DependencyInjection
         services.AddScoped<ITransactionNumberGenerator, TransactionNumberGenerator>();
         services.AddScoped<IJournalNumberGenerator, JournalNumberGenerator>();
         services.AddScoped<IDrawerNumberGenerator, DrawerNumberGenerator>();
+        services.AddScoped<IAssetNumberGenerator, AssetNumberGenerator>();
+        services.AddScoped<IPayrollNumberGenerator, PayrollNumberGenerator>();
         services.AddScoped<ISmsSender, StubSmsSender>();
         services.AddScoped<ICustomerTokenService, CustomerTokenService>();
         services.AddScoped<IStaffTokenService, StaffTokenService>();
@@ -70,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<StockSeeder>();
         services.AddScoped<RecipeSeeder>();
         services.AddScoped<StoreUnitSeeder>();
+        services.AddScoped<StoreDepartmentSeeder>();
         services.AddScoped<AccountingSeeder>();
         services.AddScoped<GeneralLedgerSeeder>();
         services.AddScoped<BillingSettingsSeeder>();

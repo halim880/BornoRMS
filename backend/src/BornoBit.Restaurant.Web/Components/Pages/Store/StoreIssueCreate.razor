@@ -3,6 +3,8 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
 @using BornoBit.Restaurant.Application.Store.Items
 @using BornoBit.Restaurant.Application.Store.Issues
+@using BornoBit.Restaurant.Application.Store.Departments
+@using BornoBit.Restaurant.Application.Store.Requisitions
 @using BornoBit.Restaurant.Application.Store.Units
 @using BornoBit.Restaurant.Domain.Store
 @using FluentValidation
@@ -15,7 +17,7 @@
 
 <div class="bo-page">
     <PageHeader Title="@(_isEdit ? "Edit Store Issue" : "New Store Issue")"
-                Description="Issue stock to a destination (e.g. Main Kitchen). Saved as a draft — post it from the list to lower stock." />
+                Description="Issue stock to a consuming department (Kitchen, Bar…). Saved as a draft — post it from the list to lower stock." />
 
     @if (_loading)
     {
@@ -33,8 +35,19 @@
                 <BoMessageBar Intent="error">@_error</BoMessageBar>
             }
 
+            @if (_requisitionNumber is not null)
+            {
+                <BoMessageBar Intent="info">Fulfilling requisition <strong>@_requisitionNumber</strong>. Lines are prefilled with the outstanding approved quantities; adjust as needed before posting.</BoMessageBar>
+            }
+
             <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <BoInput @bind-Value="_destination" Label="Destination" Required="true" Style="flex:1; min-width:220px;" Maxlength="200" Placeholder="e.g. Main Kitchen" />
+                <BoSelect TOption="StoreDepartmentDto"
+                          Items="@_departments"
+                          OptionValue="@(d => d.Id.ToString())"
+                          OptionText="@(d => d.Name)"
+                          SelectedOption="@_departments.FirstOrDefault(d => d.Id == _departmentId)"
+                          SelectedOptionChanged="@(d => _departmentId = d?.Id ?? Guid.Empty)"
+                          Label="Department" Placeholder="Select a department" Required="true" Disabled="@(_requisitionId.HasValue)" Style="flex:1; min-width:220px;" />
             </div>
 
             <BoInput @bind-Value="_notes" Label="Notes" Style="width:100%;" Maxlength="1000" />
@@ -109,6 +122,7 @@
 
 @code {
     [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery] public Guid? RequisitionId { get; set; }
     private bool _isEdit => Id.HasValue;
 
     private bool _loading = true;
@@ -118,8 +132,11 @@
 
     private List<StoreItemDto> _items = new();
     private List<StoreUnitDto> _units = new();
+    private List<StoreDepartmentDto> _departments = new();
 
-    private string? _destination;
+    private Guid _departmentId;
+    private Guid? _requisitionId;
+    private string? _requisitionNumber;
     private string? _notes;
 
     private readonly List<LineRow> _lines = new();
@@ -137,6 +154,7 @@
         {
             _items = (await Mediator.Send(new GetStoreItemsQuery(PageSize: 200, IncludeInactive: false))).Items.ToList();
             _units = (await Mediator.Send(new GetStoreUnitsQuery())).Where(u => u.IsActive).ToList();
+            _departments = (await Mediator.Send(new GetStoreDepartmentsQuery(IncludeInactive: true))).ToList();
 
             if (_isEdit)
             {
@@ -146,10 +164,35 @@
                     _loadError = $"Issue '{issue.IssueNumber}' is {issue.Status} and can no longer be edited.";
                     return;
                 }
-                _destination = issue.Destination;
+                _departmentId = issue.StoreDepartmentId;
+                _requisitionId = issue.StoreRequisitionId;
+                _requisitionNumber = issue.RequisitionNumber;
                 _notes = issue.Notes;
                 foreach (var l in issue.Lines)
                     _lines.Add(new LineRow { ItemId = l.StoreItemId, Qty = l.Qty, UnitId = l.UnitId });
+            }
+            else if (RequisitionId is { } reqId)
+            {
+                var req = await Mediator.Send(new GetStoreRequisitionQuery(reqId));
+                if (req.Status is not (StoreRequisitionStatus.Approved or StoreRequisitionStatus.PartiallyIssued))
+                {
+                    _loadError = $"Requisition '{req.RequisitionNumber}' is {req.Status}; only an approved requisition can be issued.";
+                    return;
+                }
+                _requisitionId = req.Id;
+                _requisitionNumber = req.RequisitionNumber;
+                _departmentId = req.StoreDepartmentId;
+
+                foreach (var l in req.Lines.Where(l => l.OutstandingQtyBase > 0m))
+                {
+                    var item = _items.FirstOrDefault(i => i.Id == l.StoreItemId);
+                    _lines.Add(new LineRow
+                    {
+                        ItemId = l.StoreItemId,
+                        Qty = l.OutstandingQtyBase,
+                        UnitId = item?.BaseUnitId ?? l.UnitId
+                    });
+                }
             }
         }
         catch (Exception ex) { _loadError = $"Failed to load: {ex.Message}"; }
@@ -177,7 +220,7 @@
     private async Task SaveAsync()
     {
         _error = null;
-        if (string.IsNullOrWhiteSpace(_destination)) { _error = "Destination is required."; return; }
+        if (_departmentId == Guid.Empty) { _error = "Select a department."; return; }
         var valid = _lines.Where(l => l.ItemId != Guid.Empty && l.UnitId != Guid.Empty && l.Qty > 0).ToList();
         if (valid.Count == 0) { _error = "Add at least one line with an item, unit and quantity."; return; }
 
@@ -188,12 +231,12 @@
             var notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim();
             if (_isEdit)
             {
-                await Mediator.Send(new UpdateStoreIssueCommand(Id!.Value, _destination.Trim(), null, notes, inputs));
+                await Mediator.Send(new UpdateStoreIssueCommand(Id!.Value, _departmentId, null, notes, inputs, _requisitionId));
                 ToastService.ShowSuccess("Issue updated.");
             }
             else
             {
-                await Mediator.Send(new CreateStoreIssueCommand(_destination.Trim(), null, notes, inputs));
+                await Mediator.Send(new CreateStoreIssueCommand(_departmentId, null, notes, inputs, _requisitionId));
                 ToastService.ShowSuccess("Draft issue created. Post it to lower stock.");
             }
             Nav.NavigateTo("/store/issues");

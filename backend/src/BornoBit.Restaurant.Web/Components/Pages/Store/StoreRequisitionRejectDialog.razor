@@ -1,0 +1,46 @@
+@using BornoBit.Restaurant.Application.Store.Requisitions
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+        <BoInput @bind-Value="Content.Reason" Label="Rejection reason" Required="true" Style="width:100%;" Maxlength="500" Placeholder="Why is this requisition rejected?" />
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="danger" OnClick="RejectAsync" Loading="_busy">Reject</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public StoreRequisitionRejectModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+
+    private async Task RejectAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Reason)) { _error = "A reason is required."; return; }
+
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new RejectStoreRequisitionCommand(Content.RequisitionId, Content.Reason.Trim()));
+            Content.Rejected = true;
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}

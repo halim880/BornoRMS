@@ -1,0 +1,92 @@
+@page "/accounts/reports/vat-remittance"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.CashAccounts
+@using BornoBit.Restaurant.Application.Accounting.Posting
+@using BornoBit.Restaurant.Application.Accounting.Reports
+@using BornoBit.Restaurant.Application.Accounting.Transactions
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+
+<PageTitle>VAT Remittance · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="VAT Remittance"
+                Description="Pay collected output VAT to the authority. Clears the VAT Payable liability the cash-counter import accrued (Dr VAT Payable / Cr cash)." />
+
+    @if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+
+    <div class="bo-card" style="padding:16px; margin-bottom:16px; display:flex; gap:24px; align-items:center;">
+        <div>
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">VAT Payable (GL @GlCodes.VatPayable)</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700; color:var(--bo-danger, #dc2626);">@_payable.ToString("#,##0.00")</div>
+        </div>
+    </div>
+
+    <div class="bo-card" style="padding:16px; max-width:560px; display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; gap:12px;">
+            <BoNumberInput T="decimal" @bind-Value="_amount" Label="Amount" Min="0" Step="0.01" Style="width:200px;" />
+            <BoDatePicker DateTimeValue="_paidOn" DateTimeValueChanged="@(d => { if (d.HasValue) _paidOn = d.Value.Date; })" Label="Date" Required="true" />
+        </div>
+        <BoSelect TOption="CashAccountDto"
+                  Items="@_accounts"
+                  OptionValue="@(a => a.Id.ToString())"
+                  OptionText="@(a => a.Name)"
+                  SelectedOption="@_accounts.FirstOrDefault(a => a.Id == _cashAccountId)"
+                  SelectedOptionChanged="@(a => _cashAccountId = a?.Id)"
+                  Label="Pay from account" Required="true" Placeholder="(select an account)" Style="width:100%;" />
+        <BoInput @bind-Value="_reference" Label="Reference (e.g. NBR challan no.)" Style="width:100%;" Maxlength="80" />
+        <div>
+            <BoButton Variant="primary" OnClick="SubmitAsync" Loading="_busy">Record remittance</BoButton>
+        </div>
+    </div>
+</div>
+
+@code {
+    private decimal _payable;
+    private decimal _amount;
+    private DateTime _paidOn = DateTime.UtcNow.Date;
+    private Guid? _cashAccountId;
+    private string? _reference;
+    private List<CashAccountDto> _accounts = new();
+    private string? _error;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _error = null;
+        try
+        {
+            _accounts = (await Mediator.Send(new GetCashAccountsQuery(ActiveOnly: true))).ToList();
+            _payable = (await Mediator.Send(new GetGlAccountBalanceQuery(GlCodes.VatPayable))).Balance;
+            _amount = _payable > 0m ? _payable : 0m;
+        }
+        catch (Exception ex) { _error = $"Failed to load: {ex.Message}"; }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (_cashAccountId is null) { _error = "Cash account is required."; return; }
+        if (_amount <= 0m) { _error = "Amount must be greater than zero."; return; }
+
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new RecordVatPaymentCommand(_cashAccountId.Value, _paidOn, _amount,
+                string.IsNullOrWhiteSpace(_reference) ? null : _reference.Trim()));
+            ToastService.ShowSuccess("VAT remittance recorded.");
+            _reference = null;
+            await ReloadAsync();
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}

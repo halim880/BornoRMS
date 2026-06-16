@@ -29,6 +29,10 @@ public static class DependencyInjection
         // Unified stock pipeline (stateless — shares the caller's IAppDbContext per method call).
         services.AddScoped<IStockConsumptionService, StockConsumptionService>();
 
+        // Direct multi-line GL poster for accrual entries (AP, VAT, depreciation, payroll, close).
+        // Stateless like the stock pipeline — shares the caller's IAppDbContext per method call.
+        services.AddScoped<Accounting.Posting.IGeneralLedgerService, Accounting.Posting.GeneralLedgerService>();
+
         // Single source of truth for dine-in table occupancy (shared by waiter + POS order flows).
         services.AddScoped<IDineInSessionResolver, DineInSessionResolver>();
 

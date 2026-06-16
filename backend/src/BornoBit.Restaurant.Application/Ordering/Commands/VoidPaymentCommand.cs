@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Accounting.Audit;
+using BornoBit.Restaurant.Application.Accounting.Posting;
 using BornoBit.Restaurant.Application.Accounting.Transactions;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Common.Security;
@@ -36,6 +37,7 @@ public class VoidPaymentCommandValidator : AbstractValidator<VoidPaymentCommand>
 public class VoidPaymentCommandHandler : IRequestHandler<VoidPaymentCommand, SettlementResultDto>
 {
     private readonly IAppDbContext _db;
+    private readonly IGeneralLedgerService _gl;
     private readonly ICurrentUser _currentUser;
     private readonly IManagerApprovalService _approvals;
     private readonly IStockConsumptionService _consumption;
@@ -43,10 +45,11 @@ public class VoidPaymentCommandHandler : IRequestHandler<VoidPaymentCommand, Set
     private readonly ILogger<VoidPaymentCommandHandler> _logger;
 
     public VoidPaymentCommandHandler(
-        IAppDbContext db, ICurrentUser currentUser, IManagerApprovalService approvals,
+        IAppDbContext db, IGeneralLedgerService gl, ICurrentUser currentUser, IManagerApprovalService approvals,
         IStockConsumptionService consumption, TimeProvider timeProvider, ILogger<VoidPaymentCommandHandler> logger)
     {
         _db = db;
+        _gl = gl;
         _currentUser = currentUser;
         _approvals = approvals;
         _consumption = consumption;
@@ -79,7 +82,7 @@ public class VoidPaymentCommandHandler : IRequestHandler<VoidPaymentCommand, Set
         {
             // If already imported to the books, reverse the booked takings + reopen for re-accounting
             // (snapshots the pre-void net, so this must run before VoidPayment mutates the ledger).
-            await OrderAccountingReversal.ReverseIfAccountedAsync(_db, order, _timeProvider, cancellationToken);
+            await OrderAccountingReversal.ReverseIfAccountedAsync(_db, _gl, order, _timeProvider, cancellationToken);
 
             order.VoidPayment(request.PaymentId, reason);
         }

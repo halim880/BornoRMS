@@ -1,0 +1,122 @@
+@page "/accounts/payroll/employees"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Accounting.Payroll
+@using BornoBit.Restaurant.Domain.Payroll
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+@inject BornoBit.Restaurant.Web.Components.BornoUi.Toast.IBoToastService ToastService
+
+<PageTitle>Employees · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Employees" Description="Payroll employee master. Base salary and overtime rate seed each monthly payroll run." />
+
+    @if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+
+    <div class="bo-card" style="padding:16px; margin-bottom:16px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <BoInput @bind-Value="_code" Label="Code" Style="width:120px;" Maxlength="40" />
+        <BoInput @bind-Value="_name" Label="Full name" Style="width:200px;" Maxlength="200" />
+        <BoInput @bind-Value="_designation" Label="Designation" Style="width:160px;" Maxlength="120" />
+        <BoNumberInput T="decimal" @bind-Value="_baseSalary" Label="Base salary" Min="0" Step="0.01" Style="width:130px;" />
+        <BoNumberInput T="decimal" @bind-Value="_overtimeRate" Label="OT rate" Min="0" Step="0.01" Style="width:110px;" />
+        <BoButton Variant="primary" OnClick="CreateAsync" Loading="_busy">Add</BoButton>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading employees…" />
+    }
+    else if (_employees.Count == 0)
+    {
+        <EmptyState Description="No employees yet." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Code</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Name</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Designation</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Base salary</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Status</th>
+                        <th style="padding:10px 14px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in _employees)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px;">@e.Code</td>
+                            <td style="padding:10px 14px; font-weight:600;">@e.FullName</td>
+                            <td style="padding:10px 14px; color:var(--bo-text-muted);">@(e.Designation ?? "—")</td>
+                            <td style="padding:10px 14px; text-align:right;">@e.BaseSalary.ToString("#,##0.00")</td>
+                            <td style="padding:10px 14px;">@e.Status</td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                <BoButton Variant="ghost" Size="sm" OnClick="@(() => ToggleStatusAsync(e))">
+                                    @(e.Status == EmployeeStatus.Active ? "Deactivate" : "Activate")
+                                </BoButton>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private List<EmployeeDto> _employees = new();
+
+    private string _code = "", _name = "", _designation = "";
+    private decimal _baseSalary, _overtimeRate;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try { _employees = (await Mediator.Send(new GetEmployeesQuery())).ToList(); }
+        catch (Exception ex) { _error = $"Failed to load employees: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task CreateAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name)) { _error = "Code and name are required."; return; }
+
+        _busy = true;
+        try
+        {
+            await Mediator.Send(new CreateEmployeeCommand(_code.Trim(), _name.Trim(),
+                string.IsNullOrWhiteSpace(_designation) ? null : _designation.Trim(), _baseSalary, _overtimeRate, DateTime.UtcNow.Date));
+            ToastService.ShowSuccess($"Employee {_name} added.");
+            _code = ""; _name = ""; _designation = ""; _baseSalary = 0m; _overtimeRate = 0m;
+            await ReloadAsync();
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task ToggleStatusAsync(EmployeeDto e)
+    {
+        _error = null;
+        var newStatus = e.Status == EmployeeStatus.Active ? EmployeeStatus.Inactive : EmployeeStatus.Active;
+        try
+        {
+            await Mediator.Send(new UpdateEmployeeCommand(e.Id, e.FullName, e.Designation, e.BaseSalary, e.OvertimeRate, newStatus));
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

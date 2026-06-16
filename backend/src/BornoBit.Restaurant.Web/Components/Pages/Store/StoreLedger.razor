@@ -1,0 +1,100 @@
+@page "/store/ledger"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Store")]
+@using BornoBit.Restaurant.Application.Store.Items
+@using BornoBit.Restaurant.Application.Store.Ledger
+
+<PageTitle>Store Ledger · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Store Movement Ledger"
+                Description="Every stock movement (opening, purchase, issue, wastage, adjustment). Pick an item for a running balance.">
+        <Actions>
+            <a class="bo-btn bo-btn-ghost" href="@PdfUrl()" target="_blank">PDF</a>
+        </Actions>
+    </PageHeader>
+
+    <div class="bo-card" style="padding:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;">
+        <BoSelect TOption="StoreItemDto"
+                  Items="@_items"
+                  OptionValue="@(i => i.Id.ToString())"
+                  OptionText="@(i => i.Name)"
+                  SelectedOption="@_items.FirstOrDefault(i => i.Id == _itemId)"
+                  SelectedOptionChanged="@(i => _itemId = i?.Id)"
+                  Label="Item (all if blank)" Placeholder="All items" Style="min-width:240px;" />
+        <div>
+            <label style="display:block; font-size:var(--bo-font-xs); color:var(--bo-text-muted); margin-bottom:4px;">From</label>
+            <input type="date" @bind="_from" class="bo-input" />
+        </div>
+        <div>
+            <label style="display:block; font-size:var(--bo-font-xs); color:var(--bo-text-muted); margin-bottom:4px;">To</label>
+            <input type="date" @bind="_to" class="bo-input" />
+        </div>
+        <BoButton Variant="primary" OnClick="ReloadAsync" Loading="_loading">Apply</BoButton>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading ledger…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_data is null || _data.Rows.Count == 0)
+    {
+        <EmptyState Description="No movements for the selected filters." />
+    }
+    else
+    {
+        @if (_data.ItemId is not null)
+        {
+            <div style="display:flex; gap:18px; margin-bottom:10px; color:var(--bo-text-muted);">
+                <span>Opening: <strong>@_data.OpeningBalance?.ToString("0.###") @_data.UnitCode</strong></span>
+                <span>Closing: <strong>@_data.ClosingBalance?.ToString("0.###") @_data.UnitCode</strong></span>
+                <span>@_data.Rows.Count movement(s)</span>
+            </div>
+        }
+
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Date (UTC)</th>
+                        @if (_data.ItemId is null)
+                        {
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Item</th>
+                        }
+                        <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Type</th>
+                        <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Qty</th>
+                        <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Reason</th>
+                        @if (_data.ItemId is not null)
+                        {
+                            <th style="padding:8px 12px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">Balance</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _data.Rows)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:8px 12px; color:var(--bo-text-muted);">@r.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                            @if (_data.ItemId is null)
+                            {
+                                <td style="padding:8px 12px;">@r.ItemName</td>
+                            }
+                            <td style="padding:8px 12px; color:var(--bo-text-muted);">@r.MovementType</td>
+                            <td style="padding:8px 12px; text-align:right; color:@(r.QtyBase >= 0 ? "var(--bo-success)" : "var(--bo-danger)");">
+                                @(r.QtyBase >= 0 ? "+" : "")@r.QtyBase.ToString("0.###") @r.UnitCode
+                            </td>
+                            <td style="padding:8px 12px; color:var(--bo-text-subtle); font-size:var(--bo-font-xs);">@r.Reason</td>
+                            @if (_data.ItemId is not null)
+                            {
+                                <td style="padding:8px 12px; text-align:right;">@r.RunningBalance?.ToString("0.###")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

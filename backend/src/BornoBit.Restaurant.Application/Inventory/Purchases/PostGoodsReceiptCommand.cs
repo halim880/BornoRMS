@@ -1,7 +1,9 @@
+using BornoBit.Restaurant.Application.Accounting.Posting;
 using BornoBit.Restaurant.Application.Common.Numbering;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Application.Inventory.Payables;
+using BornoBit.Restaurant.Domain.Accounting;
 using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Shared.Common;
 using BornoBit.Restaurant.Shared.Identity;
@@ -28,14 +30,16 @@ public class PostGoodsReceiptCommandValidator : AbstractValidator<PostGoodsRecei
 public class PostGoodsReceiptCommandHandler : IRequestHandler<PostGoodsReceiptCommand, Unit>
 {
     private readonly IAppDbContext _db;
+    private readonly IGeneralLedgerService _gl;
     private readonly TimeProvider _timeProvider;
     private readonly ITransactionNumberGenerator _numbers;
     private readonly ICurrentUser _currentUser;
 
     public PostGoodsReceiptCommandHandler(
-        IAppDbContext db, TimeProvider timeProvider, ITransactionNumberGenerator numbers, ICurrentUser currentUser)
+        IAppDbContext db, IGeneralLedgerService gl, TimeProvider timeProvider, ITransactionNumberGenerator numbers, ICurrentUser currentUser)
     {
         _db = db;
+        _gl = gl;
         _timeProvider = timeProvider;
         _numbers = numbers;
         _currentUser = currentUser;
@@ -79,6 +83,21 @@ public class PostGoodsReceiptCommandHandler : IRequestHandler<PostGoodsReceiptCo
 
         grn.MarkPosted(nowUtc);
 
+        // GL accrual (hybrid): book the cost as a payable the moment goods are received —
+        // Dr Purchases-expense / Cr Accounts Payable (2100). Payment later clears AP against cash.
+        // NOTE (cutover): only receipts posted after this feature shipped raise AP. For a DB with
+        // pre-existing outstanding payables, post a one-off opening-AP journal so GL AP matches
+        // GetPayablesQuery's received-minus-paid formula.
+        if (grn.Subtotal > 0m)
+        {
+            var purchasesGl = await SupplierPaymentPoster.ResolvePurchasesGlAsync(_db, cancellationToken);
+            await _gl.PostAsync(_db, grn.ReceivedAtUtc, VoucherType.Journal, new[]
+            {
+                GlPostingLine.DrId(purchasesGl, grn.Subtotal, $"Goods receipt {grn.GrnNumber}"),
+                GlPostingLine.Cr(GlCodes.AccountsPayable, grn.Subtotal, $"Payable to supplier (GRN {grn.GrnNumber})")
+            }, reference: grn.GrnNumber, narration: $"GRN {grn.GrnNumber} accrual", cancellationToken);
+        }
+
         // PO/GRN matching: bump the received tally on each matched purchase-order line, then advance PO status.
         if (grn.PurchaseOrderId is { } poId)
         {
@@ -99,7 +118,7 @@ public class PostGoodsReceiptCommandHandler : IRequestHandler<PostGoodsReceiptCo
         if (request.PaymentCashAccountId is { } accountId)
         {
             await SupplierPaymentPoster.AddAsync(
-                _db, _numbers, _currentUser, nowUtc,
+                _db, _gl, _numbers, _currentUser, nowUtc,
                 grn.SupplierId, accountId, grn.ReceivedAtUtc, grn.Subtotal,
                 reference: grn.GrnNumber, notes: $"Payment on goods receipt {grn.GrnNumber}", cancellationToken);
         }

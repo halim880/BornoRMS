@@ -3,14 +3,18 @@ using BornoBit.Restaurant.Domain.Common;
 namespace BornoBit.Restaurant.Domain.Store;
 
 /// <summary>
-/// A store issue: stock leaving the warehouse to a destination (kitchen / department / branch). Created as
+/// A store issue: stock leaving the warehouse to a consuming department (Kitchen, Bar, Bakery…). Created as
 /// <c>Draft</c>, then <c>Posted</c> — posting is the only path that lowers stock (the application layer calls
 /// <c>StoreItem.Issue</c> per line and writes an <c>IssueOut</c> movement, valued at the item's current
-/// average cost). <see cref="Destination"/> is free text — the issue does not post into the POS module.
+/// average cost). <see cref="StoreDepartmentId"/> is the cost centre charged; <see cref="Destination"/> holds a
+/// denormalised snapshot of the department name for display. <see cref="StoreRequisitionId"/> links the issue
+/// back to an approved requisition when it was raised from one (null for ad-hoc issues).
 /// </summary>
 public class StoreIssue : AuditableEntity
 {
     public string IssueNumber { get; private set; } = default!;
+    public Guid StoreDepartmentId { get; private set; }
+    public Guid? StoreRequisitionId { get; private set; }
     public string Destination { get; private set; } = default!;
     public DateTime IssuedAtUtc { get; private set; }
     public string? Notes { get; private set; }
@@ -24,30 +28,39 @@ public class StoreIssue : AuditableEntity
 
     public static StoreIssue Create(
         string issueNumber,
-        string destination,
+        Guid storeDepartmentId,
+        string departmentName,
         DateTime issuedAtUtc,
-        string? notes = null)
+        string? notes = null,
+        Guid? storeRequisitionId = null)
     {
         if (string.IsNullOrWhiteSpace(issueNumber)) throw new ArgumentException("Issue number is required.", nameof(issueNumber));
-        if (string.IsNullOrWhiteSpace(destination)) throw new ArgumentException("Destination is required.", nameof(destination));
+        if (storeDepartmentId == Guid.Empty) throw new ArgumentException("Department is required.", nameof(storeDepartmentId));
+        if (string.IsNullOrWhiteSpace(departmentName)) throw new ArgumentException("Department name is required.", nameof(departmentName));
 
         return new StoreIssue
         {
             IssueNumber = issueNumber.Trim().ToUpperInvariant(),
-            Destination = destination.Trim(),
+            StoreDepartmentId = storeDepartmentId,
+            StoreRequisitionId = storeRequisitionId,
+            Destination = departmentName.Trim(),
             IssuedAtUtc = issuedAtUtc,
             Notes = Trim(notes),
             Status = StoreIssueStatus.Draft
         };
     }
 
-    /// <summary>Edit the header fields of a draft issue.</summary>
-    public void UpdateHeader(string destination, DateTime issuedAtUtc, string? notes)
+    /// <summary>Edit the header fields of a draft issue. <paramref name="departmentName"/> is the snapshot stored
+    /// in <see cref="Destination"/>.</summary>
+    public void UpdateHeader(Guid storeDepartmentId, string departmentName, DateTime issuedAtUtc, string? notes, Guid? storeRequisitionId)
     {
         if (Status != StoreIssueStatus.Draft) throw new InvalidOperationException("Cannot edit a posted or voided issue.");
-        if (string.IsNullOrWhiteSpace(destination)) throw new ArgumentException("Destination is required.", nameof(destination));
+        if (storeDepartmentId == Guid.Empty) throw new ArgumentException("Department is required.", nameof(storeDepartmentId));
+        if (string.IsNullOrWhiteSpace(departmentName)) throw new ArgumentException("Department name is required.", nameof(departmentName));
 
-        Destination = destination.Trim();
+        StoreDepartmentId = storeDepartmentId;
+        StoreRequisitionId = storeRequisitionId;
+        Destination = departmentName.Trim();
         IssuedAtUtc = issuedAtUtc;
         Notes = Trim(notes);
     }

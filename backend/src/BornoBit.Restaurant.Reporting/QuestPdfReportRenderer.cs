@@ -47,4 +47,16 @@ public class QuestPdfReportRenderer : IReportRenderer
         var doc = new StoreIssueVoucherDocument(data);
         return Task.FromResult(doc.GeneratePdf());
     }
+
+    public Task<byte[]> RenderStoreMovementLedgerAsync(StoreMovementLedgerReportData data, CancellationToken cancellationToken = default)
+    {
+        var doc = new StoreMovementLedgerDocument(data);
+        return Task.FromResult(doc.GeneratePdf());
+    }
+
+    public Task<byte[]> RenderStoreDepartmentConsumptionAsync(StoreDepartmentConsumptionReportData data, CancellationToken cancellationToken = default)
+    {
+        var doc = new StoreDepartmentConsumptionDocument(data);
+        return Task.FromResult(doc.GeneratePdf());
+    }
 }

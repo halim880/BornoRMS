@@ -1,0 +1,118 @@
+@page "/accounts/reports/food-cost"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Manager")]
+@using BornoBit.Restaurant.Application.Inventory.Reports
+@using MediatR
+@inject ISender Mediator
+
+<PageTitle>Food Cost · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Food Cost"
+                Description="Consumption-based COGS and food-cost %. Management view (consumption basis) — not posted to the financial P&L." />
+
+    <div class="bo-card no-print" style="padding:12px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <BoDatePicker DateTimeValue="_from" DateTimeValueChanged="OnFromChanged" Label="From" />
+        <BoDatePicker DateTimeValue="_to" DateTimeValueChanged="OnToChanged" Label="To" />
+    </div>
+
+    @if (_rangeError is not null)
+    {
+        <BoMessageBar Intent="warning">@_rangeError</BoMessageBar>
+    }
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Net sales</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700;">@_report.NetSales.ToString("#,##0.00")</div>
+        </div>
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">COGS (consumed)</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700;">@_report.Cogs.ToString("#,##0.00")</div>
+        </div>
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Food cost %</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700; color:var(--bo-primary);">@_report.FoodCostPercent.ToString("0.##")%</div>
+        </div>
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Wastage</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700; color:var(--bo-danger, #dc2626);">@_report.Wastage.ToString("#,##0.00")</div>
+        </div>
+        <div class="bo-card" style="flex:1; min-width:160px;">
+            <div style="font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Inventory value (now)</div>
+            <div style="font-size:var(--bo-font-xl); font-weight:700;">@_report.InventoryValue.ToString("#,##0.00")</div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading food-cost report…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_report.Categories.Count == 0)
+    {
+        <EmptyState Description="No stock consumed in this period." />
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted);">Stock category</th>
+                        <th style="padding:10px 14px; font-size:var(--bo-font-xs); text-transform:uppercase; color:var(--bo-text-muted); text-align:right;">COGS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _report.Categories)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px;">@r.Category</td>
+                            <td style="padding:10px 14px; text-align:right; font-weight:600;">@r.Cogs.ToString("#,##0.00")</td>
+                        </tr>
+                    }
+                    <tr style="border-top:2px solid var(--bo-border); background:var(--bo-bg-soft);">
+                        <td style="padding:10px 14px; font-weight:700;">Total COGS</td>
+                        <td style="padding:10px 14px; text-align:right; font-weight:700;">@_report.Cogs.ToString("#,##0.00")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string? _rangeError;
+
+    private FoodCostReportDto _report = new(0m, 0m, 0m, 0m, 0m, Array.Empty<FoodCostCategoryRow>(), "Tk");
+
+    private DateTime _from = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+    private DateTime _to = DateTime.UtcNow.Date;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _rangeError = null;
+        if (_from > _to)
+        {
+            _rangeError = "The From date is after the To date.";
+            return;
+        }
+
+        _loading = true; _error = null;
+        try
+        {
+            _report = await Mediator.Send(new GetFoodCostReportQuery(_from, _to));
+        }
+        catch (Exception ex) { _error = $"Failed to load food-cost report: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private Task OnFromChanged(DateTime? d) { if (d.HasValue) _from = d.Value.Date; return ReloadAsync(); }
+    private Task OnToChanged(DateTime? d) { if (d.HasValue) _to = d.Value.Date; return ReloadAsync(); }
+}

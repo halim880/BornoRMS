@@ -106,6 +106,7 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<StockSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<RecipeSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<StoreUnitSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<StoreDepartmentSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<AccountingSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<GeneralLedgerSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<BillingSettingsSeeder>().SeedAsync();

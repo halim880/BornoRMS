@@ -12,11 +12,14 @@ namespace BornoBit.Restaurant.Application.Store.Issues;
 public record StoreIssueListItemDto(
     Guid Id,
     string IssueNumber,
+    Guid StoreDepartmentId,
     string Destination,
     DateTime IssuedAtUtc,
     StoreIssueStatus Status,
     int LineCount,
-    decimal TotalQtyBase);
+    decimal TotalQtyBase,
+    Guid? StoreRequisitionId,
+    string? RequisitionNumber);
 
 public record StoreIssueLineDto(
     Guid Id,
@@ -30,17 +33,23 @@ public record StoreIssueLineDto(
 public record StoreIssueDetailDto(
     Guid Id,
     string IssueNumber,
+    Guid StoreDepartmentId,
     string Destination,
     DateTime IssuedAtUtc,
     string? Notes,
     StoreIssueStatus Status,
     DateTime? PostedAtUtc,
+    Guid? StoreRequisitionId,
+    string? RequisitionNumber,
     IReadOnlyList<StoreIssueLineDto> Lines);
 
 // ---- List ----
 
-public record GetStoreIssuesQuery(StoreIssueStatus? Status = null, int Page = 1, int PageSize = 50)
-    : IRequest<PagedResult<StoreIssueListItemDto>>;
+public record GetStoreIssuesQuery(
+    StoreIssueStatus? Status = null,
+    Guid? StoreDepartmentId = null,
+    int Page = 1,
+    int PageSize = 50) : IRequest<PagedResult<StoreIssueListItemDto>>;
 
 public class GetStoreIssuesQueryHandler : IRequestHandler<GetStoreIssuesQuery, PagedResult<StoreIssueListItemDto>>
 {
@@ -54,6 +63,7 @@ public class GetStoreIssuesQueryHandler : IRequestHandler<GetStoreIssuesQuery, P
 
         var query = _db.StoreIssues.AsQueryable();
         if (request.Status is { } st) query = query.Where(g => g.Status == st);
+        if (request.StoreDepartmentId is { } dep) query = query.Where(g => g.StoreDepartmentId == dep);
 
         var total = await query.LongCountAsync(cancellationToken);
 
@@ -62,9 +72,13 @@ public class GetStoreIssuesQueryHandler : IRequestHandler<GetStoreIssuesQuery, P
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(g => new StoreIssueListItemDto(
-                g.Id, g.IssueNumber, g.Destination, g.IssuedAtUtc, g.Status,
+                g.Id, g.IssueNumber, g.StoreDepartmentId, g.Destination, g.IssuedAtUtc, g.Status,
                 g.Lines.Count(),
-                g.Lines.Sum(l => (decimal?)l.QtyBase) ?? 0m))
+                g.Lines.Sum(l => (decimal?)l.QtyBase) ?? 0m,
+                g.StoreRequisitionId,
+                g.StoreRequisitionId == null
+                    ? null
+                    : _db.StoreRequisitions.Where(r => r.Id == g.StoreRequisitionId).Select(r => r.RequisitionNumber).FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<StoreIssueListItemDto>(items, page, pageSize, total);
@@ -92,9 +106,17 @@ public class GetStoreIssueQueryHandler : IRequestHandler<GetStoreIssueQuery, Sto
             select new StoreIssueLineDto(l.Id, l.StoreItemId, l.ItemName, l.Qty, l.UnitId, u.Code, l.QtyBase))
             .ToListAsync(cancellationToken);
 
+        var requisitionNumber = issue.StoreRequisitionId == null
+            ? null
+            : await _db.StoreRequisitions
+                .Where(r => r.Id == issue.StoreRequisitionId)
+                .Select(r => r.RequisitionNumber)
+                .FirstOrDefaultAsync(cancellationToken);
+
         return new StoreIssueDetailDto(
-            issue.Id, issue.IssueNumber, issue.Destination, issue.IssuedAtUtc,
-            issue.Notes, issue.Status, issue.PostedAtUtc, lines);
+            issue.Id, issue.IssueNumber, issue.StoreDepartmentId, issue.Destination, issue.IssuedAtUtc,
+            issue.Notes, issue.Status, issue.PostedAtUtc,
+            issue.StoreRequisitionId, requisitionNumber, lines);
     }
 }
 
@@ -103,17 +125,18 @@ public class GetStoreIssueQueryHandler : IRequestHandler<GetStoreIssueQuery, Sto
 public record StoreIssueLineInput(Guid ItemId, decimal Qty, Guid UnitId);
 
 public record CreateStoreIssueCommand(
-    string Destination,
+    Guid StoreDepartmentId,
     DateTime? IssuedAtUtc,
     string? Notes,
-    IReadOnlyList<StoreIssueLineInput> Lines
+    IReadOnlyList<StoreIssueLineInput> Lines,
+    Guid? StoreRequisitionId = null
 ) : IRequest<Guid>;
 
 public class CreateStoreIssueCommandValidator : AbstractValidator<CreateStoreIssueCommand>
 {
     public CreateStoreIssueCommandValidator()
     {
-        RuleFor(x => x.Destination).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.StoreDepartmentId).NotEmpty();
         RuleFor(x => x.Notes).MaximumLength(1000);
         RuleFor(x => x.Lines).NotEmpty().WithMessage("At least one line is required.");
         RuleForEach(x => x.Lines).ChildRules(line =>
@@ -138,6 +161,8 @@ public class CreateStoreIssueCommandHandler : IRequestHandler<CreateStoreIssueCo
 
     public async Task<Guid> Handle(CreateStoreIssueCommand request, CancellationToken cancellationToken)
     {
+        var department = await StoreIssueHelpers.ResolveDepartmentAsync(_db, request.StoreDepartmentId, cancellationToken);
+
         var itemIds = request.Lines.Select(l => l.ItemId).Distinct().ToList();
         var items = await _db.StoreItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
 
@@ -152,7 +177,7 @@ public class CreateStoreIssueCommandHandler : IRequestHandler<CreateStoreIssueCo
 
         var issue = StoreIssue.Create(
             await NextIssueNumberAsync(nowUtc, cancellationToken),
-            request.Destination, issuedAt, request.Notes);
+            department.Id, department.Name, issuedAt, request.Notes, request.StoreRequisitionId);
 
         foreach (var line in request.Lines)
         {
@@ -238,6 +263,7 @@ public class PostStoreIssueCommandHandler : IRequestHandler<PostStoreIssueComman
         }
 
         issue.MarkPosted(_timeProvider.GetUtcNow().UtcDateTime);
+        await StoreIssueHelpers.ApplyRequisitionProgressAsync(_db, issue, sign: +1, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return Unit.Value;
     }
@@ -247,10 +273,11 @@ public class PostStoreIssueCommandHandler : IRequestHandler<PostStoreIssueComman
 
 public record UpdateStoreIssueCommand(
     Guid Id,
-    string Destination,
+    Guid StoreDepartmentId,
     DateTime? IssuedAtUtc,
     string? Notes,
-    IReadOnlyList<StoreIssueLineInput> Lines
+    IReadOnlyList<StoreIssueLineInput> Lines,
+    Guid? StoreRequisitionId = null
 ) : IRequest<Unit>;
 
 public class UpdateStoreIssueCommandValidator : AbstractValidator<UpdateStoreIssueCommand>
@@ -258,7 +285,7 @@ public class UpdateStoreIssueCommandValidator : AbstractValidator<UpdateStoreIss
     public UpdateStoreIssueCommandValidator()
     {
         RuleFor(x => x.Id).NotEmpty();
-        RuleFor(x => x.Destination).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.StoreDepartmentId).NotEmpty();
         RuleFor(x => x.Notes).MaximumLength(1000);
         RuleFor(x => x.Lines).NotEmpty().WithMessage("At least one line is required.");
         RuleForEach(x => x.Lines).ChildRules(line =>
@@ -284,6 +311,8 @@ public class UpdateStoreIssueCommandHandler : IRequestHandler<UpdateStoreIssueCo
         if (issue.Status != StoreIssueStatus.Draft)
             throw new ValidationException($"Only a draft issue can be edited; '{issue.IssueNumber}' is {issue.Status}.");
 
+        var department = await StoreIssueHelpers.ResolveDepartmentAsync(_db, request.StoreDepartmentId, cancellationToken);
+
         var itemIds = request.Lines.Select(l => l.ItemId).Distinct().ToList();
         var items = await _db.StoreItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
 
@@ -293,7 +322,7 @@ public class UpdateStoreIssueCommandHandler : IRequestHandler<UpdateStoreIssueCo
         var baseUnitIds = items.Values.Select(i => i.BaseUnitId).Distinct().ToList();
         var baseUnits = await _db.StoreUnits.Where(u => baseUnitIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, cancellationToken);
 
-        issue.UpdateHeader(request.Destination, request.IssuedAtUtc ?? issue.IssuedAtUtc, request.Notes);
+        issue.UpdateHeader(department.Id, department.Name, request.IssuedAtUtc ?? issue.IssuedAtUtc, request.Notes, request.StoreRequisitionId);
         issue.ClearLines();
 
         foreach (var line in request.Lines)
@@ -371,7 +400,45 @@ public class VoidStoreIssueCommandHandler : IRequestHandler<VoidStoreIssueComman
         }
 
         issue.MarkVoided(nowUtc);
+        await StoreIssueHelpers.ApplyRequisitionProgressAsync(_db, issue, sign: -1, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return Unit.Value;
+    }
+}
+
+// ---- Shared helpers ----
+
+internal static class StoreIssueHelpers
+{
+    /// <summary>Resolves an active department for an issue header (throws if missing/inactive).</summary>
+    public static async Task<StoreDepartment> ResolveDepartmentAsync(IAppDbContext db, Guid departmentId, CancellationToken ct)
+    {
+        var dep = await db.StoreDepartments.FirstOrDefaultAsync(d => d.Id == departmentId, ct)
+            ?? throw new NotFoundException($"Store department {departmentId} not found.");
+        if (!dep.IsActive) throw new ValidationException($"Department '{dep.Name}' is inactive.");
+        return dep;
+    }
+
+    /// <summary>Rolls a posted/voided issue's quantities into its source requisition's per-line issued totals.
+    /// <paramref name="sign"/> is +1 on post, -1 on void. No-op for ad-hoc issues (no requisition).</summary>
+    public static async Task ApplyRequisitionProgressAsync(IAppDbContext db, StoreIssue issue, int sign, CancellationToken ct)
+    {
+        if (issue.StoreRequisitionId is not { } requisitionId) return;
+
+        var requisition = await db.StoreRequisitions.Include(r => r.Lines)
+            .FirstOrDefaultAsync(r => r.Id == requisitionId, ct);
+        if (requisition is null) return;
+
+        // Sum issued quantity per item, then apply to the matching requisition line.
+        var byItem = issue.Lines
+            .GroupBy(l => l.StoreItemId)
+            .ToDictionary(g => g.Key, g => g.Sum(l => l.QtyBase));
+
+        foreach (var (itemId, qtyBase) in byItem)
+        {
+            var reqLine = requisition.Lines.FirstOrDefault(l => l.StoreItemId == itemId);
+            if (reqLine is null) continue;
+            requisition.RecordIssued(reqLine.Id, sign * qtyBase);
+        }
     }
 }

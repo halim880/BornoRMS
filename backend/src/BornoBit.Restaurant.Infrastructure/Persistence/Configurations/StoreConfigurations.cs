@@ -36,6 +36,23 @@ public class StoreCategoryConfiguration : IEntityTypeConfiguration<StoreCategory
     }
 }
 
+public class StoreDepartmentConfiguration : IEntityTypeConfiguration<StoreDepartment>
+{
+    public void Configure(EntityTypeBuilder<StoreDepartment> builder)
+    {
+        builder.ToTable("StoreDepartments");
+        builder.HasKey(d => d.Id);
+
+        builder.Property(d => d.Code).IsRequired().HasMaxLength(40);
+        builder.Property(d => d.Name).IsRequired().HasMaxLength(200);
+        builder.Property(d => d.BanglaName).HasMaxLength(200);
+        builder.Property(d => d.Description).HasMaxLength(1000);
+
+        builder.HasIndex(d => d.Code).IsUnique();
+        builder.HasIndex(d => d.DisplayOrder);
+    }
+}
+
 public class StoreItemConfiguration : IEntityTypeConfiguration<StoreItem>
 {
     public void Configure(EntityTypeBuilder<StoreItem> builder)
@@ -166,6 +183,18 @@ public class StoreIssueConfiguration : IEntityTypeConfiguration<StoreIssue>
 
         builder.HasIndex(g => g.IssueNumber).IsUnique();
         builder.HasIndex(g => g.Status);
+        builder.HasIndex(g => g.StoreDepartmentId);
+        builder.HasIndex(g => g.StoreRequisitionId);
+
+        builder.HasOne<StoreDepartment>()
+            .WithMany()
+            .HasForeignKey(g => g.StoreDepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<StoreRequisition>()
+            .WithMany()
+            .HasForeignKey(g => g.StoreRequisitionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(g => g.Lines)
             .WithOne()
@@ -174,6 +203,66 @@ public class StoreIssueConfiguration : IEntityTypeConfiguration<StoreIssue>
 
         builder.Metadata.FindNavigation(nameof(StoreIssue.Lines))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
+    }
+}
+
+public class StoreRequisitionConfiguration : IEntityTypeConfiguration<StoreRequisition>
+{
+    public void Configure(EntityTypeBuilder<StoreRequisition> builder)
+    {
+        builder.ToTable("StoreRequisitions");
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.RequisitionNumber).IsRequired().HasMaxLength(40);
+        builder.Property(r => r.Notes).HasMaxLength(1000);
+        builder.Property(r => r.RejectedReason).HasMaxLength(500);
+        builder.Property(r => r.Status).HasConversion<int>();
+
+        builder.HasIndex(r => r.RequisitionNumber).IsUnique();
+        builder.HasIndex(r => r.Status);
+        builder.HasIndex(r => r.StoreDepartmentId);
+
+        builder.HasOne<StoreDepartment>()
+            .WithMany()
+            .HasForeignKey(r => r.StoreDepartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(r => r.Lines)
+            .WithOne()
+            .HasForeignKey(l => l.StoreRequisitionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata.FindNavigation(nameof(StoreRequisition.Lines))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+    }
+}
+
+public class StoreRequisitionLineConfiguration : IEntityTypeConfiguration<StoreRequisitionLine>
+{
+    public void Configure(EntityTypeBuilder<StoreRequisitionLine> builder)
+    {
+        builder.ToTable("StoreRequisitionLines");
+        builder.HasKey(l => l.Id);
+
+        builder.Property(l => l.ItemName).IsRequired().HasMaxLength(200);
+        builder.Property(l => l.RequestedQty).HasPrecision(18, 3);
+        builder.Property(l => l.RequestedQtyBase).HasPrecision(18, 3);
+        builder.Property(l => l.ApprovedQtyBase).HasPrecision(18, 3);
+        builder.Property(l => l.IssuedQtyBase).HasPrecision(18, 3);
+
+        builder.Ignore(l => l.OutstandingQtyBase);
+
+        builder.HasIndex(l => l.StoreRequisitionId);
+
+        builder.HasOne<StoreItem>()
+            .WithMany()
+            .HasForeignKey(l => l.StoreItemId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<StoreUnit>()
+            .WithMany()
+            .HasForeignKey(l => l.UnitId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -198,6 +287,28 @@ public class StoreIssueLineConfiguration : IEntityTypeConfiguration<StoreIssueLi
         builder.HasOne<StoreUnit>()
             .WithMany()
             .HasForeignKey(l => l.UnitId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class StorePaymentConfiguration : IEntityTypeConfiguration<StorePayment>
+{
+    public void Configure(EntityTypeBuilder<StorePayment> builder)
+    {
+        builder.ToTable("StorePayments");
+        builder.HasKey(p => p.Id);
+
+        builder.Property(p => p.Amount).HasPrecision(18, 2);
+        builder.Property(p => p.Method).HasConversion<int>();
+        builder.Property(p => p.Reference).HasMaxLength(120);
+        builder.Property(p => p.Notes).HasMaxLength(1000);
+
+        builder.HasIndex(p => p.StoreSupplierId);
+        builder.HasIndex(p => p.PaidAtUtc);
+
+        builder.HasOne<StoreSupplier>()
+            .WithMany()
+            .HasForeignKey(p => p.StoreSupplierId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

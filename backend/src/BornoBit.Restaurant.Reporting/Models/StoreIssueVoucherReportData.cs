@@ -8,7 +8,8 @@ public record StoreIssueVoucherReportData(
     string Status,
     string? Notes,
     DateTime GeneratedAtUtc,
-    IReadOnlyList<StoreIssueVoucherLine> Lines
+    IReadOnlyList<StoreIssueVoucherLine> Lines,
+    string? RequisitionNumber = null
 );
 
 public record StoreIssueVoucherLine(

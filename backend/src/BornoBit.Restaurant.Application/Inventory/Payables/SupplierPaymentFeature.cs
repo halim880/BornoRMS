@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Accounting.Audit;
+using BornoBit.Restaurant.Application.Accounting.Posting;
 using BornoBit.Restaurant.Application.Common.Numbering;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Domain.Accounting;
@@ -18,14 +19,23 @@ public static class PayablesConstants
 }
 
 /// <summary>
-/// Shared posting logic: record a payment to a supplier and mirror it as a "Purchases" expense in the
-/// cash book, both added to the same unit of work (the caller commits). Used by the standalone payables
-/// command and by goods-receipt immediate payment, so cost only ever hits the books once.
+/// Shared posting logic for a supplier payment. HYBRID accrual model:
+/// <list type="bullet">
+/// <item>Cash book — keeps a "Purchases" expense <see cref="FinanceTransaction"/> on the payment date so the
+/// cash-basis P&amp;L / Cash Book still recognise the cost when cash leaves (unchanged behaviour). This row is
+/// NOT mirrored to the GL anymore.</item>
+/// <item>GL (accrual) — posts Dr Accounts Payable (2100) / Cr cash-leaf directly, clearing the payable the
+/// goods-receipt accrual raised. The receipt already booked the Purchases expense against AP, so the payment
+/// only moves AP→cash and the expense is never double-counted in the ledger.</item>
+/// </list>
+/// Both rows join the caller's unit of work (the caller commits). Used by the standalone payables command and
+/// by goods-receipt immediate payment.
 /// </summary>
 public static class SupplierPaymentPoster
 {
     public static async Task AddAsync(
         IAppDbContext db,
+        IGeneralLedgerService gl,
         ITransactionNumberGenerator numbers,
         ICurrentUser currentUser,
         DateTime nowUtc,
@@ -42,21 +52,40 @@ public static class SupplierPaymentPoster
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new ValidationException($"No active '{PayablesConstants.PurchasesCategoryName}' expense category found. Create one first.");
 
-        if (!await db.CashAccounts.AnyAsync(a => a.Id == cashAccountId && a.IsActive, cancellationToken))
-            throw new ValidationException("The selected cash account does not exist or is inactive.");
+        var cashAccount = await db.CashAccounts.FirstOrDefaultAsync(a => a.Id == cashAccountId && a.IsActive, cancellationToken)
+            ?? throw new ValidationException("The selected cash account does not exist or is inactive.");
 
         var payment = SupplierPayment.Create(supplierId, cashAccountId, paidOn, amount, reference, notes);
         db.SupplierPayments.Add(payment);
 
+        // Cash-book expense row (cash-basis P&L) — intentionally NOT GL-mirrored.
         var number = await numbers.NextAsync(nowUtc, cancellationToken);
         var txn = FinanceTransaction.Create(
             number, paidOn, TransactionType.Expense, cashAccountId, purchases.Id, amount,
             reference, notes ?? "Supplier payment");
         db.FinanceTransactions.Add(txn);
-        await Accounting.Posting.GeneralLedgerPoster.PostMirrorAsync(db, txn, nowUtc, cancellationToken);
+
+        // GL accrual: clear the payable against cash (Dr AP / Cr cash-leaf).
+        var cashGl = await ChartOfAccountsMapper.EnsureCashAccountGlAsync(db, cashAccount, cancellationToken);
+        await gl.PostAsync(db, paidOn, VoucherType.Payment, new[]
+        {
+            GlPostingLine.Dr(GlCodes.AccountsPayable, amount, $"Supplier payment {reference}"),
+            GlPostingLine.CrId(cashGl, amount, $"Paid from {cashAccount.Name}")
+        }, reference: $"SUPPAY-{number}", narration: notes ?? "Supplier payment", cancellationToken);
 
         FinancialAudit.Write(db, FinancialAuditAction.SupplierPaid, currentUser, nameof(SupplierPayment), payment.Id,
             amount: amount, notes: reference);
+    }
+
+    /// <summary>The GL leaf the "Purchases" expense category maps to — the account the goods-receipt accrual
+    /// debits, so the GL Purchases account is the same one the cash-basis category resolves to.</summary>
+    public static async Task<Guid> ResolvePurchasesGlAsync(IAppDbContext db, CancellationToken cancellationToken)
+    {
+        var purchases = await db.FinanceCategories
+            .Where(c => c.Type == TransactionType.Expense && c.IsActive && c.Name == PayablesConstants.PurchasesCategoryName)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new ValidationException($"No active '{PayablesConstants.PurchasesCategoryName}' expense category found. Create one first.");
+        return await ChartOfAccountsMapper.EnsureCategoryGlAsync(db, purchases, cancellationToken);
     }
 }
 
@@ -84,14 +113,16 @@ public class RecordSupplierPaymentCommandValidator : AbstractValidator<RecordSup
 public class RecordSupplierPaymentCommandHandler : IRequestHandler<RecordSupplierPaymentCommand, Guid>
 {
     private readonly IAppDbContext _db;
+    private readonly IGeneralLedgerService _gl;
     private readonly ITransactionNumberGenerator _numbers;
     private readonly TimeProvider _timeProvider;
     private readonly ICurrentUser _currentUser;
 
     public RecordSupplierPaymentCommandHandler(
-        IAppDbContext db, ITransactionNumberGenerator numbers, TimeProvider timeProvider, ICurrentUser currentUser)
+        IAppDbContext db, IGeneralLedgerService gl, ITransactionNumberGenerator numbers, TimeProvider timeProvider, ICurrentUser currentUser)
     {
         _db = db;
+        _gl = gl;
         _numbers = numbers;
         _timeProvider = timeProvider;
         _currentUser = currentUser;
@@ -104,7 +135,7 @@ public class RecordSupplierPaymentCommandHandler : IRequestHandler<RecordSupplie
 
         var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
         await SupplierPaymentPoster.AddAsync(
-            _db, _numbers, _currentUser, nowUtc,
+            _db, _gl, _numbers, _currentUser, nowUtc,
             request.SupplierId, request.CashAccountId, request.PaidOn, request.Amount,
             request.Reference, request.Notes, cancellationToken);
 

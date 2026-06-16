@@ -34,3 +34,17 @@ public enum StoreIssueStatus
     Posted = 2,
     Voided = 3
 }
+
+/// <summary>Lifecycle of a department store requisition. A department drafts and submits a request; the store
+/// approves (optionally trimming quantities) or rejects it; posted issues against the requisition drive it from
+/// Approved → PartiallyIssued → Issued. Draft/Submitted requisitions can be Cancelled.</summary>
+public enum StoreRequisitionStatus
+{
+    Draft = 1,
+    Submitted = 2,
+    Approved = 3,
+    Rejected = 4,
+    PartiallyIssued = 5,
+    Issued = 6,
+    Cancelled = 7
+}
