@@ -1,102 +1,246 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-/// Borno UI design tokens (mirrors the staff console's `--bo-*` CSS vars in
-/// wwwroot/app.css), expressed as Flutter colors. Brand-matched, but the widgets
-/// themselves use idiomatic Material 3.
+import 'app_colors.dart';
+
+export 'app_colors.dart';
+
+/// Legacy token shim. Older widgets read `Bo.*`; the names stay but the values
+/// now point at the orange POS palette (mirrors [AppColors.light]). These must
+/// be literal `const Color`s because call sites use them in const contexts.
+/// Prefer reading `context.appColors` / `context.colorScheme` in new code.
 class Bo {
-  // Brand (cyan-700)
-  static const primary = Color(0xFF0E7490);
-  static const primaryStrong = Color(0xFF155E75);
-  static const primarySoft = Color(0xFFCFFAFE);
-  static const primaryTint = Color(0xFFECFEFF);
-  static const primaryEmphasis = Color(0xFF164E63);
+  // Brand → accent
+  static const primary = Color(0xFFEA580C); // accent
+  static const primaryStrong = Color(0xFFC2410C); // accentHover
+  static const primarySoft = Color(0xFFFCE7D9); // accentTint2
+  static const primaryTint = Color(0xFFFFF3EC); // accentTint
+  static const primaryEmphasis = Color(0xFFC2410C); // accentHover
 
-  static const accent = Color(0xFFF59E0B);
+  static const accent = Color(0xFFD97706); // warning (kept distinct in charts)
 
-  // Slate neutrals
-  static const slate50 = Color(0xFFF8FAFC);
-  static const slate100 = Color(0xFFF1F5F9);
-  static const slate200 = Color(0xFFE2E8F0);
-  static const slate300 = Color(0xFFCBD5E1);
-  static const slate400 = Color(0xFF94A3B8);
-  static const slate500 = Color(0xFF64748B);
-  static const slate600 = Color(0xFF475569);
-  static const slate700 = Color(0xFF334155);
-  static const slate800 = Color(0xFF1E293B);
+  // Neutrals (slate scale → canvas/surface/border/text ramp)
+  static const slate50 = Color(0xFFFAFBFC); // surfaceMuted
+  static const slate100 = Color(0xFFF4F6F9); // canvas
+  static const slate200 = Color(0xFFE9ECF1); // border
+  static const slate300 = Color(0xFFDCE0E7); // borderStrong
+  static const slate400 = Color(0xFF97A1B1); // textTertiary
+  static const slate500 = Color(0xFF5B677A); // textSecondary
+  static const slate600 = Color(0xFF5B677A);
+  static const slate700 = Color(0xFF5B677A);
+  static const slate800 = Color(0xFF0F172A); // textPrimary
   static const slate900 = Color(0xFF0F172A);
 
-  static const text = slate900;
-  static const textMuted = slate700;
-  static const textSubtle = slate500;
-  static const border = slate200;
-  static const borderStrong = slate300;
-  static const bgSoft = slate100;
+  static const text = Color(0xFF0F172A); // textPrimary
+  static const textMuted = Color(0xFF5B677A); // textSecondary
+  static const textSubtle = Color(0xFF97A1B1); // textTertiary
+  static const border = Color(0xFFE9ECF1);
+  static const borderStrong = Color(0xFFDCE0E7);
+  static const bgSoft = Color(0xFFFAFBFC); // surfaceMuted
 
   // Semantic
-  static const success = Color(0xFF16A34A);
-  static const successSoft = Color(0xFFDCFCE7);
+  static const success = Color(0xFF15A34A);
+  static const successSoft = Color(0xFFEEFBF2); // successTint
   static const danger = Color(0xFFDC2626);
-  static const dangerSoft = Color(0xFFFEE2E2);
+  static const dangerSoft = Color(0xFFFEF2F2); // dangerTint
   static const warning = Color(0xFFD97706);
-  static const warningSoft = Color(0xFFFEF3C7);
-  static const info = Color(0xFF2563EB);
+  static const warningSoft = Color(0xFFFEF3C7); // no token; legacy chips
+  static const info = Color(0xFF2563EB); // no token; legacy charts
   static const infoSoft = Color(0xFFDBEAFE);
 
-  // Radii
+  // Radii (legacy scale; new code uses AppColors.radius*)
   static const radiusSm = 6.0;
   static const radiusMd = 8.0;
   static const radiusLg = 12.0;
 
-  // Page surface — like the staff console, page sections sit on white.
-  static const surface = Colors.white;
-  static const scaffold = slate100;
+  static const surface = Color(0xFFFFFFFF);
+  static const scaffold = Color(0xFFF4F6F9); // canvas
 }
 
 ThemeData buildBornoTheme() {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: Bo.primary,
-    primary: Bo.primary,
+  const c = AppColors.light;
+
+  final scheme = ColorScheme(
     brightness: Brightness.light,
-  ).copyWith(surface: Bo.surface);
+    primary: c.accent,
+    onPrimary: c.onAccent,
+    primaryContainer: c.accentTint,
+    onPrimaryContainer: c.accentHover,
+    secondary: c.success,
+    onSecondary: const Color(0xFFFFFFFF),
+    secondaryContainer: c.successTint,
+    onSecondaryContainer: c.success,
+    error: c.danger,
+    onError: const Color(0xFFFFFFFF),
+    errorContainer: c.dangerTint,
+    onErrorContainer: c.danger,
+    surface: c.surface,
+    onSurface: c.textPrimary,
+    onSurfaceVariant: c.textSecondary,
+    surfaceContainerLowest: const Color(0xFFFFFFFF),
+    surfaceContainerLow: c.surfaceMuted,
+    surfaceContainer: c.surfaceTint,
+    surfaceContainerHigh: c.canvas,
+    outline: c.border,
+    outlineVariant: c.borderStrong,
+  );
+
+  // Inter mapped onto the typographic scale. The two numeric styles with
+  // tabular figures (displayTotal / priceText) live in AppColors.
+  final textTheme = GoogleFonts.interTextTheme().copyWith(
+    titleLarge: GoogleFonts.inter(
+      fontSize: 18,
+      fontWeight: FontWeight.w700,
+      color: c.textPrimary,
+    ),
+    titleMedium: GoogleFonts.inter(
+      fontSize: 16,
+      fontWeight: FontWeight.w700,
+      color: c.textPrimary,
+    ),
+    bodyLarge: GoogleFonts.inter(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      color: c.textPrimary,
+    ),
+    bodyMedium: GoogleFonts.inter(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      color: c.textSecondary,
+    ),
+    bodySmall: GoogleFonts.inter(
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      color: c.textTertiary,
+    ),
+    labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+  );
 
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: Bo.scaffold,
-    fontFamily: 'Segoe UI',
+    scaffoldBackgroundColor: c.canvas,
+    textTheme: textTheme,
+    extensions: const [AppColors.light],
+
+    // Section / cart panels: surface bg, no border, soft shadow applied by the
+    // widgets that wrap a DecoratedBox with AppColors.shadowSoft. Plain Cards
+    // stay borderless on white at radius 16.
     cardTheme: CardThemeData(
-      color: Bo.surface,
+      color: c.surface,
       elevation: 0,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Bo.radiusLg),
-        side: const BorderSide(color: Bo.border),
+        borderRadius: BorderRadius.circular(AppColors.radiusPanel),
       ),
       margin: EdgeInsets.zero,
     ),
-    dividerTheme: const DividerThemeData(color: Bo.border, thickness: 1, space: 1),
+
+    // Order line items: flat rows on white split by 1px border dividers.
+    dividerTheme: DividerThemeData(color: c.border, thickness: 1, space: 1),
+
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Bo.surface,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(Bo.radiusMd)),
-    ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Bo.radiusSm)),
+      fillColor: c.surface,
+      hintStyle: TextStyle(color: c.textTertiary),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppColors.radiusInput),
+        borderSide: BorderSide(color: c.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppColors.radiusInput),
+        borderSide: BorderSide(color: c.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppColors.radiusInput),
+        borderSide: BorderSide(color: c.accent, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppColors.radiusInput),
+        borderSide: BorderSide(color: c.danger),
       ),
     ),
-    dataTableTheme: const DataTableThemeData(
-      headingTextStyle: TextStyle(fontWeight: FontWeight.w600, color: Bo.textMuted, fontSize: 13),
-      dataTextStyle: TextStyle(color: Bo.text, fontSize: 13),
+
+    // Primary CTA: accent bg, white text, radius 12.
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: c.accent,
+        foregroundColor: c.onAccent,
+        disabledBackgroundColor: c.accentTint,
+        disabledForegroundColor: c.onAccent,
+        textStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppColors.radiusButton),
+        ),
+      ),
+    ),
+
+    // Receipt/KOT-style: surface bg, borderStrong outline, textSecondary.
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        backgroundColor: c.surface,
+        foregroundColor: c.textSecondary,
+        side: BorderSide(color: c.borderStrong),
+        textStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppColors.radiusButton),
+        ),
+      ),
+    ),
+
+    // Cancel/destructive: transparent, textTertiary, danger on press.
+    textButtonTheme: TextButtonThemeData(
+      style: ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.pressed)) return c.danger;
+          return c.textTertiary;
+        }),
+        textStyle: WidgetStatePropertyAll(
+          GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppColors.radiusButton),
+          ),
+        ),
+      ),
+    ),
+
+    // Neutral chip: surfaceMuted bg/border/textSecondary, radius 11.
+    chipTheme: ChipThemeData(
+      backgroundColor: c.surfaceMuted,
+      side: BorderSide(color: c.border),
+      labelStyle: TextStyle(
+        color: c.textSecondary,
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppColors.radiusChip),
+      ),
+    ),
+
+    dataTableTheme: DataTableThemeData(
+      headingTextStyle: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: c.textSecondary,
+        fontSize: 13,
+      ),
+      dataTextStyle: TextStyle(color: c.textPrimary, fontSize: 13),
     ),
   );
 }
 
-/// Maps a semantic tone name to (background, foreground) — used for status chips.
+/// Maps a semantic tone name to (background, foreground) for status chips.
+/// Backed by the new tokens; the success tone pairs with [AppColors.successBorder].
 ({Color bg, Color fg}) toneColors(String tone) => switch (tone) {
       'success' => (bg: Bo.successSoft, fg: Bo.success),
       'danger' => (bg: Bo.dangerSoft, fg: Bo.danger),
       'warning' => (bg: Bo.warningSoft, fg: Bo.warning),
       'info' => (bg: Bo.infoSoft, fg: Bo.info),
-      'primary' => (bg: Bo.primarySoft, fg: Bo.primaryEmphasis),
-      _ => (bg: Bo.slate100, fg: Bo.slate600),
+      'primary' => (bg: Bo.primaryTint, fg: Bo.primaryEmphasis),
+      _ => (bg: Bo.bgSoft, fg: Bo.textMuted),
     };

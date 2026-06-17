@@ -9,84 +9,61 @@
 <div class="login">
 
     @* ============================ HERO ============================ *@
-    <aside class="login-hero">
-        <div class="login-hero-bg" aria-hidden="true"></div>
+    <aside class="login-hero" aria-hidden="true">
+        <svg class="login-hero-art" viewBox="0 0 600 900" preserveAspectRatio="xMidYMid slice">
+            <defs>
+                <radialGradient id="bbSun" cx="20%" cy="84%" r="60%">
+                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.35" />
+                    <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
+                </radialGradient>
+            </defs>
+            <circle cx="120" cy="760" r="320" fill="url(#bbSun)" />
 
-        <div class="login-hero-inner">
-            <div class="brand">
-                <img class="brand-mark" src="/favicon.svg" alt="BornoBit" />
-                <div class="brand-text">
-                    <span class="brand-name">BornoBit</span>
-                    <span class="brand-sub">Restaurant ERP</span>
-                </div>
+            @* plate rings, top-right *@
+            <g fill="none" stroke="currentColor" stroke-opacity="0.16" stroke-width="1.4">
+                <circle cx="470" cy="180" r="150" />
+                <circle cx="470" cy="180" r="112" />
+                <circle cx="470" cy="180" r="74" stroke-dasharray="3 7" />
+            </g>
+
+            @* fork & knife line art *@
+            <g stroke="currentColor" stroke-opacity="0.22" stroke-width="2.2" fill="none"
+               stroke-linecap="round" stroke-linejoin="round" transform="translate(452,128) rotate(8)">
+                <path d="M0 0 V40 M9 0 V40 M18 0 V40 M9 40 V96" />
+                <path d="M44 0 C58 14 58 40 44 52 L44 96" />
+            </g>
+
+            @* steam swirls + bowl *@
+            <g stroke="currentColor" stroke-opacity="0.24" stroke-width="2.4" fill="none" stroke-linecap="round">
+                <path d="M150 470 c-18 -22 18 -40 0 -64 c-16 -22 14 -40 0 -60" />
+                <path d="M196 482 c-18 -22 18 -40 0 -64 c-16 -22 14 -40 0 -60" />
+                <path d="M242 470 c-18 -22 18 -40 0 -64 c-16 -22 14 -40 0 -60" />
+            </g>
+            <path d="M118 486 h172 a86 86 0 0 1 -172 0 z" fill="currentColor" fill-opacity="0.12"
+                  stroke="currentColor" stroke-opacity="0.22" stroke-width="2" />
+
+            @* scattered seeds *@
+            <g fill="currentColor" fill-opacity="0.28">
+                <circle cx="80" cy="150" r="3" /><circle cx="138" cy="96" r="2" /><circle cx="60" cy="320" r="2.4" />
+                <circle cx="520" cy="560" r="2.6" /><circle cx="430" cy="640" r="2" /><circle cx="500" cy="720" r="3" />
+                <circle cx="360" cy="430" r="2.2" /><circle cx="280" cy="700" r="2.4" />
+            </g>
+        </svg>
+
+        <div class="login-hero-brand">
+            <img class="brand-mark" src="/favicon.svg" alt="" />
+            <div class="brand-text">
+                <span class="brand-name">BornoBit</span>
+                <span class="brand-sub">Restaurant ERP</span>
             </div>
+        </div>
 
-            <div class="hero-copy">
-                <h1 class="hero-title">Run your restaurant<br />from one platform.</h1>
-                <p class="hero-lede">
-                    Orders, kitchen operations, inventory, accounting, staff and customers —
-                    managed in real time, across every branch.
-                </p>
-            </div>
-
-            @* Floating mock dashboard cards *@
-            <div class="hero-stage" aria-hidden="true">
-                <div class="float-card card-pos">
-                    <div class="fc-head">
-                        <span class="fc-title">Live order · T02</span>
-                        <span class="fc-badge fc-badge--ready">READY</span>
-                    </div>
-                    <div class="fc-order">
-                        <img src="/img/products/kacchi-biryani.jpg" alt="" loading="lazy" />
-                        <div class="fc-order-body">
-                            <span class="fc-order-name">Kacchi Biryani ×2</span>
-                            <span class="fc-order-meta">Dine-in · Paid</span>
-                        </div>
-                        <span class="fc-order-amt">৳530</span>
-                    </div>
-                </div>
-
-                <div class="float-card card-kds">
-                    <div class="fc-head"><span class="fc-title">Kitchen Display</span></div>
-                    <div class="kds-grid">
-                        <span class="kds-tile is-fire"></span>
-                        <span class="kds-tile is-fire"></span>
-                        <span class="kds-tile"></span>
-                        <span class="kds-tile is-done"></span>
-                        <span class="kds-tile"></span>
-                        <span class="kds-tile is-fire"></span>
-                    </div>
-                    <span class="fc-foot">3 firing · 1 plating</span>
-                </div>
-
-                <div class="float-card card-sales">
-                    <div class="fc-head">
-                        <span class="fc-title">Today's sales</span>
-                        <span class="fc-trend">▲ 12%</span>
-                    </div>
-                    <div class="fc-amount">৳ 84,200</div>
-                    <svg class="sparkline" viewBox="0 0 120 36" preserveAspectRatio="none">
-                        <polyline points="0,30 18,24 36,27 54,16 72,19 90,9 108,12 120,4" />
-                    </svg>
-                </div>
-
-                <div class="float-card card-stock">
-                    <span class="stock-dot"></span>
-                    <div class="stock-body">
-                        <span class="stock-val">98.6%</span>
-                        <span class="stock-lbl">Stock in sync</span>
-                    </div>
-                </div>
-            </div>
-
-            <ul class="hero-features">
-                <li><span class="tick">✓</span> POS &amp; Billing</li>
-                <li><span class="tick">✓</span> Kitchen Display</li>
-                <li><span class="tick">✓</span> Inventory &amp; Recipes</li>
-                <li><span class="tick">✓</span> Accounting &amp; Ledger</li>
-                <li><span class="tick">✓</span> Multi-Branch</li>
-                <li><span class="tick">✓</span> Sales Analytics</li>
-            </ul>
+        <div class="login-hero-tag">
+            <span class="login-hero-chip">
+                <span class="login-hero-dot"></span>
+                Kitchen open · Service ready
+            </span>
+            <h2 class="login-hero-title">Every great service starts behind the pass.</h2>
         </div>
     </aside>
 
@@ -94,17 +71,10 @@
     <main class="login-panel">
         <div class="login-card">
 
-            <div class="brand brand--compact">
-                <img class="brand-mark" src="/favicon.svg" alt="BornoBit" />
-                <div class="brand-text">
-                    <span class="brand-name">BornoBit</span>
-                    <span class="brand-sub">Restaurant ERP</span>
-                </div>
-            </div>
-
+            <p class="login-eyebrow">Staff Terminal</p>
             <header class="login-head">
-                <h2 class="login-title">Welcome back <span class="wave">👋</span></h2>
-                <p class="login-subtitle">Sign in to continue managing your restaurant.</p>
+                <h1 class="login-title">Welcome back</h1>
+                <p class="login-subtitle">Sign in to open your shift and start taking orders.</p>
             </header>
 
             @if (!string.IsNullOrEmpty(_error))
@@ -155,21 +125,27 @@
                 <div class="login-options">
                     <label class="remember">
                         <input type="checkbox" name="rememberMe" value="true" />
-                        <span>Remember me</span>
+                        <span>Keep me signed in</span>
                     </label>
                     <a href="#" class="link">Forgot password?</a>
                 </div>
 
                 <button type="submit" class="login-submit">
-                    <span class="login-submit-label">Sign In</span>
+                    <span class="login-submit-label">Sign in &amp; open shift</span>
                     <span class="login-submit-spinner" aria-hidden="true"></span>
                 </button>
             </form>
 
+            <div class="login-divider"><span>or</span></div>
+
+            <button type="button" class="login-pin" disabled title="Coming soon">
+                <span class="login-pin-hash">#</span> Sign in with manager PIN
+            </button>
+
             <div class="login-support">
-                Need help? <span class="muted">Contact your system administrator</span>
+                Trouble signing in? <span class="muted">Ask your shift manager</span>
                 <span class="dot">·</span>
-                <a href="#" class="link">Restaurant Support</a>
+                <a href="#" class="link">Contact support</a>
             </div>
 
             @if (Env.IsDevelopment())
