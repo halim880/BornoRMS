@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/dtos.dart';
 import '../../core/printing/print_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/app_toast.dart';
 import '../dashboard/widgets.dart' show money;
 import 'cart_line.dart';
 import 'payment_dialog.dart';
@@ -20,47 +21,38 @@ class CartPanel extends ConsumerWidget {
     final a = context.appColors;
     final state = ref.watch(posControllerProvider);
     final detail = state.detail;
-
-    if (detail == null) {
-      return PosPanel(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              'Pick an order above, or tap + to start one.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: a.textTertiary),
-            ),
-          ),
-        ),
-      );
-    }
-
     final c = ref.read(posControllerProvider.notifier);
     final busy = state.busy;
+    final hasOrder = detail != null;
+    final hasItems = hasOrder && detail.lines.isNotEmpty;
 
     return PosPanel(
       child: Column(
         children: [
-          _Header(detail: detail),
+          if (hasOrder)
+            _Header(detail: detail)
+          else
+            const _NoOrderHeader(),
           const Divider(height: 1),
           // lines
           Expanded(
-            child: detail.lines.isEmpty
-                ? _EmptyItems()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    itemCount: detail.lines.length,
-                    itemBuilder: (_, i) => CartLineRow(
-                      line: detail.lines[i],
-                      currency: detail.currency,
-                      onQty: (d) => c.changeQty(detail.lines[i], d),
-                      onRemove: () => c.removeLine(detail.lines[i]),
-                    ),
-                  ),
+            child: !hasOrder
+                ? _NoOrder()
+                : detail.lines.isEmpty
+                    ? _EmptyItems()
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        itemCount: detail.lines.length,
+                        itemBuilder: (_, i) => CartLineRow(
+                          line: detail.lines[i],
+                          currency: detail.currency,
+                          onQty: (d) => c.changeQty(detail.lines[i], d),
+                          onRemove: () => c.removeLine(detail.lines[i]),
+                        ),
+                      ),
           ),
           Divider(height: 1, color: a.border),
-          // summary + actions
+          // summary + actions (always visible; disabled until an order exists)
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -71,7 +63,9 @@ class CartPanel extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: busy ? null : () => _print(context, ref, detail, kot: false),
+                        onPressed: (busy || !hasOrder)
+                            ? null
+                            : () => _print(context, ref, detail, kot: false),
                         icon: const Icon(Icons.receipt_long, size: 18),
                         label: const Text('Receipt'),
                       ),
@@ -79,7 +73,7 @@ class CartPanel extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: (busy || detail.lines.isEmpty)
+                        onPressed: (busy || !hasItems)
                             ? null
                             : () => _print(context, ref, detail, kot: true),
                         icon: const Icon(Icons.soup_kitchen_outlined, size: 18),
@@ -92,13 +86,15 @@ class CartPanel extends ConsumerWidget {
                 Row(
                   children: [
                     TextButton(
-                      onPressed: busy ? null : () => showCancelDialog(context, ref),
+                      onPressed: (busy || !hasOrder)
+                          ? null
+                          : () => showCancelDialog(context, ref),
                       child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: FilledButton(
-                        onPressed: (busy || detail.lines.isEmpty)
+                        onPressed: (busy || !hasItems)
                             ? null
                             : () => _checkout(context, ref),
                         style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
@@ -107,7 +103,7 @@ class CartPanel extends ConsumerWidget {
                           children: [
                             const Text('Charge'),
                             Text(
-                              money(detail.grandTotal, detail.currency),
+                              money(detail?.grandTotal ?? 0, detail?.currency ?? 'Tk'),
                               style: AppColors.priceText.copyWith(color: a.onAccent),
                             ),
                           ],
@@ -133,7 +129,7 @@ class CartPanel extends ConsumerWidget {
       }
       ref.read(posControllerProvider.notifier).clearSelection();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Order settled.')));
+        AppToast.show(context, 'Order settled.');
       }
     }
   }
@@ -143,7 +139,13 @@ class CartPanel extends ConsumerWidget {
     final svc = ref.read(printServiceProvider);
     final outcome = kot ? await svc.printKot(detail) : await svc.printReceipt(detail);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(outcome.message)));
+      AppToast.show(
+        context,
+        outcome.message,
+        type: outcome.result == PrintResult.failed
+            ? ToastType.error
+            : ToastType.success,
+      );
     }
   }
 }
@@ -233,6 +235,61 @@ class _Chip extends StatelessWidget {
           Text(label,
               style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.w500)),
         ],
+      ),
+    );
+  }
+}
+
+/// Placeholder header shown when no order is active, mirroring [_Header]'s
+/// height so the cart panel layout stays stable.
+class _NoOrderHeader extends StatelessWidget {
+  const _NoOrderHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final a = context.appColors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 10),
+      child: Row(
+        children: [
+          Icon(Icons.receipt_long_outlined, size: 18, color: a.textTertiary),
+          const SizedBox(width: 8),
+          Text(
+            'No active order',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(color: a.textTertiary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Items-area placeholder shown when no order is selected/started.
+class _NoOrder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final a = context.appColors;
+    final text = Theme.of(context).textTheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.point_of_sale_outlined, size: 40, color: a.textTertiary),
+            const SizedBox(height: 10),
+            Text('No order selected', style: text.bodyLarge),
+            const SizedBox(height: 4),
+            Text(
+              'Pick an order above, or tap + to start one.',
+              textAlign: TextAlign.center,
+              style: text.bodySmall,
+            ),
+          ],
+        ),
       ),
     );
   }

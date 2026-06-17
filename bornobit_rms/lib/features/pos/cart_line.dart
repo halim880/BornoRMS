@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/models/dtos.dart';
 import '../../core/theme/app_colors.dart';
 import '../dashboard/widgets.dart' show money;
@@ -33,6 +34,7 @@ class _CartLineRowState extends State<CartLineRow> {
     final text = Theme.of(context).textTheme;
     final l = widget.line;
     final variant = l.modifiers.map((m) => m.optionName).join(' · ');
+    final img = AppConfig.imageUrl(l.imagePath);
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -42,15 +44,35 @@ class _CartLineRowState extends State<CartLineRow> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // thumbnail tile
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: categoryGradient(l.menuItemId),
-              borderRadius: BorderRadius.circular(8),
+          // thumbnail tile — product image, or a gradient + icon placeholder
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(gradient: categoryGradient(l.menuItemId)),
+                  ),
+                  if (img != null)
+                    Image.network(
+                      img,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Center(
+                        child: Icon(Icons.restaurant,
+                            size: 18, color: categoryGlyph(l.menuItemId)),
+                      ),
+                    )
+                  else
+                    Center(
+                      child: Icon(Icons.restaurant,
+                          size: 18, color: categoryGlyph(l.menuItemId)),
+                    ),
+                ],
+              ),
             ),
-            child: Icon(Icons.restaurant, size: 18, color: categoryGlyph(l.menuItemId)),
           ),
           const SizedBox(width: 10),
           // name + unit price

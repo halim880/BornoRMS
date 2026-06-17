@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/app_toast.dart';
 import '../dashboard/widgets.dart' show money;
 import 'pos_dialogs.dart';
 import 'pos_models.dart';
@@ -12,7 +13,11 @@ import 'pos_section.dart';
 class ProductCard extends ConsumerStatefulWidget {
   final PosProduct product;
   final PosAvailability? availability;
-  const ProductCard({super.key, required this.product, required this.availability});
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.availability,
+  });
 
   @override
   ConsumerState<ProductCard> createState() => _ProductCardState();
@@ -34,13 +39,28 @@ class _ProductCardState extends ConsumerState<ProductCard> {
     Widget thumb = Stack(
       fit: StackFit.expand,
       children: [
-        DecoratedBox(decoration: BoxDecoration(gradient: categoryGradient(p.categoryId))),
-        Center(
-          child: img != null
-              ? Image.network(img, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.restaurant_menu, color: categoryGlyph(p.categoryId)))
-              : Icon(Icons.restaurant_menu, size: 30, color: categoryGlyph(p.categoryId)),
+        DecoratedBox(
+          decoration: BoxDecoration(gradient: categoryGradient(p.categoryId)),
         ),
+        if (img != null)
+          Image.network(
+            img,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Center(
+              child: Icon(
+                Icons.restaurant_menu,
+                color: categoryGlyph(p.categoryId),
+              ),
+            ),
+          )
+        else
+          Center(
+            child: Icon(
+              Icons.restaurant_menu,
+              size: 30,
+              color: categoryGlyph(p.categoryId),
+            ),
+          ),
       ],
     );
     if (out) thumb = ColorFiltered(colorFilter: grayscaleFilter, child: thumb);
@@ -71,10 +91,12 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(p.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: text.bodyLarge),
+                          Text(
+                            p.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodyLarge,
+                          ),
                           const SizedBox(height: 2),
                           Row(
                             children: [
@@ -85,8 +107,10 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                                   money(p.fromPrice, p.currency),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: AppColors.priceText
-                                      .copyWith(fontSize: 12, color: a.textPrimary),
+                                  style: AppColors.priceText.copyWith(
+                                    fontSize: 12,
+                                    color: a.textPrimary,
+                                  ),
                                 ),
                               ),
                             ],
@@ -101,7 +125,11 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                   Positioned(
                     top: 6,
                     right: 6,
-                    child: _Pill(label: 'Sold out', bg: a.textPrimary, fg: a.onAccent),
+                    child: _Pill(
+                      label: 'Sold out',
+                      bg: a.textPrimary,
+                      fg: a.onAccent,
+                    ),
                   )
                 else if (low)
                   Positioned(
@@ -117,7 +145,10 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                     child: Container(
                       width: 26,
                       height: 26,
-                      decoration: BoxDecoration(color: a.accent, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                        color: a.accent,
+                        shape: BoxShape.circle,
+                      ),
                       child: Icon(Icons.add, size: 18, color: a.onAccent),
                     ),
                   ),
@@ -140,19 +171,31 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(label,
-          style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
 
 /// Resolve variant + options, then add to the active order. Mirrors the prior
 /// inline flow; lifted out so [ProductCard] and others can call it.
-Future<void> addProduct(BuildContext context, WidgetRef ref, PosProduct product) async {
+Future<void> addProduct(
+  BuildContext context,
+  WidgetRef ref,
+  PosProduct product,
+) async {
   if (ref.read(posControllerProvider).orderId == null) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Start an order first (tap +).')));
+    AppToast.show(
+      context,
+      'Start an order first (tap +).',
+      type: ToastType.info,
+    );
     return;
   }
   String? variantId;
@@ -174,15 +217,17 @@ Future<void> addProduct(BuildContext context, WidgetRef ref, PosProduct product)
   try {
     await ref
         .read(posControllerProvider.notifier)
-        .addItem(menuItemId: product.id, variantId: variantId, optionIds: optionIds);
+        .addItem(
+          menuItemId: product.id,
+          variantId: variantId,
+          optionIds: optionIds,
+        );
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Added ${product.name}'), duration: const Duration(milliseconds: 900)),
-      );
+      AppToast.show(context, 'Added ${product.name}');
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      AppToast.show(context, '$e', type: ToastType.error);
     }
   }
 }

@@ -458,6 +458,7 @@ class OrderLine {
   final int quantity;
   final double lineTotal;
   final String? notes;
+  final String? imagePath;
   final List<OrderLineModifier> modifiers;
   OrderLine({
     required this.menuItemId,
@@ -468,6 +469,7 @@ class OrderLine {
     required this.quantity,
     required this.lineTotal,
     required this.notes,
+    required this.imagePath,
     required this.modifiers,
   });
 
@@ -480,6 +482,7 @@ class OrderLine {
         quantity: _i(j['quantity']),
         lineTotal: _d(j['lineTotal']),
         notes: _sOrNull(j['notes']),
+        imagePath: _sOrNull(j['imagePath']),
         modifiers: (j['modifiers'] as List? ?? [])
             .map((e) => OrderLineModifier.fromJson(e as Map<String, dynamic>))
             .toList(),

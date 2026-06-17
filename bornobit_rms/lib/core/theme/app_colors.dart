@@ -102,8 +102,8 @@ class AppColors extends ThemeExtension<AppColors> {
   );
 
   // -- radii ---------------------------------------------------------------
-  static const double radiusCard = 10; // product cards
-  static const double radiusPanel = 16; // section panels / cart panel
+  static const double radiusCard = 7; // product cards
+  static const double radiusPanel = 12; // section panels / cart panel
   static const double radiusChip = 11; // chips / order tabs
   static const double radiusButton = 12; // buttons
   static const double radiusInput = 12; // inputs

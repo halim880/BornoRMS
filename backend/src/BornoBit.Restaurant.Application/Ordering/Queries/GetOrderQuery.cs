@@ -20,7 +20,8 @@ public record OrderLineDto(
     int Quantity,
     decimal LineTotal,
     string? Notes = null,
-    IReadOnlyList<OrderLineModifierDto>? Modifiers = null);
+    IReadOnlyList<OrderLineModifierDto>? Modifiers = null,
+    string? ImagePath = null);
 
 public record OrderDetailDto(
     Guid Id,
@@ -87,7 +88,8 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
                 l.Modifiers
                     .OrderBy(m => m.GroupName)
                     .Select(m => new OrderLineModifierDto(m.GroupName, m.OptionName, m.PriceDelta, m.OptionId))
-                    .ToList()))
+                    .ToList(),
+                _db.Products.Where(p => p.Id == l.MenuItemId).Select(p => p.ImagePath).FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         var payments = await _db.Payments

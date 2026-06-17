@@ -5,24 +5,26 @@ import '../../core/theme/app_colors.dart';
 import '../dashboard/widgets.dart' show money;
 
 /// Bill breakdown for the cart panel: subtotal, optional discount, VAT, a dashed
-/// rule, then the large tabular "Total payable".
+/// rule, then the large tabular "Total payable". With no active order ([detail]
+/// is null) it renders a zeroed breakdown so the cart footer stays visible.
 class SummaryBar extends StatelessWidget {
-  final OrderDetail detail;
+  final OrderDetail? detail;
   const SummaryBar({super.key, required this.detail});
 
   @override
   Widget build(BuildContext context) {
     final a = context.appColors;
-    final cur = detail.currency;
+    final d = detail;
+    final cur = d?.currency ?? 'Tk';
 
     return Column(
       children: [
-        _row(context, 'Subtotal', money(detail.subtotal, cur)),
-        if (detail.discountAmount != 0)
-          _row(context, 'Discount', '-${money(detail.discountAmount, cur)}', color: a.success),
-        if (detail.taxAmount != 0) _row(context, 'VAT (5%)', money(detail.taxAmount, cur)),
-        if (detail.roundingAdjustment != 0)
-          _row(context, 'Rounding', money(detail.roundingAdjustment, cur)),
+        _row(context, 'Subtotal', money(d?.subtotal ?? 0, cur)),
+        if (d != null && d.discountAmount != 0)
+          _row(context, 'Discount', '-${money(d.discountAmount, cur)}', color: a.success),
+        if (d != null && d.taxAmount != 0) _row(context, 'VAT (5%)', money(d.taxAmount, cur)),
+        if (d != null && d.roundingAdjustment != 0)
+          _row(context, 'Rounding', money(d.roundingAdjustment, cur)),
         const SizedBox(height: 8),
         _DashedDivider(color: a.borderStrong),
         const SizedBox(height: 8),
@@ -32,7 +34,7 @@ class SummaryBar extends StatelessWidget {
           children: [
             Text('Total payable', style: Theme.of(context).textTheme.bodyLarge),
             Text(
-              money(detail.grandTotal, cur),
+              money(d?.grandTotal ?? 0, cur),
               style: AppColors.displayTotal.copyWith(color: a.textPrimary),
             ),
           ],
