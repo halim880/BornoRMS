@@ -1,11 +1,7 @@
+@using BornoBit.Restaurant.Web.Components.BornoUi
+
 <header class="bo-page-header">
-    <div>
-        <h2>@Title</h2>
-        @if (!string.IsNullOrEmpty(Description))
-        {
-            <p class="bo-page-description">@Description</p>
-        }
-    </div>
+    <BoBreadcrumb Items="@_crumbs" />
     @if (Actions is not null)
     {
         <div class="bo-page-header-actions">
@@ -16,6 +12,26 @@
 
 @code {
     [Parameter, EditorRequired] public string Title { get; set; } = default!;
+
+    // Kept for backward-compat with existing callers; the description is no
+    // longer rendered now that the header is a breadcrumb trail.
     [Parameter] public string? Description { get; set; }
+
+    // Optional middle crumb (e.g. the module/section the page lives under).
+    [Parameter] public string? Parent { get; set; }
+    [Parameter] public string? ParentHref { get; set; }
+
     [Parameter] public RenderFragment? Actions { get; set; }
+
+    private IReadOnlyList<BoBreadcrumbItem> _crumbs
+    {
+        get
+        {
+            var items = new List<BoBreadcrumbItem> { new("Home", "/", "Home") };
+            if (!string.IsNullOrWhiteSpace(Parent))
+                items.Add(new BoBreadcrumbItem(Parent!, ParentHref));
+            items.Add(new BoBreadcrumbItem(Title));
+            return items;
+        }
+    }
 }

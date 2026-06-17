@@ -1,0 +1,124 @@
+@page "/operations/reports/sales-invoices"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Reports")]
+@using BornoBit.Restaurant.Application.Ordering.Queries
+
+<PageTitle>Sales (Invoice-wise) · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Sales Report (Invoice-wise)"
+                Description="Paid sales over a date range, one row per invoice.">
+        <Actions>
+            <a class="bo-btn bo-btn-ghost" href="@PdfUrl()" target="_blank">
+                <span style="display:inline-flex; align-items:center; gap:6px;"><BoIcon Name="DocumentArrowDown" Size="16" /> PDF</span>
+            </a>
+            <BoButton Variant="ghost" OnClick="PrintAsync">
+                <span style="display:inline-flex; align-items:center; gap:6px;"><BoIcon Name="Print" Size="16" /> Print</span>
+            </BoButton>
+        </Actions>
+    </PageHeader>
+
+    <div class="bo-panel no-print" style="padding:12px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <BoDatePicker DateTimeValue="_from" DateTimeValueChanged="OnFromChanged" Label="From" />
+        <BoDatePicker DateTimeValue="_to" DateTimeValueChanged="OnToChanged" Label="To" />
+    </div>
+
+    @if (_rangeError is not null)
+    {
+        <BoMessageBar Intent="warning">@_rangeError</BoMessageBar>
+    }
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:var(--bo-primary-tint); color:var(--bo-primary);"><BoIcon Name="DocumentBulletList" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Invoices</span>
+                <span class="report-stat-value">@_report.TotalInvoices</span>
+            </span>
+        </div>
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:color-mix(in srgb, var(--bo-info) 14%, #fff); color:var(--bo-info);"><BoIcon Name="Money" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Subtotal</span>
+                <span class="report-stat-value">@_report.TotalSubtotal.ToString("#,##0.00")</span>
+            </span>
+        </div>
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:color-mix(in srgb, var(--bo-danger) 14%, #fff); color:var(--bo-danger);"><BoIcon Name="Tag" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Discount</span>
+                <span class="report-stat-value" style="color:var(--bo-danger, #dc2626);">@_report.TotalDiscount.ToString("#,##0.00")</span>
+            </span>
+        </div>
+        <div class="bo-panel report-stat">
+            <span class="report-stat-icon" style="background:color-mix(in srgb, var(--bo-success) 14%, #fff); color:var(--bo-success);"><BoIcon Name="Wallet" Size="22" /></span>
+            <span class="report-stat-body">
+                <span class="report-stat-label">Total</span>
+                <span class="report-stat-value" style="color:var(--bo-success, #16a34a);">@_report.GrandTotal.ToString("#,##0.00")</span>
+            </span>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading sales…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else if (_report.Rows.Count == 0)
+    {
+        <EmptyState Description="No paid sales in this period." />
+    }
+    else
+    {
+        <div class="bo-panel" style="padding:0; overflow:hidden;">
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Invoice #</th>
+                        <th>Customer</th>
+                        <th>Type</th>
+                        <th>Method</th>
+                        <th class="num">Subtotal</th>
+                        <th class="num">Discount</th>
+                        <th class="num">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _report.Rows)
+                    {
+                        <tr>
+                            <td class="muted" style="white-space:nowrap;">@r.PaidAtUtc.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td style="white-space:nowrap; font-weight:600;">@r.OrderNumber</td>
+                            <td>@(string.IsNullOrWhiteSpace(r.CustomerName) ? r.CustomerPhone : r.CustomerName)</td>
+                            <td><BoBadge Tone="@OrderTypeTone(r.OrderType)">@r.OrderType</BoBadge></td>
+                            <td>
+                                @if (r.PaymentMethod is { } pm)
+                                {
+                                    <BoBadge Tone="@PaymentTone(pm)">@pm</BoBadge>
+                                }
+                                else
+                                {
+                                    <span class="muted">—</span>
+                                }
+                            </td>
+                            <td class="num">@r.Subtotal.ToString("#,##0.00")</td>
+                            <td class="num" style="color:var(--bo-danger, #dc2626);">@(r.Discount > 0m ? r.Discount.ToString("#,##0.00") : "—")</td>
+                            <td class="num" style="font-weight:600;">@r.Total.ToString("#,##0.00")</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5">Total · @_report.TotalInvoices invoice@(_report.TotalInvoices == 1 ? "" : "s")</td>
+                        <td class="num">@_report.TotalSubtotal.ToString("#,##0.00")</td>
+                        <td class="num" style="color:var(--bo-danger, #dc2626);">@_report.TotalDiscount.ToString("#,##0.00")</td>
+                        <td class="num" style="color:var(--bo-success, #16a34a);">@_report.GrandTotal.ToString("#,##0.00")</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>

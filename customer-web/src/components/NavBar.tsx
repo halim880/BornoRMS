@@ -21,8 +21,9 @@ export default function NavBar({ phone }: { phone: string | null }) {
   return (
     <header className="border-b border-slate-200 bg-white">
       <nav className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-        <Link href="/menu" className="text-lg font-bold text-emerald-700">
-          🍽️ BornoBit
+        <Link href="/menu" className="flex items-center gap-2 text-lg font-bold text-emerald-700">
+          <img src="/logo.svg" width={24} height={24} alt="" className="rounded-md" />
+          BornoBit
         </Link>
         <div className="flex items-center gap-4 text-sm">
           <Link href="/menu" className="hover:text-emerald-700">Menu</Link>

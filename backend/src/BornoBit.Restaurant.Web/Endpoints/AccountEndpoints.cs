@@ -19,6 +19,7 @@ public static class AccountEndpoints
             ISender mediator,
             [FromForm] string? userName,
             [FromForm] string? password,
+            [FromForm] bool rememberMe,
             [FromForm] string? returnUrl) =>
         {
             string Fail(string code, string? rt) =>
@@ -43,7 +44,8 @@ public static class AccountEndpoints
             if (user.IsSuperAdmin) claims.Add(new Claim("super_admin", "true"));
 
             var identity = new ClaimsIdentity(claims, "Cookies");
-            await ctx.SignInAsync("Cookies", new ClaimsPrincipal(identity));
+            await ctx.SignInAsync("Cookies", new ClaimsPrincipal(identity),
+                new AuthenticationProperties { IsPersistent = rememberMe });
 
             // Honor an explicit deep-link returnUrl first; otherwise land on the first menu URL of the
             // user's lowest-display-order project module (same source the sidebar/ModuleSwitcher uses).

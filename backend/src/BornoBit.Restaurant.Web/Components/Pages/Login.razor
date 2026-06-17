@@ -2,59 +2,222 @@
 @layout LoginLayout
 @attribute [AllowAnonymous]
 @using Microsoft.AspNetCore.Authorization
+@inject IWebHostEnvironment Env
 
-<PageTitle>Sign in · BornoBit Staff</PageTitle>
+<PageTitle>Sign in · BornoBit Restaurant ERP</PageTitle>
 
-<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
-            background:var(--bo-bg, #f1f5f9);">
-    <div style="width:100%; max-width:400px; background:var(--bo-bg-card, #fff);
-                border:1px solid var(--bo-border, #e2e8f0); border-radius:var(--bo-radius-xl, 16px);
-                padding:36px; box-shadow:var(--bo-shadow-lg);">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
-            <span style="width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center;
-                         justify-content:center; background:var(--bo-primary, #0f766e); color:#fff; font-weight:700;">B</span>
-            <div>
-                <div style="font-weight:700; color:var(--bo-text, #0f172a);">BornoBit</div>
-                <div style="font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--bo-text-muted, #64748b);">Staff Console</div>
+<div class="login">
+
+    @* ============================ HERO ============================ *@
+    <aside class="login-hero">
+        <div class="login-hero-bg" aria-hidden="true"></div>
+
+        <div class="login-hero-inner">
+            <div class="brand">
+                <img class="brand-mark" src="/favicon.svg" alt="BornoBit" />
+                <div class="brand-text">
+                    <span class="brand-name">BornoBit</span>
+                    <span class="brand-sub">Restaurant ERP</span>
+                </div>
             </div>
+
+            <div class="hero-copy">
+                <h1 class="hero-title">Run your restaurant<br />from one platform.</h1>
+                <p class="hero-lede">
+                    Orders, kitchen operations, inventory, accounting, staff and customers —
+                    managed in real time, across every branch.
+                </p>
+            </div>
+
+            @* Floating mock dashboard cards *@
+            <div class="hero-stage" aria-hidden="true">
+                <div class="float-card card-pos">
+                    <div class="fc-head">
+                        <span class="fc-title">Live order · T02</span>
+                        <span class="fc-badge fc-badge--ready">READY</span>
+                    </div>
+                    <div class="fc-order">
+                        <img src="/img/products/kacchi-biryani.jpg" alt="" loading="lazy" />
+                        <div class="fc-order-body">
+                            <span class="fc-order-name">Kacchi Biryani ×2</span>
+                            <span class="fc-order-meta">Dine-in · Paid</span>
+                        </div>
+                        <span class="fc-order-amt">৳530</span>
+                    </div>
+                </div>
+
+                <div class="float-card card-kds">
+                    <div class="fc-head"><span class="fc-title">Kitchen Display</span></div>
+                    <div class="kds-grid">
+                        <span class="kds-tile is-fire"></span>
+                        <span class="kds-tile is-fire"></span>
+                        <span class="kds-tile"></span>
+                        <span class="kds-tile is-done"></span>
+                        <span class="kds-tile"></span>
+                        <span class="kds-tile is-fire"></span>
+                    </div>
+                    <span class="fc-foot">3 firing · 1 plating</span>
+                </div>
+
+                <div class="float-card card-sales">
+                    <div class="fc-head">
+                        <span class="fc-title">Today's sales</span>
+                        <span class="fc-trend">▲ 12%</span>
+                    </div>
+                    <div class="fc-amount">৳ 84,200</div>
+                    <svg class="sparkline" viewBox="0 0 120 36" preserveAspectRatio="none">
+                        <polyline points="0,30 18,24 36,27 54,16 72,19 90,9 108,12 120,4" />
+                    </svg>
+                </div>
+
+                <div class="float-card card-stock">
+                    <span class="stock-dot"></span>
+                    <div class="stock-body">
+                        <span class="stock-val">98.6%</span>
+                        <span class="stock-lbl">Stock in sync</span>
+                    </div>
+                </div>
+            </div>
+
+            <ul class="hero-features">
+                <li><span class="tick">✓</span> POS &amp; Billing</li>
+                <li><span class="tick">✓</span> Kitchen Display</li>
+                <li><span class="tick">✓</span> Inventory &amp; Recipes</li>
+                <li><span class="tick">✓</span> Accounting &amp; Ledger</li>
+                <li><span class="tick">✓</span> Multi-Branch</li>
+                <li><span class="tick">✓</span> Sales Analytics</li>
+            </ul>
         </div>
+    </aside>
 
-        <h1 style="font-size:22px; margin:0 0 4px; color:var(--bo-text, #0f172a);">Welcome back</h1>
-        <p style="color:var(--bo-text-muted, #64748b); font-size:14px; margin:0 0 20px;">Sign in to manage orders.</p>
+    @* ============================ FORM ============================ *@
+    <main class="login-panel">
+        <div class="login-card">
 
-        @if (!string.IsNullOrEmpty(_error))
-        {
-            <div role="alert" style="background:#fef2f2; border:1px solid #fecaca; color:#991b1b;
-                        padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:14px;">@_error</div>
-        }
+            <div class="brand brand--compact">
+                <img class="brand-mark" src="/favicon.svg" alt="BornoBit" />
+                <div class="brand-text">
+                    <span class="brand-name">BornoBit</span>
+                    <span class="brand-sub">Restaurant ERP</span>
+                </div>
+            </div>
 
-        <form action="/account/login" method="post" style="display:flex; flex-direction:column; gap:6px;">
-            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <header class="login-head">
+                <h2 class="login-title">Welcome back <span class="wave">👋</span></h2>
+                <p class="login-subtitle">Sign in to continue managing your restaurant.</p>
+            </header>
 
-            <label for="userName" style="font-size:13px; font-weight:600; margin-top:8px; color:var(--bo-text, #334155);">Email / Username</label>
-            <input id="userName" name="userName" type="text" required autofocus value="admin@bornobit.local"
-                   autocomplete="username" style="@FieldStyle" />
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div role="alert" class="login-error">
+                    <span class="login-error-dot">!</span>
+                    <span>@_error</span>
+                </div>
+            }
 
-            <label for="password" style="font-size:13px; font-weight:600; margin-top:8px; color:var(--bo-text, #334155);">Password</label>
-            <input id="password" name="password" type="password" required autocomplete="current-password"
-                   placeholder="Enter your password" style="@FieldStyle" />
+            <form action="/account/login" method="post" class="login-form" onsubmit="return boLoginSubmit(this)">
+                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
 
-            <button type="submit" style="margin-top:18px; padding:11px 16px; background:var(--bo-primary, #0f766e);
-                    color:#fff; border:0; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer;">Sign in</button>
-        </form>
-    </div>
+                <label for="userName" class="field-label">Email / Username</label>
+                <div class="field">
+                    <span class="field-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="5" width="18" height="14" rx="2" />
+                            <path d="m3 7 9 6 9-6" />
+                        </svg>
+                    </span>
+                    <input id="userName" name="userName" type="text" required autofocus
+                           autocomplete="username" placeholder="you@bornobit.local" class="field-input" />
+                </div>
+
+                <label for="password" class="field-label">Password</label>
+                <div class="field">
+                    <span class="field-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="10" width="16" height="11" rx="2" />
+                            <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                        </svg>
+                    </span>
+                    <input id="password" name="password" type="password" required
+                           autocomplete="current-password" placeholder="Enter your password" class="field-input" />
+                    <button type="button" class="field-eye" aria-label="Show password"
+                            title="Show / hide password" onclick="boTogglePw(this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="login-options">
+                    <label class="remember">
+                        <input type="checkbox" name="rememberMe" value="true" />
+                        <span>Remember me</span>
+                    </label>
+                    <a href="#" class="link">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="login-submit">
+                    <span class="login-submit-label">Sign In</span>
+                    <span class="login-submit-spinner" aria-hidden="true"></span>
+                </button>
+            </form>
+
+            <div class="login-support">
+                Need help? <span class="muted">Contact your system administrator</span>
+                <span class="dot">·</span>
+                <a href="#" class="link">Restaurant Support</a>
+            </div>
+
+            @if (Env.IsDevelopment())
+            {
+                <div class="login-dev">
+                    <strong>Dev sign-in</strong>
+                    <code>admin@bornobit.local</code> / <code>ChangeMe!2026</code>
+                </div>
+            }
+
+            <footer class="login-foot">
+                <span>Version 1.0</span>
+                <span class="dot">·</span>
+                <span>© 2026 BornoBit Technologies</span>
+            </footer>
+        </div>
+    </main>
 </div>
+
+<script>
+    function boTogglePw(btn) {
+        var input = btn.parentElement.querySelector('input');
+        if (!input) return;
+        var show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        btn.classList.toggle('is-on', show);
+    }
+
+    function boLoginSubmit(form) {
+        var btn = form.querySelector('.login-submit');
+        if (btn) {
+            btn.classList.add('is-loading');
+            btn.setAttribute('disabled', 'disabled');
+            var label = btn.querySelector('.login-submit-label');
+            if (label) label.textContent = 'Signing in…';
+        }
+        return true; // allow the native POST to proceed
+    }
+</script>
 
 @code {
     [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
     [SupplyParameterFromQuery(Name = "error")] public string? ErrorCode { get; set; }
 
-    private const string FieldStyle =
-        "width:100%; padding:10px 12px; border:1px solid var(--bo-border, #e2e8f0); border-radius:8px; font-size:14px;";
-
     private string? _error => ErrorCode switch
     {
-        "invalid" => "Invalid credentials.",
+        "invalid" => "Invalid credentials. Please try again.",
         "missing" => "Please enter both username and password.",
         _ => null
     };

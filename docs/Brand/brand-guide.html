@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>BornoBit — Brand Guide</title>
+<style>
+  :root{
+    --o-400:#FB923C; --o-500:#F97316; --o-600:#EA580C; --o-700:#C2410C;
+    --gold:#FFD27A; --amber:#F59E0B;
+    --text:#0F172A; --muted:#334155; --subtle:#64748B; --border:#E2E8F0; --bg:#F5F5F5;
+    --font:'Inter','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--text);background:var(--bg);line-height:1.5}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px}
+  header{display:flex;align-items:center;gap:20px;margin-bottom:8px}
+  h1{font-size:30px;font-weight:700;letter-spacing:-0.01em;margin:0}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--subtle);font-weight:700;margin:48px 0 16px;border-top:1px solid var(--border);padding-top:24px}
+  p{color:var(--muted);max-width:62ch}
+  .lead{font-size:17px;color:var(--muted);margin-top:4px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:24px}
+  .grid{display:grid;gap:16px}
+  .swatches{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .sw{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}
+  .sw .chip{height:78px}
+  .sw .meta{padding:10px 12px}
+  .sw .name{font-weight:600;font-size:13px}
+  .sw .hex{font-size:12px;color:var(--subtle);font-variant-numeric:tabular-nums}
+  .sw .tok{font-size:11px;color:var(--subtle);font-family:ui-monospace,Menlo,Consolas,monospace}
+  .logos{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));align-items:stretch}
+  .logo-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:170px}
+  .logo-cell.dark{background:#1C1207;border-color:#1C1207}
+  .logo-cell .cap{font-size:12px;color:var(--subtle)}
+  .logo-cell.dark .cap{color:#A8A29E}
+  .sizes{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap}
+  .sizes figure{margin:0;text-align:center}
+  .sizes figcaption{font-size:11px;color:var(--subtle);margin-top:8px}
+  .do-dont{grid-template-columns:1fr 1fr}
+  .rule{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--muted)}
+  .tick{flex:0 0 auto;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700}
+  .ok{background:#16A34A}.no{background:#DC2626}
+  .clearspace{position:relative;display:inline-block;padding:24px;border:1px dashed var(--o-600);border-radius:14px;background:#fff}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;background:#F1F5F9;padding:2px 6px;border-radius:6px}
+  .type-row{display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--border);padding:14px 0}
+  .type-row:last-child{border-bottom:0}
+  .type-row .w{font-size:12px;color:var(--subtle);width:120px;flex:0 0 auto}
+  .note{background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:14px 16px;color:#7C2D12;font-size:13.5px;max-width:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <img src="logomark.svg" alt="BornoBit logomark" width="64" height="64"/>
+    <div>
+      <h1>BornoBit — Brand Guide</h1>
+      <div class="lead">Restaurant ERP · visual identity reference</div>
+    </div>
+  </header>
+  <p>The BornoBit mark is a confident single-stroke (monoline) <strong>B</strong> on a warm orange badge,
+     with one gold “bit” spark at the corner — a nod to the digital <em>Bit</em> in the name. Use these assets
+     and tokens consistently across the staff console, customer site, documents and decks.</p>
+
+  <div class="note" style="margin-top:16px">
+    <strong>Note:</strong> the application UI currently themes <em>teal</em> via the <code>--bo-*</code> tokens.
+    This guide defines the new <strong>orange brand</strong>. Re-theming the app to orange is an optional,
+    separate step — the logo assets below stand on their own.
+  </div>
+
+  <h2>Logo</h2>
+  <div class="grid logos">
+    <div class="card logo-cell"><img src="logomark.svg" width="96" height="96" alt=""/><span class="cap">Logomark (primary)</span></div>
+    <div class="card logo-cell" style="color:#EA580C"><img src="logomark-mono.svg" width="96" height="96" alt=""/><span class="cap">Mono (currentColor)</span></div>
+    <div class="card logo-cell dark" style="color:#fff"><img src="logomark-mono.svg" width="96" height="96" alt=""/><span class="cap">Mono on dark</span></div>
+  </div>
+  <div class="grid logos" style="margin-top:16px">
+    <div class="card logo-cell" style="grid-column:span 2"><img src="wordmark.svg" width="320" alt=""/><span class="cap">Horizontal wordmark lockup</span></div>
+    <div class="card logo-cell"><img src="wordmark-stacked.svg" width="180" alt=""/><span class="cap">Stacked lockup</span></div>
+  </div>
+
+  <h2>Color</h2>
+  <div class="grid swatches">
+    <div class="sw"><div class="chip" style="background:#FB923C"></div><div class="meta"><div class="name">Orange 400</div><div class="hex">#FB923C</div><div class="tok">badge top</div></div></div>
+    <div class="sw"><div class="chip" style="background:#F97316"></div><div class="meta"><div class="name">Orange 500 · Primary</div><div class="hex">#F97316</div><div class="tok">brand anchor</div></div></div>
+    <div class="sw"><div class="chip" style="background:#EA580C"></div><div class="meta"><div class="name">Orange 600</div><div class="hex">#EA580C</div><div class="tok">badge bottom · “Bit”</div></div></div>
+    <div class="sw"><div class="chip" style="background:#C2410C"></div><div class="meta"><div class="name">Orange 700</div><div class="hex">#C2410C</div><div class="tok">deep / emphasis</div></div></div>
+    <div class="sw"><div class="chip" style="background:#FFD27A"></div><div class="meta"><div class="name">Gold Spark</div><div class="hex">#FFD27A</div><div class="tok">the “bit”</div></div></div>
+    <div class="sw"><div class="chip" style="background:#0F172A"></div><div class="meta"><div class="name">Ink</div><div class="hex">#0F172A</div><div class="tok">wordmark text</div></div></div>
+    <div class="sw"><div class="chip" style="background:#64748B"></div><div class="meta"><div class="name">Subtle</div><div class="hex">#64748B</div><div class="tok">subtitle</div></div></div>
+    <div class="sw"><div class="chip" style="background:#fff;border-bottom:1px solid var(--border)"></div><div class="meta"><div class="name">White</div><div class="hex">#FFFFFF</div><div class="tok">the B glyph</div></div></div>
+  </div>
+  <p style="margin-top:16px">Badge gradient runs <code>#FB923C → #EA580C</code> (top→bottom). The “bit” spark is gold
+     <code>#FFD27A</code> — the only non-orange accent. The B glyph is always white on the badge.</p>
+
+  <h2>Minimum size &amp; clear space</h2>
+  <div class="card">
+    <div class="sizes">
+      <figure><img src="logomark.svg" width="16" height="16" alt=""/><figcaption>16px (favicon)</figcaption></figure>
+      <figure><img src="logomark.svg" width="32" height="32" alt=""/><figcaption>32px</figcaption></figure>
+      <figure><img src="logomark.svg" width="48" height="48" alt=""/><figcaption>48px</figcaption></figure>
+      <figure><img src="logomark.svg" width="96" height="96" alt=""/><figcaption>96px</figcaption></figure>
+    </div>
+    <p style="margin-top:20px">Keep clear space around the mark equal to the badge’s corner radius on every side. Don’t crowd it.</p>
+    <div class="clearspace"><img src="logomark.svg" width="80" height="80" alt=""/></div>
+  </div>
+
+  <h2>Do &amp; don’t</h2>
+  <div class="grid do-dont">
+    <div class="card">
+      <div class="rule"><span class="tick ok">✓</span><span>Use the full-color logomark on light or neutral surfaces.</span></div>
+      <div class="rule" style="margin-top:12px"><span class="tick ok">✓</span><span>Use the mono mark on photos, dark UI, or single-color print.</span></div>
+      <div class="rule" style="margin-top:12px"><span class="tick ok">✓</span><span>Scale proportionally; keep the rounded-square badge and the white B.</span></div>
+    </div>
+    <div class="card">
+      <div class="rule"><span class="tick no">✕</span><span>Don’t recolor the B or change the stroke weight of the monoline.</span></div>
+      <div class="rule" style="margin-top:12px"><span class="tick no">✕</span><span>Don’t stretch, rotate, or add shadows/outlines to the badge.</span></div>
+      <div class="rule" style="margin-top:12px"><span class="tick no">✕</span><span>Don’t move or multiply the gold spark, or swap it for another color.</span></div>
+    </div>
+  </div>
+
+  <h2>Typography</h2>
+  <div class="card">
+    <p style="margin-top:0">Brand &amp; UI font is <strong>Inter</strong> (fallback <code>Segoe UI, system-ui</code>). The wordmark
+       sets “BornoBit” at weight 700, letter-spacing −0.01em, with “Bit” in Orange 600.</p>
+    <div class="type-row"><span class="w">Regular · 400</span><span style="font-weight:400;font-size:22px">BornoBit Restaurant</span></div>
+    <div class="type-row"><span class="w">Medium · 500</span><span style="font-weight:500;font-size:22px">BornoBit Restaurant</span></div>
+    <div class="type-row"><span class="w">Semibold · 600</span><span style="font-weight:600;font-size:22px">BornoBit Restaurant</span></div>
+    <div class="type-row"><span class="w">Bold · 700</span><span style="font-weight:700;font-size:22px;letter-spacing:-0.01em">Borno<span style="color:#EA580C">Bit</span></span></div>
+  </div>
+
+  <p style="margin-top:48px;color:var(--subtle);font-size:13px">© 2026 BornoBit Technologies · Assets in <code>docs/Brand/</code></p>
+</div>
+</body>
+</html>

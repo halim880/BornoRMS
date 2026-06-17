@@ -79,6 +79,42 @@ public static class ReportEndpoints
                 : Results.Problem(result.Message, statusCode: StatusCodes.Status502BadGateway);
         }).RequireAuthorization("Staff");
 
+        // Invoice-wise sales report over a date range (one row per paid order).
+        app.MapGet("/reports/sales/invoices.pdf", async (
+            DateTime? fromUtc, DateTime? toUtc,
+            ISender sender, IReportRenderer renderer, IOptions<ReceiptBranding> branding, CancellationToken ct) =>
+        {
+            var from = (fromUtc ?? DateTime.UtcNow.Date).Date;
+            var to = (toUtc ?? DateTime.UtcNow.Date).Date;
+
+            var report = await sender.Send(new GetSalesInvoiceReportQuery(from, to), ct);
+
+            var data = new SalesInvoiceReportData(
+                RestaurantName: branding.Value.Name,
+                FromUtc: from,
+                ToUtc: to,
+                GeneratedAtUtc: DateTime.UtcNow,
+                Currency: report.Currency,
+                TotalInvoices: report.TotalInvoices,
+                TotalSubtotal: report.TotalSubtotal,
+                TotalDiscount: report.TotalDiscount,
+                GrandTotal: report.GrandTotal,
+                Rows: report.Rows
+                    .Select(r => new SalesInvoiceReportRow(
+                        r.PaidAtUtc,
+                        r.OrderNumber,
+                        string.IsNullOrWhiteSpace(r.CustomerName) ? r.CustomerPhone : r.CustomerName!,
+                        r.OrderType.ToString(),
+                        r.PaymentMethod?.ToString() ?? "—",
+                        r.Subtotal,
+                        r.Discount,
+                        r.Total))
+                    .ToList());
+
+            var pdf = await renderer.RenderSalesInvoiceReportAsync(data, ct);
+            return Results.File(pdf, "application/pdf", "sales-invoices.pdf");
+        }).RequireAuthorization("Reports");
+
         app.MapGet("/reports/stock/valuation.pdf", async (
             string? search, Guid? categoryId, string? itemType, bool? lowStockOnly, bool? includeInactive,
             string? sortBy, bool? sortDesc,

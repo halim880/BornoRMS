@@ -352,7 +352,7 @@ h4 {
 .bo-page-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
+    align-items: center;
     gap: 16px;
     margin-bottom: var(--bo-space-4);
     flex-wrap: wrap;
@@ -428,6 +428,49 @@ h4 {
     font-size: var(--bo-font-xl, 22px);
     font-weight: 800;
     line-height: 1.1;
+}
+
+/* Shared report table: zebra rows, sticky-feel header, tabular figures. */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--bo-font-sm, 14px);
+}
+.report-table thead th {
+    padding: 11px 16px;
+    font-size: var(--bo-font-xs, 12px);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    color: var(--bo-text-muted);
+    background: var(--bo-bg-soft);
+    border-bottom: 1px solid var(--bo-border);
+    text-align: left;
+    white-space: nowrap;
+}
+.report-table tbody td {
+    padding: 11px 16px;
+    border-top: 1px solid var(--bo-border-soft);
+    vertical-align: middle;
+}
+.report-table tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--bo-bg-soft) 45%, transparent);
+}
+.report-table tbody tr:hover {
+    background: var(--bo-primary-tint);
+}
+.report-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.report-table .muted {
+    color: var(--bo-text-muted);
+}
+.report-table tfoot td {
+    padding: 13px 16px;
+    font-weight: 700;
+    background: var(--bo-bg-soft);
+    border-top: 2px solid var(--bo-border);
 }
 
 /* Print: show only the report content, drop app chrome / filters / action buttons. */

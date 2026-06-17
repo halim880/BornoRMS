@@ -1,0 +1,21 @@
+[Unit]
+Description=BornoRMS App (.NET 10)
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/BornoRMS/App
+ExecStart=/usr/bin/dotnet /var/www/BornoRMS/App/BornoBit.Restaurant.Web.dll
+Restart=always
+RestartSec=5
+
+# IMPORTANT: keep it internal only
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5000
+Environment=ASPNETCORE_ENVIRONMENT=Production
+
+# Security (recommended, but root is OK for testing)
+User=root
+
+SyslogIdentifier=surma-api
+
+[Install]
+WantedBy=multi-user.target

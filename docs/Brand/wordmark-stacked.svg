@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 196" width="240" height="196" role="img" aria-label="BornoBit — Restaurant ERP">
+  <defs>
+    <linearGradient id="bo-badge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FB923C"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Badge centred -->
+  <g transform="translate(72,8)">
+    <rect width="96" height="96" rx="22" fill="url(#bo-badge)"/>
+    <g fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M34 25 V71"/>
+      <path d="M34 25 H49 C63 25 63 46 49 46 H34"/>
+      <path d="M34 47 H54 C69 47 69 71 54 71 H34"/>
+    </g>
+    <rect x="70" y="15" width="8.5" height="8.5" rx="2.4" fill="#FFD27A"/>
+  </g>
+
+  <!-- Wordmark, centred under the badge -->
+  <g font-family="'Inter','Segoe UI',system-ui,-apple-system,sans-serif" text-anchor="middle">
+    <text x="120" y="150" font-size="32" font-weight="700" letter-spacing="-0.4" fill="#0F172A">Borno<tspan fill="#EA580C">Bit</tspan></text>
+    <text x="120" y="172" font-size="12" font-weight="600" letter-spacing="3" fill="#64748B">RESTAURANT ERP</text>
+  </g>
+</svg>

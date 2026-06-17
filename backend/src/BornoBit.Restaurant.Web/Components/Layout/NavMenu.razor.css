@@ -41,30 +41,12 @@
 .nav-brand-mark {
     width: 40px; height: 40px;
     border-radius: 12px;
-    background: linear-gradient(135deg, var(--bo-primary) 0%, var(--bo-primary-strong) 100%);
-    display: flex; align-items: center; justify-content: center;
-    color: #fff;
-    font-weight: 800; font-style: italic;
-    font-size: 22px;
-    line-height: 1;
-    /* Soft primary glow that follows the user-picked theme color. */
-    box-shadow:
-        0 4px 12px -2px color-mix(in srgb, var(--bo-primary) 35%, transparent),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    display: block;
+    object-fit: contain;
+    /* Soft drop shadow so the badge reads as a raised chip. */
+    box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.25);
     flex-shrink: 0;
-    position: relative;
 }
-.nav-brand-mark::after {
-    /* Inner highlight curve for a glossy chip feel. */
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 12px;
-    background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.28), transparent 60%);
-    pointer-events: none;
-}
-
-.nav-brand-dot { transform: translateY(-1px); position: relative; z-index: 1; }
 
 .nav-brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .nav-brand-line1 {

@@ -5,6 +5,9 @@ using BornoBit.Restaurant.Domain.Identity;
 using BornoBit.Restaurant.Infrastructure;
 using BornoBit.Restaurant.Infrastructure.Persistence.Seeding;
 using BornoBit.Restaurant.Reporting;
+using Asp.Versioning;
+using Asp.Versioning.Builder;
+using BornoBit.Restaurant.Api.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -81,8 +84,25 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
+// URL-segment API versioning (/api/v1/...). New staff endpoints live under the versioned group;
+// legacy customer/waiter routes stay unversioned for back-compat with the existing waiter app.
+builder.Services
+    .AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+        options.ReportApiVersions = true;
+        options.ApiVersionReader = new UrlSegmentApiVersionReader();
+    })
+    .AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'VVV";
+        options.SubstituteApiVersionInUrl = true;
+    });
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
 
 var app = builder.Build();
 
@@ -125,7 +145,15 @@ app.UseStaticFiles();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        foreach (var description in app.DescribeApiVersions())
+        {
+            options.SwaggerEndpoint(
+                $"/swagger/{description.GroupName}/swagger.json",
+                description.GroupName.ToUpperInvariant());
+        }
+    });
 }
 
 app.UseCors("Frontends");
@@ -142,6 +170,21 @@ app.MapAdminOrderEndpoints();
 app.MapCustomerRequestEndpoints();
 app.MapReceiptEndpoints();
 app.MapWaiterEndpoints();
+
+// Versioned staff API (/api/v1/...). The version set is shared by all v1 endpoint mappers.
+var apiVersionSet = app.NewApiVersionSet()
+    .HasApiVersion(new ApiVersion(1, 0))
+    .ReportApiVersions()
+    .Build();
+
+var apiV1 = app.MapGroup("/api/v{version:apiVersion}")
+    .WithApiVersionSet(apiVersionSet)
+    .HasApiVersion(new ApiVersion(1, 0));
+
+apiV1.MapDashboardEndpoints();
+apiV1.MapStaffMenuEndpoints();
+apiV1.MapStaffOrderEndpoints();
+apiV1.MapStaffPosEndpoints();
 
 app.MapGet("/", () => Results.Ok(new { app = "BornoBit.Restaurant.Api", version = "0.1.0" }));
 

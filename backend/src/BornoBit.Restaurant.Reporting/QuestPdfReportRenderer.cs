@@ -59,4 +59,10 @@ public class QuestPdfReportRenderer : IReportRenderer
         var doc = new StoreDepartmentConsumptionDocument(data);
         return Task.FromResult(doc.GeneratePdf());
     }
+
+    public Task<byte[]> RenderSalesInvoiceReportAsync(SalesInvoiceReportData data, CancellationToken cancellationToken = default)
+    {
+        var doc = new SalesInvoiceReportDocument(data);
+        return Task.FromResult(doc.GeneratePdf());
+    }
 }

@@ -191,6 +191,7 @@ public class AppMenuSeeder
             new("Reports", Icon: "ChartMultiple", RequiredRole: Roles.Manager, Children: new()
             {
                 new("Sales Report",       Url: "/operations/reports/sales",      Icon: "ChartMultiple",      RequiredRole: Roles.Manager),
+                new("Sales (Invoice-wise)", Url: "/operations/reports/sales-invoices", Icon: "ReceiptMoney",   RequiredRole: Roles.Manager),
                 new("Collection Report",  Url: "/operations/reports/collection", Icon: "ReceiptMoney",       RequiredRole: Roles.Manager),
                 new("Most Selling Items", Url: "/operations/reports/top-items",  Icon: "ArrowTrendingLines", RequiredRole: Roles.Manager),
             }),
