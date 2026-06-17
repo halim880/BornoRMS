@@ -20,7 +20,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((ctx, services, cfg) =>
     cfg.ReadFrom.Configuration(ctx.Configuration).ReadFrom.Services(services));
 
-builder.Services.AddApplication();
+// Register Application handlers AND Infrastructure-resident handlers (Users/Roles management),
+// mirroring the Web host, so the staff admin REST endpoints can resolve them.
+builder.Services.AddApplication(typeof(BornoBit.Restaurant.Infrastructure.DependencyInjection).Assembly);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddReporting();
 
@@ -67,6 +69,19 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy("CanCloseSession", policy =>
         policy.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Cashier));
+
+    // Staff-console parity policies (mirror BornoBit.Restaurant.Web) for the ported admin/back-office
+    // REST endpoints consumed by the Flutter app.
+    options.AddPolicy("SuperAdmin", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin));
+    options.AddPolicy("Admin", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin));
+    options.AddPolicy("Manager", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("Inventory", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("Store", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("Reports", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("Kitchen", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Chef));
+    options.AddPolicy("CanDiscount", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("CanVoid", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("CanSettle", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Cashier));
 });
 
 var customerOrigins = builder.Configuration.GetSection("Cors:CustomerOrigins").Get<string[]>() ?? Array.Empty<string>();
