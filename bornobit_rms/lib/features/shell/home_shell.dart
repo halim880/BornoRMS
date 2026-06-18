@@ -9,6 +9,7 @@ import '../../core/theme/fluent_icons.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../orders/orders_screen.dart';
 import '../pos/pos_screen.dart';
+import '../waiter/waiter_screen.dart';
 
 /// Below this width we switch from a permanent sidebar to a drawer (phones).
 const _kWideBreakpoint = 900.0;
@@ -120,6 +121,8 @@ class _ModuleContent extends StatelessWidget {
         return const OrdersScreen();
       case posRoute:
         return const PosScreen();
+      case waiterRoute:
+        return const WaiterScreen();
       default:
         return _ModulePlaceholder(selection: selection);
     }

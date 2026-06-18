@@ -40,6 +40,7 @@ class NavSelection {
 const dashboardRoute = '/operations/dashboard';
 const ordersRoute = '/orders';
 const posRoute = '/pos';
+const waiterRoute = '/waiter/orders';
 
 final selectedNavProvider =
     StateProvider<NavSelection>((ref) => const NavSelection(dashboardRoute, 'Dashboard'));
