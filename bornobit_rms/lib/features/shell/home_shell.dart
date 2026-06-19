@@ -6,18 +6,7 @@ import '../../core/models/dtos.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/fluent_icons.dart';
-import '../catalog/product_categories_screen.dart';
-import '../catalog/products_screen.dart';
-import '../catalog/tables_screen.dart';
-import '../dashboard/dashboard_screen.dart';
-import '../kitchen/kitchen_display_screen.dart';
-import '../orders/orders_screen.dart';
-import '../pos/pos_screen.dart';
-import '../reports/collection_report_screen.dart';
-import '../reports/sales_invoice_report_screen.dart';
-import '../reports/sales_report_screen.dart';
-import '../reports/top_items_report_screen.dart';
-import '../waiter/waiter_screen.dart';
+import '../module_registry.dart';
 
 /// Below this width we switch from a permanent sidebar to a drawer (phones).
 const _kWideBreakpoint = 900.0;
@@ -122,34 +111,9 @@ class _ModuleContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    switch (selection.url) {
-      case dashboardRoute:
-        return const DashboardScreen();
-      case ordersRoute:
-        return const OrdersScreen();
-      case posRoute:
-        return const PosScreen();
-      case waiterRoute:
-        return const WaiterScreen();
-      case kitchenDisplayRoute:
-        return const KitchenDisplayScreen();
-      case productsRoute:
-        return const ProductsScreen();
-      case productCategoriesRoute:
-        return const ProductCategoriesScreen();
-      case tablesAdminRoute:
-        return const TablesScreen();
-      case salesReportRoute:
-        return const SalesReportScreen();
-      case salesInvoiceReportRoute:
-        return const SalesInvoiceReportScreen();
-      case collectionReportRoute:
-        return const CollectionReportScreen();
-      case topItemsReportRoute:
-        return const TopItemsReportScreen();
-      default:
-        return _ModulePlaceholder(selection: selection);
-    }
+    final builder = moduleRoutes[selection.url];
+    if (builder != null) return builder(context);
+    return _ModulePlaceholder(selection: selection);
   }
 }
 
