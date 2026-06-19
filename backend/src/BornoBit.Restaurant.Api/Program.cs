@@ -206,6 +206,8 @@ apiV1.MapReportsEndpoints();
 apiV1.MapStockEndpoints();
 apiV1.MapAccountsEndpoints();
 apiV1.MapStoreEndpoints();
+apiV1.MapAdminEndpoints();
+apiV1.MapSettingsEndpoints();
 
 app.MapGet("/", () => Results.Ok(new { app = "BornoBit.Restaurant.Api", version = "0.1.0" }));
 

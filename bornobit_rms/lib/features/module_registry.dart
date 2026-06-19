@@ -67,6 +67,19 @@ import 'store/store_ledger_screen.dart';
 import 'store/store_payables_screen.dart';
 import 'store/store_department_issues_screen.dart';
 
+// Wave 3 — admin
+import 'admin/users_screen.dart';
+import 'admin/roles_screen.dart';
+import 'admin/menu_permissions_screen.dart';
+import 'admin/module_permissions_screen.dart';
+import 'admin/numbering_scopes_screen.dart';
+import 'admin/tenants_screen.dart';
+import 'admin/modules_screen.dart';
+
+// Wave 3 — settings
+import 'settings/app_settings_screen.dart';
+import 'settings/user_manual_screen.dart';
+
 /// Central map of DB-menu route URL -> screen builder. The shell looks a module
 /// up here; anything missing falls through to the "not built yet" placeholder.
 /// Each ported feature owns its route constant (declared in its screen file).
@@ -130,4 +143,15 @@ final Map<String, WidgetBuilder> moduleRoutes = {
   storeLedgerRoute: (_) => const StoreLedgerScreen(),
   storePayablesRoute: (_) => const StorePayablesScreen(),
   storeDepartmentIssuesRoute: (_) => const StoreDepartmentIssuesScreen(),
+  // admin
+  usersRoute: (_) => const UsersScreen(),
+  rolesAdminRoute: (_) => const RolesAdminScreen(),
+  menuPermissionsRoute: (_) => const MenuPermissionsScreen(),
+  modulePermissionsRoute: (_) => const ModulePermissionsScreen(),
+  numberingScopesRoute: (_) => const NumberingScopesScreen(),
+  tenantsRoute: (_) => const TenantsScreen(),
+  modulesRoute: (_) => const ModulesScreen(),
+  // settings
+  appSettingsRoute: (_) => const AppSettingsScreen(),
+  userManualRoute: (_) => const UserManualScreen(),
 };
