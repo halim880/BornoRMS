@@ -47,6 +47,8 @@ public class Order : AuditableEntity
     public decimal ServiceChargeAmount { get; private set; }
     /// <summary>Optional gratuity. Added to the payable but excluded from the sales/VAT base.</summary>
     public decimal TipAmount { get; private set; }
+    /// <summary>Delivery fee for delivery orders. Added to the payable but excluded from the sales/VAT base (like the tip).</summary>
+    public decimal DeliveryChargeAmount { get; private set; }
     public bool IsPaid { get; private set; }
     public DateTime? PaidAtUtc { get; private set; }
 
@@ -84,7 +86,7 @@ public class Order : AuditableEntity
     public IReadOnlyCollection<Payment> Payments => _payments.AsReadOnly();
 
     public decimal Subtotal => _lines.Sum(l => l.LineTotal);
-    public decimal GrandTotal => Math.Max(0m, Subtotal - DiscountAmount + TaxAmount + ServiceChargeAmount + TipAmount + RoundingAdjustment);
+    public decimal GrandTotal => Math.Max(0m, Subtotal - DiscountAmount + TaxAmount + ServiceChargeAmount + TipAmount + DeliveryChargeAmount + RoundingAdjustment);
     public decimal Total => GrandTotal;
 
     /// <summary>Net captured money: captured charges minus captured refunds.</summary>
@@ -277,6 +279,15 @@ public class Order : AuditableEntity
         TipAmount = tipAmount;
     }
 
+    /// <summary>Sets the delivery fee. Excluded from the sales/VAT base but added to the payable.
+    /// Set at creation and adjustable until the order is paid; deliberately not touched by <see cref="Settle"/>.</summary>
+    public void SetDeliveryCharge(decimal deliveryChargeAmount)
+    {
+        if (IsPaid) throw new InvalidOperationException("Cannot change the delivery charge on a paid order.");
+        if (deliveryChargeAmount < 0m) throw new ArgumentOutOfRangeException(nameof(deliveryChargeAmount));
+        DeliveryChargeAmount = deliveryChargeAmount;
+    }
+
     /// <summary>
     /// Applies every bill adjustment in one shot (discount + tax + service charge + tip + rounding),
     /// ready for the settlement handler to then add the tender payments in the same transaction.
@@ -386,7 +397,8 @@ public class Order : AuditableEntity
     /// Cash may overpay (the excess becomes change); non-cash is capped at the balance due.
     /// </summary>
     public Payment AddPayment(PaymentMethod method, PaymentProvider? provider, decimal amount, decimal tendered,
-        Guid? cashierUserId, string? cashierName, Guid? cashDrawerSessionId = null, string? reference = null)
+        Guid? cashierUserId, string? cashierName, Guid? cashDrawerSessionId = null, string? reference = null,
+        string? idempotencyKey = null)
     {
         if (Status == OrderStatus.Cancelled) throw new InvalidOperationException("Cannot pay a cancelled order.");
         if (PaymentStatus == PaymentStatus.Refunded) throw new InvalidOperationException("Order has been refunded.");
@@ -401,7 +413,7 @@ public class Order : AuditableEntity
             else throw new InvalidOperationException("Payment exceeds the balance due.");
         }
 
-        var payment = Payment.Capture(Id, method, provider, amount, tendered, cashierUserId, cashierName, cashDrawerSessionId, reference);
+        var payment = Payment.Capture(Id, method, provider, amount, tendered, cashierUserId, cashierName, cashDrawerSessionId, reference, idempotencyKey);
         _payments.Add(payment);
         RecomputePaymentState();
         return payment;

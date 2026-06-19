@@ -172,6 +172,7 @@ class PayableRow {
   final String supplierName;
   final int paymentTermsDays;
   final double received;
+  final double returned;
   final double paid;
   final double outstanding;
 
@@ -181,6 +182,7 @@ class PayableRow {
     required this.supplierName,
     required this.paymentTermsDays,
     required this.received,
+    required this.returned,
     required this.paid,
     required this.outstanding,
   });
@@ -191,6 +193,7 @@ class PayableRow {
         supplierName: _s(j['supplierName']),
         paymentTermsDays: _i(j['paymentTermsDays']),
         received: _d(j['received']),
+        returned: _d(j['returned']),
         paid: _d(j['paid']),
         outstanding: _d(j['outstanding']),
       );
@@ -524,6 +527,20 @@ class DrawerLine {
 }
 
 /// DayEndReportDto.
+/// Result of posting a day's cash-counter takings to the GL.
+class CashImportResult {
+  final int count;
+  final double total;
+  final List<String> skippedMethods;
+  CashImportResult({required this.count, required this.total, required this.skippedMethods});
+
+  factory CashImportResult.fromJson(Map<String, dynamic> j) => CashImportResult(
+        count: _i(j['count']),
+        total: _d(j['total']),
+        skippedMethods: (j['skippedMethods'] as List? ?? []).map((e) => e.toString()).toList(),
+      );
+}
+
 class DayEndReport {
   final DateTime date;
   final String currency;

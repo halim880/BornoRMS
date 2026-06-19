@@ -1,3 +1,4 @@
+using BornoBit.Restaurant.Api.Services;
 using BornoBit.Restaurant.Application.Ordering.Commands;
 using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -17,7 +18,7 @@ public static class OrderEndpoints
             .RequireAuthorization("Customer")
             .WithTags("Orders");
 
-        group.MapPost("", async (PlaceOrderRequest body, ClaimsPrincipal user, ISender sender, CancellationToken ct) =>
+        group.MapPost("", async (PlaceOrderRequest body, ClaimsPrincipal user, ISender sender, ILiveNotifier live, IConfiguration config, CancellationToken ct) =>
         {
             var customerId = GetCustomerId(user);
             if (customerId is null) return Results.Unauthorized();
@@ -27,9 +28,18 @@ public static class OrderEndpoints
                     l.OptionIds is { Count: > 0 } ? l.OptionIds : null))
                 .ToList();
 
+            // Online delivery fee is set by the restaurant, not the customer — read the configured flat rate.
+            var deliveryCharge = body.Type == OrderType.Delivery
+                ? (decimal.TryParse(config["Delivery:OnlineDeliveryCharge"], out var fee) ? fee : 60m)
+                : 0m;
+
             try
             {
-                var result = await sender.Send(new PlaceOrderCommand(customerId.Value, body.TableId, body.Type, body.Notes, lines), ct);
+                var result = await sender.Send(new PlaceOrderCommand(customerId.Value, body.TableId, body.Type, body.Notes, lines,
+                    body.DeliveryAddress, body.ContactPhone, deliveryCharge), ct);
+                // QR/customer order lands on the kitchen board + live-orders in real time.
+                await live.NotifyAsync(LiveScopes.Orders, ct);
+                if (body.Type == OrderType.Delivery) await live.NotifyAsync(LiveScopes.Delivery, ct);
                 return Results.Created($"/orders/{result.OrderId}", result);
             }
             catch (NotFoundException ex)
@@ -82,5 +92,6 @@ public static class OrderEndpoints
     }
 
     public record PlaceOrderLineRequest(Guid MenuItemId, int Quantity, Guid? VariantId = null, List<Guid>? OptionIds = null);
-    public record PlaceOrderRequest(Guid? TableId, OrderType Type, string? Notes, List<PlaceOrderLineRequest>? Lines);
+    public record PlaceOrderRequest(Guid? TableId, OrderType Type, string? Notes, List<PlaceOrderLineRequest>? Lines,
+        string? DeliveryAddress = null, string? ContactPhone = null);
 }

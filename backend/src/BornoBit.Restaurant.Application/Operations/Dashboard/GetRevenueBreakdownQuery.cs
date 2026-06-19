@@ -49,6 +49,7 @@ public class GetRevenueBreakdownQueryHandler : IRequestHandler<GetRevenueBreakdo
                 o.DiscountAmount,
                 o.TaxAmount,
                 o.ServiceChargeAmount,
+                o.DeliveryChargeAmount,
                 o.RoundingAdjustment,
                 o.Currency
             })
@@ -62,7 +63,7 @@ public class GetRevenueBreakdownQueryHandler : IRequestHandler<GetRevenueBreakdo
             x.TaxAmount,
             x.ServiceChargeAmount,
             x.Currency,
-            Total = Math.Max(0m, x.Subtotal - x.DiscountAmount + x.TaxAmount + x.ServiceChargeAmount + x.RoundingAdjustment)
+            Total = Math.Max(0m, x.Subtotal - x.DiscountAmount + x.TaxAmount + x.ServiceChargeAmount + x.DeliveryChargeAmount + x.RoundingAdjustment)
         }).ToList();
 
         return new RevenueBreakdownDto(

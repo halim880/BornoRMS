@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/i18n/labels.dart';
 import '../../core/models/dtos.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/app_toast.dart';
+import '../../l10n/app_localizations.dart';
 import '../dashboard/widgets.dart';
 import 'waiter_api.dart';
 import 'waiter_models.dart';
@@ -42,6 +44,7 @@ class _WaiterScreenState extends ConsumerState<WaiterScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final async = ref.watch(waiterConsoleProvider);
     return AsyncStateView<WaiterConsoleData>(
       isLoading: async.isLoading,
@@ -63,10 +66,10 @@ class _WaiterScreenState extends ConsumerState<WaiterScreen> with SingleTickerPr
             unselectedLabelColor: Bo.textMuted,
             indicatorColor: Bo.primary,
             tabs: [
-              Tab(text: 'Floor (${d.floor.length})'),
-              Tab(text: 'My sessions (${d.mySessions.length})'),
-              Tab(text: 'Ready (${d.ready.length})'),
-              Tab(text: 'Requests (${d.requests.length})'),
+              Tab(text: t.wtTabFloor(d.floor.length)),
+              Tab(text: t.wtTabSessions(d.mySessions.length)),
+              Tab(text: t.wtTabReady(d.ready.length)),
+              Tab(text: t.wtTabRequests(d.requests.length)),
             ],
           ),
           const Divider(height: 1),
@@ -91,17 +94,21 @@ class _WaiterScreenState extends ConsumerState<WaiterScreen> with SingleTickerPr
     );
   }
 
-  void _requestPayment(String sessionId) =>
-      _run(() => ref.read(staffApiProvider).waiterRequestPayment(sessionId), 'Cashier notified');
+  void _requestPayment(String sessionId) => _run(
+      () => ref.read(staffApiProvider).waiterRequestPayment(sessionId),
+      AppLocalizations.of(context).wtToastCashierNotified);
 
-  void _closeSession(String sessionId) =>
-      _run(() => ref.read(staffApiProvider).waiterCloseSession(sessionId), 'Session closed');
+  void _closeSession(String sessionId) => _run(
+      () => ref.read(staffApiProvider).waiterCloseSession(sessionId),
+      AppLocalizations.of(context).wtToastSessionClosed);
 
-  void _markServed(String orderId) =>
-      _run(() => ref.read(staffApiProvider).waiterChangeStatus(orderId, 'Served'), 'Marked served');
+  void _markServed(String orderId) => _run(
+      () => ref.read(staffApiProvider).waiterChangeStatus(orderId, 'Served'),
+      AppLocalizations.of(context).wtToastMarkedServed);
 
-  void _resolveRequest(String requestId) =>
-      _run(() => ref.read(staffApiProvider).waiterResolveRequest(requestId), 'Request resolved');
+  void _resolveRequest(String requestId) => _run(
+      () => ref.read(staffApiProvider).waiterResolveRequest(requestId),
+      AppLocalizations.of(context).wtToastRequestResolved);
 
   void _showBill(String sessionId) {
     showDialog(context: context, builder: (_) => _SessionBillDialog(sessionId: sessionId));
@@ -114,38 +121,39 @@ class _KpiStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return KpiGrid(
       minTileWidth: 180,
       children: [
         KpiCard(
-          label: 'My tables',
+          label: t.wtKpiMyTables,
           value: '${d.myTables}',
           icon: Icons.table_restaurant_outlined,
           tint: Bo.primarySoft,
-          stats: [MiniStat('active', '${d.myActiveSessions}', tone: 'primary')],
+          stats: [MiniStat(t.wtStatActive, '${d.myActiveSessions}', tone: 'primary')],
         ),
         KpiCard(
-          label: 'Available',
+          label: t.wtKpiAvailable,
           value: '${d.availableTables}',
           icon: Icons.event_available_outlined,
           tint: Bo.primarySoft,
-          stats: [MiniStat('occupied', '${d.occupiedTables}', tone: 'info')],
+          stats: [MiniStat(t.wtStatOccupied, '${d.occupiedTables}', tone: 'info')],
         ),
         KpiCard(
-          label: 'Ready to serve',
+          label: t.wtKpiReadyToServe,
           value: '${d.readyToServeOrders}',
           icon: Icons.room_service_outlined,
           tint: Bo.primarySoft,
         ),
         KpiCard(
-          label: 'Pending requests',
+          label: t.wtKpiPendingRequests,
           value: '${d.pendingRequests}',
           icon: Icons.notifications_active_outlined,
           tint: Bo.primarySoft,
-          stats: [MiniStat('bills', '${d.billsWaiting}', tone: 'warning')],
+          stats: [MiniStat(t.wtStatBills, '${d.billsWaiting}', tone: 'warning')],
         ),
         KpiCard(
-          label: 'My revenue (today)',
+          label: t.wtKpiMyRevenue,
           value: money(d.myRevenueServedToday, d.currency),
           icon: Icons.payments_outlined,
           tint: Bo.primarySoft,
@@ -164,7 +172,8 @@ class _FloorTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (floor.isEmpty) return const EmptyState(message: 'No tables configured', icon: Icons.table_bar_outlined);
+    final l10n = AppLocalizations.of(context);
+    if (floor.isEmpty) return EmptyState(message: l10n.wtNoTables, icon: Icons.table_bar_outlined);
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -176,6 +185,7 @@ class _FloorTab extends StatelessWidget {
       itemCount: floor.length,
       itemBuilder: (_, i) {
         final t = floor[i];
+        final seats = '${l10n.wtSeats(t.capacity)}${t.guestCount != null ? ' · ${l10n.wtGuests(t.guestCount!)}' : ''}';
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -184,15 +194,14 @@ class _FloorTab extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text('Table ${t.tableNumber}',
+                    Text(l10n.commonTable(t.tableNumber),
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                     const Spacer(),
-                    ToneChip(tableStatusLabel(t.status), tableStatusTone(t.status)),
+                    ToneChip(tableStatusLabelL10n(l10n, t.status), tableStatusTone(t.status)),
                   ],
                 ),
                 const SizedBox(height: 6),
-                Text('Seats ${t.capacity}${t.guestCount != null ? ' · ${t.guestCount} guests' : ''}',
-                    style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
+                Text(seats, style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
                 if (t.waiterName != null)
                   Text(t.waiterName!, style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
                 const Spacer(),
@@ -205,20 +214,20 @@ class _FloorTab extends StatelessWidget {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () => onBill(t.sessionId!),
-                          child: const Text('Bill'),
+                          child: Text(l10n.wtBill),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: FilledButton(
                           onPressed: () => onRequestPayment(t.sessionId!),
-                          child: const Text('Pay'),
+                          child: Text(l10n.wtPay),
                         ),
                       ),
                     ],
                   ),
                 ] else
-                  const Text('Free', style: TextStyle(color: Bo.textSubtle, fontSize: 12)),
+                  Text(l10n.wtFree, style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
               ],
             ),
           ),
@@ -243,13 +252,15 @@ class _SessionsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (sessions.isEmpty) return const EmptyState(message: 'No open sessions', icon: Icons.receipt_long_outlined);
+    final l10n = AppLocalizations.of(context);
+    if (sessions.isEmpty) return EmptyState(message: l10n.wtNoSessions, icon: Icons.receipt_long_outlined);
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: sessions.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, i) {
         final s = sessions[i];
+        final meta = '${s.sessionNumber} · ${l10n.wtGuests(s.guestCount)} · ${l10n.wtOrders(s.orderCount)} · ${s.sessionMinutes}m';
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -260,23 +271,22 @@ class _SessionsTab extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(children: [
-                        Text('Table ${s.tableNumber}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                        Text(l10n.commonTable(s.tableNumber), style: const TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(width: 8),
                         ToneChip(s.status, s.status == 'Billing' ? 'warning' : 'primary'),
                       ]),
                       const SizedBox(height: 4),
-                      Text('${s.sessionNumber} · ${s.guestCount} guests · ${s.orderCount} orders · ${s.sessionMinutes}m',
-                          style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
+                      Text(meta, style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
                     ],
                   ),
                 ),
                 Text(money(s.runningBill, s.currency), style: const TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(width: 12),
-                OutlinedButton(onPressed: () => onBill(s.id), child: const Text('Bill')),
+                OutlinedButton(onPressed: () => onBill(s.id), child: Text(l10n.wtBill)),
                 const SizedBox(width: 8),
-                OutlinedButton(onPressed: () => onRequestPayment(s.id), child: const Text('Pay')),
+                OutlinedButton(onPressed: () => onRequestPayment(s.id), child: Text(l10n.wtPay)),
                 const SizedBox(width: 8),
-                TextButton(onPressed: () => onClose(s.id), child: const Text('Close')),
+                TextButton(onPressed: () => onClose(s.id), child: Text(l10n.wtClose)),
               ],
             ),
           ),
@@ -294,7 +304,8 @@ class _ReadyTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (ready.isEmpty) return const EmptyState(message: 'Nothing ready to serve', icon: Icons.room_service_outlined);
+    final l10n = AppLocalizations.of(context);
+    if (ready.isEmpty) return EmptyState(message: l10n.wtNothingReady, icon: Icons.room_service_outlined);
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: ready.length,
@@ -311,11 +322,11 @@ class _ReadyTab extends StatelessWidget {
                   children: [
                     Text(r.orderNumber, style: const TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(width: 8),
-                    if (r.tableNumber != null) Text('Table ${r.tableNumber}', style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
+                    if (r.tableNumber != null) Text(l10n.commonTable(r.tableNumber!), style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
                     const Spacer(),
                     ToneChip('${r.waitingMinutes}m', r.waitingMinutes > 10 ? 'danger' : 'warning'),
                     const SizedBox(width: 8),
-                    FilledButton(onPressed: () => onServe(r.orderId), child: const Text('Serve')),
+                    FilledButton(onPressed: () => onServe(r.orderId), child: Text(l10n.wtServe)),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -339,7 +350,8 @@ class _RequestsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (requests.isEmpty) return const EmptyState(message: 'No pending requests', icon: Icons.notifications_none);
+    final l10n = AppLocalizations.of(context);
+    if (requests.isEmpty) return EmptyState(message: l10n.wtNoRequests, icon: Icons.notifications_none);
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: requests.length,
@@ -349,9 +361,9 @@ class _RequestsTab extends StatelessWidget {
         return Card(
           child: ListTile(
             leading: const Icon(Icons.notifications_active_outlined, color: Bo.warning),
-            title: Text(requestLabel(r.type), style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text('Table ${r.tableNumber} · ${r.waitingMinutes}m${r.note != null ? ' · ${r.note}' : ''}'),
-            trailing: FilledButton(onPressed: () => onResolve(r.id), child: const Text('Resolve')),
+            title: Text(requestTypeLabel(l10n, r.type), style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text('${l10n.commonTable(r.tableNumber)} · ${r.waitingMinutes}m${r.note != null ? ' · ${r.note}' : ''}'),
+            trailing: FilledButton(onPressed: () => onResolve(r.id), child: Text(l10n.wtResolve)),
           ),
         );
       },
@@ -394,6 +406,7 @@ class _BillBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -406,8 +419,8 @@ class _BillBody extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Table ${b.tableNumber}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                    Text('${b.sessionNumber} · ${b.guestCount} guests', style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
+                    Text(l10n.commonTable(b.tableNumber), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    Text('${b.sessionNumber} · ${l10n.wtGuests(b.guestCount)}', style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
                   ],
                 ),
               ),
@@ -423,9 +436,9 @@ class _BillBody extends StatelessWidget {
                 Row(children: [
                   Text(o.orderNumber, style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(width: 8),
-                  ToneChip(o.status, orderStatusTone(o.status)),
+                  ToneChip(orderStatusLabel(l10n, o.status), orderStatusTone(o.status)),
                   const Spacer(),
-                  if (o.isPaid) const ToneChip('Paid', 'success'),
+                  if (o.isPaid) ToneChip(l10n.billPaid, 'success'),
                 ]),
                 const SizedBox(height: 4),
                 for (final l in o.lines)
@@ -440,14 +453,14 @@ class _BillBody extends StatelessWidget {
                   ),
                 const Divider(),
               ],
-              _row('Subtotal', b.subtotal),
-              if (b.discountAmount != 0) _row('Discount', -b.discountAmount),
-              if (b.taxAmount != 0) _row('Tax', b.taxAmount),
-              if (b.serviceChargeAmount != 0) _row('Service charge', b.serviceChargeAmount),
-              if (b.roundingAdjustment != 0) _row('Rounding', b.roundingAdjustment),
-              _row('Grand total', b.grandTotal, bold: true),
-              if (b.paidAmount != 0) _row('Paid', b.paidAmount),
-              if (b.balanceDue != 0) _row('Balance due', b.balanceDue, bold: true),
+              _row(l10n.billSubtotalLabel, b.subtotal),
+              if (b.discountAmount != 0) _row(l10n.billDiscount, -b.discountAmount),
+              if (b.taxAmount != 0) _row(l10n.billTax, b.taxAmount),
+              if (b.serviceChargeAmount != 0) _row(l10n.billServiceCharge, b.serviceChargeAmount),
+              if (b.roundingAdjustment != 0) _row(l10n.billRounding, b.roundingAdjustment),
+              _row(l10n.billGrandTotal, b.grandTotal, bold: true),
+              if (b.paidAmount != 0) _row(l10n.billPaid, b.paidAmount),
+              if (b.balanceDue != 0) _row(l10n.billBalanceDue, b.balanceDue, bold: true),
             ],
           ),
         ),

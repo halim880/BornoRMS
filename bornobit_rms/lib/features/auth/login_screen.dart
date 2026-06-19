@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/auth_controller.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/theme/app_theme.dart';
+import '../../l10n/app_localizations.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -32,6 +33,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final busy = auth.status == AuthStatus.authenticating;
+    final t = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: Bo.slate100,
@@ -59,23 +61,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text('Staff console',
+                    Text(t.loginStaffConsole,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: Bo.text,
                             )),
                     const SizedBox(height: 4),
-                    const Text('BornoBit Restaurant',
-                        textAlign: TextAlign.center, style: TextStyle(color: Bo.textSubtle)),
+                    Text(t.brandName,
+                        textAlign: TextAlign.center, style: const TextStyle(color: Bo.textSubtle)),
                     const SizedBox(height: 28),
                     TextField(
                       controller: _user,
                       autocorrect: false,
                       enabled: !busy,
-                      decoration: const InputDecoration(
-                        labelText: 'Email or username',
-                        prefixIcon: Icon(Icons.person_outline),
+                      decoration: InputDecoration(
+                        labelText: t.loginEmailOrUsername,
+                        prefixIcon: const Icon(Icons.person_outline),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -85,7 +87,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       enabled: !busy,
                       onSubmitted: (_) => _submit(),
                       decoration: InputDecoration(
-                        labelText: 'Password',
+                        labelText: t.loginPassword,
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
                           icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
@@ -115,7 +117,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: busy
                           ? const SizedBox(
                               height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Sign in'),
+                          : Text(t.actionSignIn),
                     ),
                   ],
                 ),

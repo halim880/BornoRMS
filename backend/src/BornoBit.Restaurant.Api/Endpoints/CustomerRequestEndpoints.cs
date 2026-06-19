@@ -1,3 +1,4 @@
+using BornoBit.Restaurant.Api.Services;
 using BornoBit.Restaurant.Application.Operations.Dashboard;
 using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Shared.Common;
@@ -18,11 +19,12 @@ public static class CustomerRequestEndpoints
             .RequireAuthorization("Customer")
             .WithTags("CustomerRequests");
 
-        group.MapPost("", async (CreateRequestBody body, ISender sender, CancellationToken ct) =>
+        group.MapPost("", async (CreateRequestBody body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
         {
             try
             {
                 var id = await sender.Send(new CreateCustomerRequestCommand(body.TableId, body.Type, body.Note), ct);
+                await live.NotifyAsync(LiveScopes.Requests, ct);
                 return Results.Created($"/customer/requests/{id}", new { id });
             }
             catch (NotFoundException ex)

@@ -155,6 +155,7 @@ public record PayableDto(
     string SupplierName,
     int PaymentTermsDays,
     decimal Received,
+    decimal Returned,
     decimal Paid,
     decimal Outstanding);
 
@@ -175,6 +176,12 @@ public class GetPayablesQueryHandler : IRequestHandler<GetPayablesQuery, IReadOn
             select new { SupplierId = grp.Key, Total = grp.Sum() })
             .ToDictionaryAsync(x => x.SupplierId, x => x.Total, cancellationToken);
 
+        // Returned = value of goods returned to the supplier (reduces what we owe).
+        var returned = await _db.PurchaseReturns
+            .GroupBy(r => r.SupplierId)
+            .Select(g => new { SupplierId = g.Key, Total = g.Sum(r => r.Subtotal) })
+            .ToDictionaryAsync(x => x.SupplierId, x => x.Total, cancellationToken);
+
         var paid = await _db.SupplierPayments
             .GroupBy(p => p.SupplierId)
             .Select(g => new { SupplierId = g.Key, Total = g.Sum(p => p.Amount) })
@@ -188,8 +195,9 @@ public class GetPayablesQueryHandler : IRequestHandler<GetPayablesQuery, IReadOn
             .Select(s =>
             {
                 var rec = received.GetValueOrDefault(s.Id);
+                var ret = returned.GetValueOrDefault(s.Id);
                 var pay = paid.GetValueOrDefault(s.Id);
-                return new PayableDto(s.Id, s.Code, s.Name, s.PaymentTermsDays, rec, pay, rec - pay);
+                return new PayableDto(s.Id, s.Code, s.Name, s.PaymentTermsDays, rec, ret, pay, rec - ret - pay);
             })
             .Where(r => !request.OutstandingOnly || r.Outstanding > 0m)
             .OrderByDescending(r => r.Outstanding)

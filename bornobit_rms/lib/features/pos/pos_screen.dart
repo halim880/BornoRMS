@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
 import '../dashboard/widgets.dart' show money;
 import 'cart_panel.dart';
 import 'order_tabs.dart';
@@ -101,7 +102,7 @@ class _NarrowBody extends ConsumerWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('View cart · $count item(s)'),
+                  Text(AppLocalizations.of(context).posViewCart(count)),
                   Text(
                     money(detail.grandTotal, detail.currency),
                     style: AppColors.priceText.copyWith(color: a.onAccent),

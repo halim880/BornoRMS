@@ -2,6 +2,7 @@ using BornoBit.Restaurant.Application.Inventory.Categories;
 using BornoBit.Restaurant.Application.Inventory.Dashboard;
 using BornoBit.Restaurant.Application.Inventory.Items;
 using BornoBit.Restaurant.Application.Inventory.Movements;
+using BornoBit.Restaurant.Application.Inventory.Payables;
 using BornoBit.Restaurant.Application.Inventory.PurchaseOrders;
 using BornoBit.Restaurant.Application.Inventory.Purchases;
 using BornoBit.Restaurant.Application.Inventory.Recipes;
@@ -169,19 +170,76 @@ public static class StockEndpoints
                 return Results.NoContent();
             }));
 
-        // ---------- purchase orders (read-only: complex multi-line create/receive deferred) ----------
+        // ---------- purchase orders (full multi-line lifecycle: draft → approve → receive/cancel) ----------
         group.MapGet("/purchase-orders", (ISender sender, PurchaseOrderStatus? status, int? page, int? pageSize, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetPurchaseOrdersQuery(status, page ?? 1, pageSize ?? 50), ct))));
 
         group.MapGet("/purchase-orders/{id:guid}", (Guid id, ISender sender, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetPurchaseOrderQuery(id), ct))));
 
-        // ---------- goods receipts (read-only: complex multi-line create/post deferred) ----------
+        group.MapPost("/purchase-orders", (CreatePurchaseOrderRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var id = await sender.Send(new CreatePurchaseOrderCommand(
+                    body.SupplierId, body.OrderedAtUtc, body.ExpectedAtUtc, body.Notes, ToPoLines(body.Lines)), ct);
+                return Results.Created($"/api/v1/staff/stock/purchase-orders/{id}", new { id });
+            }));
+
+        group.MapPut("/purchase-orders/{id:guid}", (Guid id, UpdatePurchaseOrderRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                await sender.Send(new UpdatePurchaseOrderCommand(
+                    id, body.SupplierId, body.OrderedAtUtc, body.ExpectedAtUtc, body.Notes, ToPoLines(body.Lines)), ct);
+                return Results.NoContent();
+            }));
+
+        group.MapPost("/purchase-orders/{id:guid}/approve", (Guid id, ISender sender, CancellationToken ct) =>
+            Exec(async () => { await sender.Send(new ApprovePurchaseOrderCommand(id), ct); return Results.NoContent(); }));
+
+        group.MapPost("/purchase-orders/{id:guid}/cancel", (Guid id, ISender sender, CancellationToken ct) =>
+            Exec(async () => { await sender.Send(new CancelPurchaseOrderCommand(id), ct); return Results.NoContent(); }));
+
+        group.MapDelete("/purchase-orders/{id:guid}", (Guid id, ISender sender, CancellationToken ct) =>
+            Exec(async () => { await sender.Send(new DeletePurchaseOrderCommand(id), ct); return Results.NoContent(); }));
+
+        // ---------- goods receipts (full multi-line lifecycle: draft → post; posting raises stock + AP) ----------
         group.MapGet("/goods-receipts", (ISender sender, GoodsReceiptStatus? status, int? page, int? pageSize, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetGoodsReceiptsQuery(status, page ?? 1, pageSize ?? 50), ct))));
 
         group.MapGet("/goods-receipts/{id:guid}", (Guid id, ISender sender, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetGoodsReceiptQuery(id), ct))));
+
+        group.MapPost("/goods-receipts", (CreateGoodsReceiptRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var id = await sender.Send(new CreateGoodsReceiptCommand(
+                    body.SupplierId, body.InvoiceNo, body.ReceivedAtUtc, body.Notes, ToGrnLines(body.Lines), body.PurchaseOrderId), ct);
+                return Results.Created($"/api/v1/staff/stock/goods-receipts/{id}", new { id });
+            }));
+
+        group.MapPut("/goods-receipts/{id:guid}", (Guid id, UpdateGoodsReceiptRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                await sender.Send(new UpdateGoodsReceiptCommand(
+                    id, body.SupplierId, body.InvoiceNo, body.ReceivedAtUtc, body.Notes, ToGrnLines(body.Lines)), ct);
+                return Results.NoContent();
+            }));
+
+        // Posting raises stock (moving-average cost) + posts Dr Purchases / Cr AP. Pass a cash account to pay at receipt.
+        group.MapPost("/goods-receipts/{id:guid}/post", (Guid id, PostGoodsReceiptRequest? body, ISender sender, CancellationToken ct) =>
+            Exec(async () => { await sender.Send(new PostGoodsReceiptCommand(id, body?.PaymentCashAccountId), ct); return Results.NoContent(); }));
+
+        group.MapDelete("/goods-receipts/{id:guid}", (Guid id, ISender sender, CancellationToken ct) =>
+            Exec(async () => { await sender.Send(new DeleteGoodsReceiptCommand(id), ct); return Results.NoContent(); }));
+
+        // ---------- purchase returns (return goods to supplier: stock out at avg cost, reduces payable) ----------
+        group.MapPost("/purchase-returns", (CreatePurchaseReturnRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var id = await sender.Send(new CreatePurchaseReturnCommand(
+                    body.SupplierId, body.ReturnedAtUtc, body.Reason, body.Notes, ToReturnLines(body.Lines)), ct);
+                return Results.Created($"/api/v1/staff/stock/purchase-returns/{id}", new { id });
+            }));
 
         // ---------- wastage + adjustments (write into the stock ledger) ----------
         group.MapPost("/wastage", (RecordWastageRequest body, ISender sender, CancellationToken ct) =>
@@ -266,4 +324,37 @@ public static class StockEndpoints
     public record AdjustStockRequest(Guid ItemId, decimal CountedQtyBase, string? Reason);
     public record RecipeItemRequest(Guid? Id, Guid InventoryItemId, decimal Quantity, Guid UnitId);
     public record UpsertRecipeRequest(Guid ProductId, Guid? VariantId, decimal Yield, List<RecipeItemRequest> Items);
+
+    // ---------- purchase orders / goods receipts ----------
+    public record PoLineRequest(Guid ItemId, decimal Qty, Guid UnitId, decimal UnitCost);
+    public record CreatePurchaseOrderRequest(
+        Guid SupplierId, DateTime? OrderedAtUtc, DateTime? ExpectedAtUtc, string? Notes, List<PoLineRequest> Lines);
+    public record UpdatePurchaseOrderRequest(
+        Guid SupplierId, DateTime? OrderedAtUtc, DateTime? ExpectedAtUtc, string? Notes, List<PoLineRequest> Lines);
+
+    public record GrnLineRequest(Guid ItemId, decimal Qty, Guid UnitId, decimal UnitCost, Guid? PurchaseOrderLineId = null);
+    public record CreateGoodsReceiptRequest(
+        Guid SupplierId, string? InvoiceNo, DateTime? ReceivedAtUtc, string? Notes, List<GrnLineRequest> Lines, Guid? PurchaseOrderId = null);
+    public record UpdateGoodsReceiptRequest(
+        Guid SupplierId, string? InvoiceNo, DateTime? ReceivedAtUtc, string? Notes, List<GrnLineRequest> Lines);
+    public record PostGoodsReceiptRequest(Guid? PaymentCashAccountId);
+
+    public record ReturnLineRequest(Guid ItemId, decimal Qty, Guid UnitId);
+    public record CreatePurchaseReturnRequest(
+        Guid SupplierId, DateTime? ReturnedAtUtc, string? Reason, string? Notes, List<ReturnLineRequest> Lines);
+
+    private static List<PurchaseReturnLineInput> ToReturnLines(IEnumerable<ReturnLineRequest>? lines) =>
+        (lines ?? Enumerable.Empty<ReturnLineRequest>())
+            .Select(l => new PurchaseReturnLineInput(l.ItemId, l.Qty, l.UnitId))
+            .ToList();
+
+    private static List<PurchaseOrderLineInput> ToPoLines(IEnumerable<PoLineRequest>? lines) =>
+        (lines ?? Enumerable.Empty<PoLineRequest>())
+            .Select(l => new PurchaseOrderLineInput(l.ItemId, l.Qty, l.UnitId, l.UnitCost))
+            .ToList();
+
+    private static List<GoodsReceiptLineInput> ToGrnLines(IEnumerable<GrnLineRequest>? lines) =>
+        (lines ?? Enumerable.Empty<GrnLineRequest>())
+            .Select(l => new GoodsReceiptLineInput(l.ItemId, l.Qty, l.UnitId, l.UnitCost, l.PurchaseOrderLineId))
+            .ToList();
 }

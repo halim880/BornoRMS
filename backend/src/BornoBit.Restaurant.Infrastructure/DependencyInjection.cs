@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<ISmsSender, StubSmsSender>();
         services.AddScoped<ICustomerTokenService, CustomerTokenService>();
         services.AddScoped<IStaffTokenService, StaffTokenService>();
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
         services.AddScoped<RoleSeeder>();
         services.AddScoped<SuperAdminSeeder>();

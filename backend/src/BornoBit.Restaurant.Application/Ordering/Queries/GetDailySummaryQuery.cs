@@ -75,7 +75,7 @@ public class GetDailySummaryQueryHandler : IRequestHandler<GetDailySummaryQuery,
             .Select(o => new
             {
                 Grand = o.Lines.Sum(l => l.UnitPriceSnapshot * l.Quantity)
-                        - o.DiscountAmount + o.TaxAmount + o.ServiceChargeAmount + o.TipAmount + o.RoundingAdjustment,
+                        - o.DiscountAmount + o.TaxAmount + o.ServiceChargeAmount + o.TipAmount + o.DeliveryChargeAmount + o.RoundingAdjustment,
                 Paid = _db.Payments.Where(p => p.OrderId == o.Id && p.Status == PaymentEntryStatus.Captured)
                         .Sum(p => p.Kind == PaymentKind.Charge ? p.Amount : -p.Amount)
             })

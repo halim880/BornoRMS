@@ -29,10 +29,14 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.Property(p => p.Reference).HasMaxLength(200);
         builder.Property(p => p.Notes).HasMaxLength(1000);
         builder.Property(p => p.VoidReason).HasMaxLength(500);
+        builder.Property(p => p.IdempotencyKey).HasMaxLength(100);
 
         builder.Ignore(p => p.SignedAmount);
 
         builder.HasIndex(p => p.OrderId);
+        // Non-unique: all tenders of one split/partial settle request share a key, so the handler can
+        // detect (and no-op) a replayed request by looking up any payment already carrying that key.
+        builder.HasIndex(p => p.IdempotencyKey);
         builder.HasIndex(p => p.CreatedAtUtc);
         builder.HasIndex(p => p.Method);
         builder.HasIndex(p => p.Status);

@@ -46,4 +46,33 @@ extension ReportsApi on StaffApi {
             .map((e) => TopSellingItemRow.fromJson(e as Map<String, dynamic>))
             .toList();
       });
+
+  Future<List<CategorySalesRow>> categorySales({DateTime? from, DateTime? to}) =>
+      client.guard(() async {
+        final res = await client.dio
+            .get('$_reportsBase/category-sales', queryParameters: _range(from, to));
+        return (res.data as List)
+            .map((e) => CategorySalesRow.fromJson(e as Map<String, dynamic>))
+            .toList();
+      });
+
+  Future<CashierReport> cashierReport({DateTime? from, DateTime? to}) =>
+      client.guard(() async {
+        final res = await client.dio
+            .get('$_reportsBase/cashier', queryParameters: _range(from, to));
+        return CashierReport.fromJson(res.data as Map<String, dynamic>);
+      });
+
+  Future<PurchaseReport> purchaseReport({DateTime? from, DateTime? to}) =>
+      client.guard(() async {
+        final res = await client.dio
+            .get('$_reportsBase/purchases', queryParameters: _range(from, to));
+        return PurchaseReport.fromJson(res.data as Map<String, dynamic>);
+      });
+
+  /// Point-in-time snapshot — no date range.
+  Future<StockValuation> stockValuation() => client.guard(() async {
+        final res = await client.dio.get('$_reportsBase/stock-valuation');
+        return StockValuation.fromJson(res.data as Map<String, dynamic>);
+      });
 }

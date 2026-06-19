@@ -29,6 +29,7 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.TaxAmount).HasPrecision(18, 2);
         builder.Property(o => o.ServiceChargeAmount).HasPrecision(18, 2);
         builder.Property(o => o.TipAmount).HasPrecision(18, 2);
+        builder.Property(o => o.DeliveryChargeAmount).HasPrecision(18, 2);
         builder.Property(o => o.WaiterName).HasMaxLength(200);
         builder.Property(o => o.PaymentMethod).HasConversion<int>();
         builder.Property(o => o.PaymentStatus).HasConversion<int>();

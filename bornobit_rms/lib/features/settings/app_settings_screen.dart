@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/i18n/locale_controller.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/app_toast.dart';
+import '../../l10n/app_localizations.dart';
 import '../dashboard/widgets.dart';
 import 'settings_api.dart';
 import 'settings_models.dart';
@@ -90,6 +92,8 @@ class _AppSettingsScreenState extends ConsumerState<AppSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _LanguageCard(),
+          const SizedBox(height: 12),
           SectionCard(
             title: 'Currency & display',
             icon: Icons.attach_money,
@@ -212,6 +216,45 @@ class _AppSettingsScreenState extends ConsumerState<AppSettingsScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+/// Device-local UI language switch (English / বাংলা). Not server-backed — it sets
+/// the [localeProvider] and persists per device, so any staff member can switch.
+class _LanguageCard extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
+    final isBn = ref.watch(isBengaliProvider);
+    return SectionCard(
+      title: t.language,
+      icon: Icons.translate,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: Text(t.languageEnglish),
+                selected: !isBn,
+                onSelected: (_) =>
+                    ref.read(localeProvider.notifier).setLocale(const Locale('en')),
+              ),
+              ChoiceChip(
+                label: Text(t.languageBengali),
+                selected: isBn,
+                onSelected: (_) =>
+                    ref.read(localeProvider.notifier).setLocale(const Locale('bn')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(t.settingsLanguageSubtitle,
+              style: const TextStyle(fontSize: 12, color: Bo.textSubtle)),
+        ],
+      ),
+    );
   }
 }
 

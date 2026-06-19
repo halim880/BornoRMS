@@ -1,22 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_state.dart';
+import 'core/i18n/locale_controller.dart';
 import 'core/providers/providers.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/login_screen.dart';
 import 'features/shell/home_shell.dart';
+import 'l10n/app_localizations.dart';
 
-class BornoBitApp extends StatelessWidget {
+class BornoBitApp extends ConsumerWidget {
   const BornoBitApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(localeProvider);
     return MaterialApp(
       title: 'BornoBit RMS',
       debugShowCheckedModeBanner: false,
       theme: buildBornoTheme(),
+      locale: locale,
+      supportedLocales: supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: const _AuthGate(),
     );
   }

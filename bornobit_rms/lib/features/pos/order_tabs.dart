@@ -63,6 +63,8 @@ class OrderTabs extends ConsumerWidget {
                     ),
             ),
             const SizedBox(width: 8),
+            const _ShiftButton(),
+            const SizedBox(width: 4),
             IconButton(
               tooltip: 'Printer settings',
               icon: Icon(Icons.print_outlined, color: a.textTertiary),
@@ -70,6 +72,50 @@ class OrderTabs extends ConsumerWidget {
                   context: context, builder: (_) => const PrinterSettingsDialog()),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Drawer/shift status pill — green when a shift is open, muted "Open shift" when not.
+/// Tapping opens the [ShiftDialog] (open when closed, close when open).
+class _ShiftButton extends ConsumerWidget {
+  const _ShiftButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final a = context.appColors;
+    final drawer = ref.watch(posDrawerProvider).valueOrNull;
+    final open = drawer?.isOpen ?? false;
+
+    return Tooltip(
+      message: open ? 'Shift ${drawer!.drawerNumber} — tap to close' : 'No open shift — tap to open',
+      child: Material(
+        color: open ? a.successTint : a.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppColors.radiusChip),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppColors.radiusChip),
+          onTap: () => showDialog(context: context, builder: (_) => const ShiftDialog()),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(open ? Icons.point_of_sale : Icons.lock_outline,
+                    size: 18, color: open ? a.success : a.textTertiary),
+                const SizedBox(width: 6),
+                Text(
+                  open ? 'Shift open' : 'Open shift',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: open ? a.success : a.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

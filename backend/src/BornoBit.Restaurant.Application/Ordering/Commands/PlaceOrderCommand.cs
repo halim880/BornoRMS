@@ -1,5 +1,6 @@
 using BornoBit.Restaurant.Application.Common.Numbering;
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Domain.Logistics;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using FluentValidation;
@@ -16,7 +17,10 @@ public record PlaceOrderCommand(
     Guid? TableId,
     OrderType Type,
     string? Notes,
-    IReadOnlyList<PlaceOrderLineInput> Lines) : IRequest<PlaceOrderResult>;
+    IReadOnlyList<PlaceOrderLineInput> Lines,
+    string? DeliveryAddress = null,
+    string? ContactPhone = null,
+    decimal DeliveryCharge = 0m) : IRequest<PlaceOrderResult>;
 
 public record PlaceOrderResult(Guid OrderId, string OrderNumber, decimal Total, string Currency);
 
@@ -35,6 +39,11 @@ public class PlaceOrderCommandValidator : AbstractValidator<PlaceOrderCommand>
             .NotNull()
             .When(x => x.Type == OrderType.DineIn)
             .WithMessage("Dine-in orders require a table.");
+        RuleFor(x => x.DeliveryAddress)
+            .NotEmpty()
+            .When(x => x.Type == OrderType.Delivery)
+            .WithMessage("Delivery orders require an address.");
+        RuleFor(x => x.DeliveryCharge).GreaterThanOrEqualTo(0m);
     }
 }
 
@@ -106,6 +115,14 @@ public class PlaceOrderCommandHandler : IRequestHandler<PlaceOrderCommand, Place
             order.Confirm();
 
         _db.Orders.Add(order);
+
+        // Delivery orders carry a fee on the bill and open a dispatch/tracking record.
+        if (request.Type == OrderType.Delivery)
+        {
+            order.SetDeliveryCharge(request.DeliveryCharge);
+            _db.Deliveries.Add(Delivery.Create(order.Id, request.DeliveryAddress!.Trim(), request.ContactPhone));
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return new PlaceOrderResult(order.Id, order.OrderNumber, order.Total, order.Currency);

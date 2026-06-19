@@ -50,6 +50,10 @@ public class Payment : BaseEntity
     public string? Notes { get; private set; }
     public string? VoidReason { get; private set; }
 
+    /// <summary>Client-supplied dedup token for the settle request that created this tender. All tenders of
+    /// one split/partial request share the same key; a repeat request with the same key is a no-op upstream.</summary>
+    public string? IdempotencyKey { get; private set; }
+
     /// <summary>Signed contribution to the order's amount paid: + for a captured charge, − for a captured refund.</summary>
     public decimal SignedAmount =>
         Status != PaymentEntryStatus.Captured ? 0m : (Kind == PaymentKind.Charge ? Amount : -Amount);
@@ -65,7 +69,8 @@ public class Payment : BaseEntity
         Guid? cashierUserId,
         string? cashierName,
         Guid? cashDrawerSessionId = null,
-        string? reference = null)
+        string? reference = null,
+        string? idempotencyKey = null)
     {
         if (orderId == Guid.Empty) throw new ArgumentException("Order is required.", nameof(orderId));
         if (amount <= 0m) throw new ArgumentOutOfRangeException(nameof(amount), "Payment amount must be greater than zero.");
@@ -88,7 +93,8 @@ public class Payment : BaseEntity
             CashierUserId = cashierUserId,
             CashierName = string.IsNullOrWhiteSpace(cashierName) ? null : cashierName.Trim(),
             CashDrawerSessionId = cashDrawerSessionId,
-            Reference = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim()
+            Reference = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim(),
+            IdempotencyKey = string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim()
         };
     }
 

@@ -87,6 +87,15 @@ extension AccountsApi on StaffApi {
             data: {'name': name, 'kind': kind, 'openingBalance': openingBalance});
       });
 
+  // ---------- cash-counter → GL import ----------
+  /// Post a day's un-accounted takings to the GL on demand (the background service also does this at
+  /// day-end). Idempotent — re-running posts only what's still un-accounted. Defaults to today.
+  Future<CashImportResult> cashCounterImport({DateTime? date}) => client.guard(() async {
+        final res = await client.dio.post('$_base/cash-counter/import',
+            data: {if (date != null) 'date': _dateOnly(date)});
+        return CashImportResult.fromJson(res.data as Map<String, dynamic>);
+      });
+
   // ---------- categories ----------
   Future<List<FinanceCategory>> categories({String? type, bool? activeOnly}) =>
       client.guard(() async {
@@ -114,6 +123,26 @@ extension AccountsApi on StaffApi {
         final res = await client.dio.get('$_base/payables/payments',
             queryParameters: {if (supplierId != null) 'supplierId': supplierId});
         return _mapList(res.data, SupplierPaymentRow.fromJson);
+      });
+
+  /// Record a payment against a supplier's balance: Dr Accounts Payable / Cr the chosen cash account.
+  Future<void> recordSupplierPayment({
+    required String supplierId,
+    required String cashAccountId,
+    required DateTime paidOn,
+    required double amount,
+    String? reference,
+    String? notes,
+  }) =>
+      client.guard(() async {
+        await client.dio.post('$_base/payables/record-payment', data: {
+          'supplierId': supplierId,
+          'cashAccountId': cashAccountId,
+          'paidOn': paidOn.toUtc().toIso8601String(),
+          'amount': amount,
+          if (reference != null) 'reference': reference,
+          if (notes != null) 'notes': notes,
+        });
       });
 
   // ---------- periods ----------

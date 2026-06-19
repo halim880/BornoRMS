@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/app_toast.dart';
+import '../../l10n/app_localizations.dart';
 import '../dashboard/widgets.dart' show money;
 import 'pos_dialogs.dart';
 import 'pos_models.dart';
@@ -29,6 +30,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
   @override
   Widget build(BuildContext context) {
     final a = context.appColors;
+    final t = AppLocalizations.of(context);
     final text = Theme.of(context).textTheme;
     final p = widget.product;
     final out = widget.availability?.isOutOfStock ?? false;
@@ -101,7 +103,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                           Row(
                             children: [
                               if (p.hasVariants)
-                                Text('from ', style: text.bodySmall),
+                                Text(t.posFrom, style: text.bodySmall),
                               Flexible(
                                 child: Text(
                                   money(p.fromPrice, p.currency),
@@ -126,7 +128,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                     top: 6,
                     right: 6,
                     child: _Pill(
-                      label: 'Sold out',
+                      label: t.posSoldOut,
                       bg: a.textPrimary,
                       fg: a.onAccent,
                     ),
@@ -135,7 +137,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                   Positioned(
                     top: 6,
                     left: 6,
-                    child: _Pill(label: 'Low', bg: a.warning, fg: a.onAccent),
+                    child: _Pill(label: t.posLow, bg: a.warning, fg: a.onAccent),
                   ),
                 // quick-add
                 if (active)
@@ -193,7 +195,7 @@ Future<void> addProduct(
   if (ref.read(posControllerProvider).orderId == null) {
     AppToast.show(
       context,
-      'Start an order first (tap +).',
+      AppLocalizations.of(context).posStartOrderFirst,
       type: ToastType.info,
     );
     return;
@@ -223,7 +225,7 @@ Future<void> addProduct(
           optionIds: optionIds,
         );
     if (context.mounted) {
-      AppToast.show(context, 'Added ${product.name}');
+      AppToast.show(context, AppLocalizations.of(context).posAddedItem(product.name));
     }
   } catch (e) {
     if (context.mounted) {

@@ -42,6 +42,7 @@ public record OrderDetailDto(
     decimal TaxAmount,
     decimal ServiceChargeAmount,
     decimal TipAmount,
+    decimal DeliveryChargeAmount,
     decimal RoundingAdjustment,
     decimal GrandTotal,
     decimal Total,
@@ -100,7 +101,7 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
 
         var ord = row.Order;
         var subtotal = lines.Sum(l => l.LineTotal);
-        var grandTotal = Math.Max(0m, subtotal - ord.DiscountAmount + ord.TaxAmount + ord.ServiceChargeAmount + ord.TipAmount + ord.RoundingAdjustment);
+        var grandTotal = Math.Max(0m, subtotal - ord.DiscountAmount + ord.TaxAmount + ord.ServiceChargeAmount + ord.TipAmount + ord.DeliveryChargeAmount + ord.RoundingAdjustment);
         var amountPaid = payments
             .Where(p => p.Status == PaymentEntryStatus.Captured)
             .Sum(p => p.Kind == PaymentKind.Charge ? p.Amount : -p.Amount);
@@ -125,6 +126,7 @@ public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderDetailDt
             ord.TaxAmount,
             ord.ServiceChargeAmount,
             ord.TipAmount,
+            ord.DeliveryChargeAmount,
             ord.RoundingAdjustment,
             grandTotal,
             grandTotal,

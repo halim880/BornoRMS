@@ -5,6 +5,7 @@ import '../../core/models/dtos.dart';
 import '../../core/printing/print_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/app_toast.dart';
+import '../../l10n/app_localizations.dart';
 import '../dashboard/widgets.dart' show money;
 import 'cart_line.dart';
 import 'payment_dialog.dart';
@@ -19,6 +20,7 @@ class CartPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final a = context.appColors;
+    final t = AppLocalizations.of(context);
     final state = ref.watch(posControllerProvider);
     final detail = state.detail;
     final c = ref.read(posControllerProvider.notifier);
@@ -67,7 +69,7 @@ class CartPanel extends ConsumerWidget {
                             ? null
                             : () => _print(context, ref, detail, kot: false),
                         icon: const Icon(Icons.receipt_long, size: 18),
-                        label: const Text('Receipt'),
+                        label: Text(t.posReceipt),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -77,7 +79,7 @@ class CartPanel extends ConsumerWidget {
                             ? null
                             : () => _print(context, ref, detail, kot: true),
                         icon: const Icon(Icons.soup_kitchen_outlined, size: 18),
-                        label: const Text('Send to kitchen'),
+                        label: Text(t.posSendToKitchen),
                       ),
                     ),
                   ],
@@ -89,7 +91,7 @@ class CartPanel extends ConsumerWidget {
                       onPressed: (busy || !hasOrder)
                           ? null
                           : () => showCancelDialog(context, ref),
-                      child: const Text('Cancel'),
+                      child: Text(t.actionCancel),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -101,7 +103,7 @@ class CartPanel extends ConsumerWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Charge'),
+                            Text(t.posCharge),
                             Text(
                               money(detail?.grandTotal ?? 0, detail?.currency ?? 'Tk'),
                               style: AppColors.priceText.copyWith(color: a.onAccent),
@@ -129,7 +131,7 @@ class CartPanel extends ConsumerWidget {
       }
       ref.read(posControllerProvider.notifier).clearSelection();
       if (context.mounted) {
-        AppToast.show(context, 'Order settled.');
+        AppToast.show(context, AppLocalizations.of(context).posOrderSettled);
       }
     }
   }
@@ -181,7 +183,7 @@ class _Header extends StatelessWidget {
           Row(
             children: [
               _Chip(
-                label: walkIn ? 'Walk-in' : detail.customerName!,
+                label: walkIn ? AppLocalizations.of(context).posWalkIn : detail.customerName!,
                 bg: walkIn ? a.successTint : a.surfaceMuted,
                 border: walkIn ? a.successBorder : a.border,
                 fg: walkIn ? a.success : a.textSecondary,
@@ -255,7 +257,7 @@ class _NoOrderHeader extends StatelessWidget {
           Icon(Icons.receipt_long_outlined, size: 18, color: a.textTertiary),
           const SizedBox(width: 8),
           Text(
-            'No active order',
+            AppLocalizations.of(context).posNoActiveOrder,
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -281,10 +283,10 @@ class _NoOrder extends StatelessWidget {
           children: [
             Icon(Icons.point_of_sale_outlined, size: 40, color: a.textTertiary),
             const SizedBox(height: 10),
-            Text('No order selected', style: text.bodyLarge),
+            Text(AppLocalizations.of(context).posNoOrderSelected, style: text.bodyLarge),
             const SizedBox(height: 4),
             Text(
-              'Pick an order above, or tap + to start one.',
+              AppLocalizations.of(context).posPickOrderHint,
               textAlign: TextAlign.center,
               style: text.bodySmall,
             ),
@@ -306,9 +308,9 @@ class _EmptyItems extends StatelessWidget {
         children: [
           Icon(Icons.shopping_cart_outlined, size: 40, color: a.textTertiary),
           const SizedBox(height: 10),
-          Text('No items yet', style: text.bodyLarge),
+          Text(AppLocalizations.of(context).posNoItemsYet, style: text.bodyLarge),
           const SizedBox(height: 4),
-          Text('Tap a product to start this order.', style: text.bodySmall),
+          Text(AppLocalizations.of(context).posTapProductHint, style: text.bodySmall),
         ],
       ),
     );

@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Common.Time;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using MediatR;
@@ -12,7 +13,13 @@ public record GetOrdersQuery(
     int Page = 1,
     int PageSize = 50,
     bool? IsPaid = null,
-    bool ExcludeCancelled = false
+    bool ExcludeCancelled = false,
+    // Optional list scoping (back-office Orders screen): date window on OrderedAtUtc,
+    // a combined free-text search, and an exact-ish order-number lookup.
+    DateOnly? From = null,
+    DateOnly? To = null,
+    string? Search = null,
+    string? OrderNumber = null
 ) : IRequest<PagedResult<OrderListItemDto>>;
 
 public record OrderListItemDto(
@@ -39,8 +46,13 @@ public record OrderListItemDto(
 public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedResult<OrderListItemDto>>
 {
     private readonly IAppDbContext _db;
+    private readonly IBusinessClock _clock;
 
-    public GetOrdersQueryHandler(IAppDbContext db) => _db = db;
+    public GetOrdersQueryHandler(IAppDbContext db, IBusinessClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<PagedResult<OrderListItemDto>> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
     {
@@ -65,6 +77,34 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedResult
 
         if (request.ExcludeCancelled)
             query = query.Where(x => x.Order.Status != OrderStatus.Cancelled);
+
+        if (request.From is { } from)
+        {
+            var (start, _) = _clock.DayWindowUtc(from);
+            query = query.Where(x => x.Order.OrderedAtUtc >= start);
+        }
+
+        if (request.To is { } to)
+        {
+            var (_, end) = _clock.DayWindowUtc(to);
+            query = query.Where(x => x.Order.OrderedAtUtc < end);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.OrderNumber))
+        {
+            var on = request.OrderNumber.Trim().ToUpper();
+            query = query.Where(x => x.Order.OrderNumber.Contains(on));
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var term = request.Search.Trim();
+            query = query.Where(x =>
+                x.Order.OrderNumber.Contains(term)
+                || (x.Customer.FullName != null && x.Customer.FullName.Contains(term))
+                || x.Customer.Phone.Contains(term)
+                || (x.Table != null && x.Table.TableNumber.Contains(term)));
+        }
 
         var total = await query.LongCountAsync(cancellationToken);
 

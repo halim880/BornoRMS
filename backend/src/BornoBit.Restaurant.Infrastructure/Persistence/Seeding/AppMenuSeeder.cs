@@ -187,6 +187,7 @@ public class AppMenuSeeder
             new("POS", Url: "/pos", Icon: "ReceiptMoney"),
             new("Cash Counter", Url: "/operations/cash-counter", Icon: "CalculatorMultiple"),
             new("Orders", Url: "/orders", Icon: "DocumentBulletList"),
+            new("Print Queue", Url: "/operations/print-queue", Icon: "ReceiptMoney"),
             new("Kitchen Display", Url: "/operations/kitchen-display", Icon: "ClipboardTaskListLtr", RequiredRole: Roles.Chef),
             new("Reports", Icon: "ChartMultiple", RequiredRole: Roles.Manager, Children: new()
             {
@@ -194,6 +195,10 @@ public class AppMenuSeeder
                 new("Sales (Invoice-wise)", Url: "/operations/reports/sales-invoices", Icon: "ReceiptMoney",   RequiredRole: Roles.Manager),
                 new("Collection Report",  Url: "/operations/reports/collection", Icon: "ReceiptMoney",       RequiredRole: Roles.Manager),
                 new("Most Selling Items", Url: "/operations/reports/top-items",  Icon: "ArrowTrendingLines", RequiredRole: Roles.Manager),
+                new("Category Sales",     Url: "/operations/reports/category-sales", Icon: "DataPie",        RequiredRole: Roles.Manager),
+                new("Cashier Report",     Url: "/operations/reports/cashier",    Icon: "Person",             RequiredRole: Roles.Manager),
+                new("Purchase Report",    Url: "/operations/reports/purchases",  Icon: "DocumentBulletList", RequiredRole: Roles.Manager),
+                new("Stock Valuation",    Url: "/operations/reports/stock-valuation", Icon: "Box",           RequiredRole: Roles.Manager),
             }),
             new("Menu", Url: "/operations/menu", Icon: "Receipt"),
         }),
@@ -201,6 +206,12 @@ public class AppMenuSeeder
         {
             new("App Settings", Url: "/settings/app", Icon: "PaintBrush"),
             new("User Manual",  Url: "/system/user-manual", Icon: "BookOpenMicroscope"),
+        }),
+        new("Delivery", Icon: "VehicleTruck", RequiredRole: Roles.Manager, Children: new()
+        {
+            new("Dispatch Board", Url: "/logistics/dispatch", Icon: "VehicleTruck", RequiredRole: Roles.Cashier),
+            new("COD Reconciliation", Url: "/logistics/cod", Icon: "ReceiptMoney", RequiredRole: Roles.Cashier),
+            new("Riders", Url: "/logistics/riders", Icon: "PeopleTeam", RequiredRole: Roles.Manager),
         }),
         new("Catalog", Icon: "BoxMultiple", RequiredRole: Roles.Admin, Children: new()
         {

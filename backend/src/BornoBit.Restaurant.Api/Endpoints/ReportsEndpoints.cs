@@ -1,3 +1,6 @@
+using BornoBit.Restaurant.Application.Inventory.Dashboard;
+using BornoBit.Restaurant.Application.Inventory.Purchases;
+using BornoBit.Restaurant.Application.Operations.Dashboard;
 using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Shared.Common;
 using FluentValidation;
@@ -54,6 +57,35 @@ public static class ReportsEndpoints
                 var (f, t) = Window(from, to);
                 return Results.Ok(await sender.Send(new GetTopSellingItemsQuery(f, t, top is > 0 ? top.Value : 20), ct));
             }));
+
+        // Paid revenue grouped by product category over a date range.
+        group.MapGet("/category-sales", (ISender sender, DateTime? from, DateTime? to, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var (f, t) = Window(from, to);
+                return Results.Ok(await sender.Send(new GetSalesByCategoryQuery(f, t), ct));
+            }));
+
+        // Captured tenders over a date range, grouped by the cashier who took them.
+        group.MapGet("/cashier", (ISender sender, DateTime? from, DateTime? to, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var (f, t) = Window(from, to);
+                return Results.Ok(await sender.Send(new GetCashierReportQuery(f, t), ct));
+            }));
+
+        // Posted goods receipts over a date range, grouped by supplier (what we bought).
+        group.MapGet("/purchases", (ISender sender, DateTime? from, DateTime? to, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var (f, t) = Window(from, to);
+                return Results.Ok(await sender.Send(new GetPurchaseReportQuery(f, t), ct));
+            }));
+
+        // Current stock valuation snapshot (Σ QtyOnHand × AvgCost), overall and by category.
+        // Point-in-time, so it ignores the date range.
+        group.MapGet("/stock-valuation", (ISender sender, CancellationToken ct) =>
+            Exec(async () => Results.Ok(await sender.Send(new GetStockValuationQuery(), ct))));
 
         return app;
     }

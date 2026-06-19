@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/i18n/labels.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_page.dart';
 import '../../core/widgets/app_toast.dart';
+import '../../l10n/app_localizations.dart';
 import '../dashboard/widgets.dart';
 import 'kitchen_api.dart';
 import 'kitchen_models.dart';
@@ -107,6 +109,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
     final stationId = ref.watch(kitchenStationFilterProvider);
     final typeFilter = ref.watch(kitchenTypeFilterProvider);
 
+    final t = AppLocalizations.of(context);
     // Drive the 1s clock.
     return StreamBuilder<void>(
       stream: _tick,
@@ -115,11 +118,11 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
         return Column(
           children: [
             PageHeader(
-              title: 'Kitchen Display',
-              subtitle: 'Live tickets · accept, start cooking, then bump to ready',
+              title: t.kdsTitle,
+              subtitle: t.kdsSubtitle,
               actions: [
                 IconButton(
-                  tooltip: 'Refresh',
+                  tooltip: t.actionRefresh,
                   onPressed: _busy ? null : _reload,
                   icon: const Icon(Icons.refresh),
                 ),
@@ -160,42 +163,43 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
 
   // ---------- metrics ----------
   Widget _metrics(KitchenMetrics m) {
+    final t = AppLocalizations.of(context);
     final longest = m.longestWaitingMinutes;
     return KpiGrid(
       minTileWidth: 180,
       children: [
         KpiCard(
-          label: 'Pending',
+          label: t.kdsKpiPending,
           value: count(m.pendingCount),
           icon: Icons.hourglass_empty,
           tint: Bo.bgSoft,
         ),
         KpiCard(
-          label: 'Preparing',
+          label: t.kdsKpiPreparing,
           value: count(m.preparingCount),
           icon: Icons.outdoor_grill,
           tint: Bo.warningSoft,
         ),
         KpiCard(
-          label: 'Ready',
+          label: t.kdsKpiReady,
           value: count(m.readyCount),
           icon: Icons.room_service,
           tint: Bo.primaryTint,
         ),
         KpiCard(
-          label: 'Avg prep',
+          label: t.kdsKpiAvgPrep,
           value: '${m.averagePrepMinutes.toStringAsFixed(1)} m',
           icon: Icons.timer,
           tint: Bo.infoSoft,
         ),
         KpiCard(
-          label: 'Longest wait${m.longestWaitingOrderNumber != null ? ' · ${m.longestWaitingOrderNumber}' : ''}',
+          label: '${t.kdsKpiLongestWait}${m.longestWaitingOrderNumber != null ? ' · ${m.longestWaitingOrderNumber}' : ''}',
           value: longest == null ? '–' : '$longest m',
           icon: Icons.warning_amber,
           tint: (longest != null && longest >= 20) ? Bo.dangerSoft : Bo.bgSoft,
         ),
         KpiCard(
-          label: 'Done today',
+          label: t.kdsKpiDoneToday,
           value: count(m.completedToday),
           icon: Icons.check_circle,
           tint: Bo.successSoft,
@@ -218,11 +222,12 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
       );
     }
 
+    final t = AppLocalizations.of(context);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          tab('All Stations', null),
+          tab(t.kdsAllStations, null),
           for (final s in stations) tab(s.name, s.id),
         ],
       ),
@@ -231,6 +236,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
 
   // ---------- filters ----------
   Widget _filters(String? typeFilter) {
+    final t = AppLocalizations.of(context);
     const types = ['DineIn', 'Takeaway', 'Delivery', 'Collection', 'Waiting'];
     return Wrap(
       spacing: 12,
@@ -242,10 +248,11 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
           child: DropdownButtonFormField<String?>(
             initialValue: typeFilter,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Type', isDense: true),
+            decoration: InputDecoration(labelText: t.kdsFilterType, isDense: true),
             items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('All types')),
-              for (final t in types) DropdownMenuItem<String?>(value: t, child: Text(t)),
+              DropdownMenuItem<String?>(value: null, child: Text(t.commonAllTypes)),
+              for (final ty in types)
+                DropdownMenuItem<String?>(value: ty, child: Text(orderTypeLabel(t, ty))),
             ],
             onChanged: _setType,
           ),
@@ -254,7 +261,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
           width: 140,
           child: TextField(
             controller: _tableController,
-            decoration: const InputDecoration(labelText: 'Table #', isDense: true),
+            decoration: InputDecoration(labelText: t.kdsFilterTable, isDense: true),
             onSubmitted: _setTable,
           ),
         ),
@@ -262,23 +269,24 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
           width: 180,
           child: TextField(
             controller: _searchController,
-            decoration: const InputDecoration(labelText: 'Search order #', isDense: true),
+            decoration: InputDecoration(labelText: t.kdsFilterSearch, isDense: true),
             onSubmitted: _setSearch,
           ),
         ),
-        OutlinedButton(onPressed: _clearFilters, child: const Text('Clear')),
+        OutlinedButton(onPressed: _clearFilters, child: Text(t.actionClear)),
       ],
     );
   }
 
   // ---------- board ----------
   Widget _board(KitchenBoard board, {required bool showStationTag}) {
+    final t = AppLocalizations.of(context);
     return LayoutBuilder(
       builder: (context, c) {
         final cols = [
-          _column('Pending', board.pending, 'neutral', showStationTag),
-          _column('Preparing', board.preparing, 'warning', showStationTag),
-          _column('Ready', board.ready, 'primary', showStationTag),
+          _column(t.kdsColPending, board.pending, 'neutral', showStationTag),
+          _column(t.kdsColPreparing, board.preparing, 'warning', showStationTag),
+          _column(t.kdsColReady, board.ready, 'primary', showStationTag),
         ];
         // Wide layout: three side-by-side columns; narrow: stacked.
         if (c.maxWidth >= 900) {
@@ -305,13 +313,14 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
   }
 
   Widget _column(String title, List<KitchenOrderCard> cards, String tone, bool showStationTag) {
+    final t = AppLocalizations.of(context);
     return SectionCard(
       title: title,
       trailing: ToneChip(count(cards.length), tone),
       child: cards.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: EmptyState(message: 'No orders', icon: Icons.restaurant_menu),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: EmptyState(message: t.kdsNoOrders, icon: Icons.restaurant_menu),
             )
           : Column(
               children: [
@@ -325,15 +334,15 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
                       busy: _busy,
                       onAccept: () => _act(
                         () => ref.read(staffApiProvider).kitchenAccept(card.id),
-                        'Order accepted — kitchen ticket sent.',
+                        t.kdsToastAccepted,
                       ),
                       onAdvance: () => _act(
                         () => ref.read(staffApiProvider).kitchenAdvance(card.id),
-                        _advanceMessage(card.status),
+                        _advanceMessage(t, card.status),
                       ),
                       onTogglePriority: () => _act(
                         () => ref.read(staffApiProvider).kitchenTogglePriority(card.id, !card.isPriority),
-                        card.isPriority ? 'Priority cleared.' : 'Marked priority.',
+                        card.isPriority ? t.kdsToastPriorityCleared : t.kdsToastPriorityMarked,
                       ),
                       onEditNotes: () => _editNotes(card),
                     ),
@@ -343,39 +352,40 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
     );
   }
 
-  String _advanceMessage(String status) => switch (status) {
-        'Confirmed' => 'Cooking started.',
-        'Preparing' => 'Order is ready — front of house notified.',
-        'Ready' => 'Order served.',
-        _ => 'Order advanced.',
+  String _advanceMessage(AppLocalizations t, String status) => switch (status) {
+        'Confirmed' => t.kdsToastCooking,
+        'Preparing' => t.kdsToastReady,
+        'Ready' => t.kdsToastServed,
+        _ => t.kdsToastAdvanced,
       };
 
   Future<void> _editNotes(KitchenOrderCard card) async {
+    final t = AppLocalizations.of(context);
     final controller = TextEditingController(text: card.kitchenNotes ?? '');
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Kitchen notes · ${card.orderNumber}'),
+        title: Text(t.kdsNotesTitle(card.orderNumber)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Internal only — not shown to the customer.',
-                style: TextStyle(color: Bo.textSubtle, fontSize: 12)),
+            Text(t.kdsNotesInternal,
+                style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
               maxLines: 4,
               autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'e.g. Waiting for ingredients, cooking started…',
+              decoration: InputDecoration(
+                hintText: t.kdsNotesHint,
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.actionCancel)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.actionSave)),
         ],
       ),
     );
@@ -383,7 +393,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
       final notes = controller.text.trim();
       await _act(
         () => ref.read(staffApiProvider).kitchenSaveNotes(card.id, notes.isEmpty ? null : notes),
-        'Kitchen notes saved.',
+        t.kdsToastNotesSaved,
       );
     }
     controller.dispose();
@@ -414,6 +424,7 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final elapsed = card.elapsedMinutes(nowUtc);
     final elapsedColor = elapsed >= 20
         ? Bo.danger
@@ -456,10 +467,10 @@ class _OrderCard extends StatelessWidget {
             spacing: 6,
             runSpacing: 4,
             children: [
-              ToneChip(card.status, orderStatusTone(card.status)),
-              ToneChip(card.orderType, 'info'),
+              ToneChip(orderStatusLabel(t, card.status), orderStatusTone(card.status)),
+              ToneChip(orderTypeLabel(t, card.orderType), 'info'),
               if (card.tableNumber != null && card.tableNumber!.isNotEmpty)
-                ToneChip('Table ${card.tableNumber}', 'neutral'),
+                ToneChip(t.commonTable(card.tableNumber!), 'neutral'),
             ],
           ),
           if (card.customerName != null && card.customerName!.isNotEmpty) ...[
@@ -499,17 +510,17 @@ class _OrderCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(color: Bo.warningSoft, borderRadius: BorderRadius.circular(Bo.radiusSm)),
-              child: Text('Note: ${card.kitchenNotes}', style: const TextStyle(fontSize: 11, color: Bo.warning)),
+              child: Text(t.commonNote(card.kitchenNotes!), style: const TextStyle(fontSize: 11, color: Bo.warning)),
             ),
           ],
           const SizedBox(height: 10),
-          _actions(),
+          _actions(t),
         ],
       ),
     );
   }
 
-  Widget _actions() {
+  Widget _actions(AppLocalizations t) {
     final children = <Widget>[];
 
     // Placed/Confirmed → Accept (only Placed is acceptable; Confirmed can advance to cooking).
@@ -518,15 +529,15 @@ class _OrderCard extends StatelessWidget {
         child: FilledButton.icon(
           onPressed: busy ? null : onAccept,
           icon: const Icon(Icons.check, size: 16),
-          label: const Text('Accept'),
+          label: Text(t.kdsAccept),
         ),
       ));
     } else {
       final (label, icon) = switch (card.status) {
-        'Confirmed' => ('Start cooking', Icons.outdoor_grill),
-        'Preparing' => ('Mark ready', Icons.room_service),
-        'Ready' => ('Serve', Icons.done_all),
-        _ => ('Advance', Icons.arrow_forward),
+        'Confirmed' => (t.kdsStartCooking, Icons.outdoor_grill),
+        'Preparing' => (t.kdsMarkReady, Icons.room_service),
+        'Ready' => (t.kdsServe, Icons.done_all),
+        _ => (t.kdsAdvance, Icons.arrow_forward),
       };
       children.add(Expanded(
         child: FilledButton.icon(
@@ -539,13 +550,13 @@ class _OrderCard extends StatelessWidget {
 
     children.add(const SizedBox(width: 6));
     children.add(IconButton(
-      tooltip: card.isPriority ? 'Clear priority' : 'Mark priority',
+      tooltip: card.isPriority ? t.kdsClearPriority : t.kdsMarkPriority,
       onPressed: busy ? null : onTogglePriority,
       icon: Icon(card.isPriority ? Icons.flag : Icons.outlined_flag,
           color: card.isPriority ? Bo.danger : Bo.textSubtle),
     ));
     children.add(IconButton(
-      tooltip: 'Kitchen notes',
+      tooltip: t.kdsKitchenNotes,
       onPressed: busy ? null : onEditNotes,
       icon: const Icon(Icons.sticky_note_2_outlined, color: Bo.textSubtle),
     ));

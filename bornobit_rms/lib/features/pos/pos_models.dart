@@ -244,6 +244,94 @@ class SettlementResult {
       );
 }
 
+// ---------- cash drawer / shift ----------
+
+class CashDrawer {
+  final String id;
+  final String drawerNumber;
+  final String cashierName;
+  final String? cashAccountName;
+  final double openingBalance;
+  final double cashReceived;
+  final double cashPaidOut;
+  final double expectedClosingBalance;
+  final double? countedClosingBalance;
+  final double variance;
+  final String status; // Open | Closing | Closed
+  final DateTime? openedAtUtc;
+
+  CashDrawer({
+    required this.id,
+    required this.drawerNumber,
+    required this.cashierName,
+    required this.cashAccountName,
+    required this.openingBalance,
+    required this.cashReceived,
+    required this.cashPaidOut,
+    required this.expectedClosingBalance,
+    required this.countedClosingBalance,
+    required this.variance,
+    required this.status,
+    required this.openedAtUtc,
+  });
+
+  bool get isOpen => status == 'Open';
+
+  factory CashDrawer.fromJson(Map<String, dynamic> j) => CashDrawer(
+        id: _s(j['id']),
+        drawerNumber: _s(j['drawerNumber']),
+        cashierName: _s(j['cashierName']),
+        cashAccountName: _sOrNull(j['cashAccountName']),
+        openingBalance: _d(j['openingBalance']),
+        cashReceived: _d(j['cashReceived']),
+        cashPaidOut: _d(j['cashPaidOut']),
+        expectedClosingBalance: _d(j['expectedClosingBalance']),
+        countedClosingBalance:
+            j['countedClosingBalance'] == null ? null : _d(j['countedClosingBalance']),
+        variance: _d(j['variance']),
+        status: _s(j['status']),
+        openedAtUtc: j['openedAtUtc'] == null ? null : DateTime.tryParse(j['openedAtUtc'].toString()),
+      );
+}
+
+class DrawerCloseResult {
+  final String drawerNumber;
+  final double expected;
+  final double counted;
+  final double variance;
+  DrawerCloseResult({required this.drawerNumber, required this.expected, required this.counted, required this.variance});
+
+  factory DrawerCloseResult.fromJson(Map<String, dynamic> j) => DrawerCloseResult(
+        drawerNumber: _s(j['drawerNumber']),
+        expected: _d(j['expected']),
+        counted: _d(j['counted']),
+        variance: _d(j['variance']),
+      );
+}
+
+class DrawerMethodLine {
+  final String method;
+  final int count;
+  final double amount;
+  DrawerMethodLine({required this.method, required this.count, required this.amount});
+
+  factory DrawerMethodLine.fromJson(Map<String, dynamic> j) =>
+      DrawerMethodLine(method: _s(j['method']), count: _i(j['count']), amount: _d(j['amount']));
+}
+
+class DrawerSummary {
+  final CashDrawer drawer;
+  final List<DrawerMethodLine> byMethod;
+  DrawerSummary({required this.drawer, required this.byMethod});
+
+  factory DrawerSummary.fromJson(Map<String, dynamic> j) => DrawerSummary(
+        drawer: CashDrawer.fromJson(j['drawer'] as Map<String, dynamic>),
+        byMethod: (j['byMethod'] as List? ?? [])
+            .map((e) => DrawerMethodLine.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
 // ---------- cart staging (client-side, before SetPosOrderLines) ----------
 
 /// A staged cart line keyed by product + variant + chosen options.

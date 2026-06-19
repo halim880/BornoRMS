@@ -1,3 +1,5 @@
+using BornoBit.Restaurant.Api.Services;
+using BornoBit.Restaurant.Application.Accounting.Drawers;
 using BornoBit.Restaurant.Application.Dining.Queries;
 using BornoBit.Restaurant.Application.Ordering.Commands;
 using BornoBit.Restaurant.Application.Ordering.Pos;
@@ -50,56 +52,108 @@ public static class StaffPosEndpoints
             Exec(async () => Results.Ok(await sender.Send(new GetActiveOrdersQuery(), ct))));
 
         // ---------- order lifecycle ----------
-        group.MapPost("/orders", (CreatePosOrderRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders", (CreatePosOrderRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new CreatePosOrderCommand(
-                    body.Type, body.TableId, body.CustomerPhone, body.CustomerName, body.CustomerAddress), ct);
+                    body.Type, body.TableId, body.CustomerPhone, body.CustomerName, body.CustomerAddress,
+                    body.DeliveryCharge ?? 0m), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
+                if (body.Type == OrderType.Delivery) await live.NotifyAsync(LiveScopes.Delivery, ct);
                 return Results.Created($"/api/v1/staff/orders/{result.OrderId}", result);
             }));
 
-        group.MapPatch("/orders/{id:guid}", (Guid id, UpdatePosOrderRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPatch("/orders/{id:guid}", (Guid id, UpdatePosOrderRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new UpdatePosOrderCommand(
                     id, body.Type, body.TableId, body.CustomerPhone, body.CustomerName, body.CustomerAddress), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
                 return Results.Ok(result);
             }));
 
-        group.MapPut("/orders/{id:guid}/lines", (Guid id, SetLinesRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPut("/orders/{id:guid}/lines", (Guid id, SetLinesRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new SetPosOrderLinesCommand(id, ToLines(body.Lines)), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
                 return Results.Ok(result);
             }));
 
         // ---------- billing ----------
-        group.MapPost("/orders/{id:guid}/discount", (Guid id, DiscountRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/discount", (Guid id, DiscountRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new ApplyDiscountCommand(id, body.Percent, body.Amount, body.Reason), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
                 return Results.Ok(result);
             }));
 
-        group.MapPost("/orders/{id:guid}/rounding", (Guid id, RoundingRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/rounding", (Guid id, RoundingRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new ApplyPosRoundingCommand(id, body.Mode), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
                 return Results.Ok(result);
             }));
 
-        group.MapPost("/orders/{id:guid}/payments", (Guid id, PaymentsRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/payments", (Guid id, PaymentsRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
-                var result = await sender.Send(new AddPaymentCommand(id, ToPayments(body.Payments)), ct);
+                var result = await sender.Send(new AddPaymentCommand(id, ToPayments(body.Payments), body.IdempotencyKey), ct);
+                await live.NotifyAsync(LiveScopes.Payments, ct);
                 return Results.Ok(result);
             }));
 
-        group.MapPost("/orders/{id:guid}/cancel", (Guid id, CancelRequest? body, ISender sender, CancellationToken ct) =>
+        // Void a mistaken captured payment / refund part or all of one. Manager-gated in the handler
+        // (a manager role on the till proceeds; otherwise managerUserName/Password authorizes the override).
+        group.MapPost("/orders/{id:guid}/payments/{paymentId:guid}/void", (Guid id, Guid paymentId, VoidPaymentRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var result = await sender.Send(new VoidPaymentCommand(id, paymentId, body.Reason, body.ManagerUserName, body.ManagerPassword), ct);
+                await live.NotifyAsync(LiveScopes.Payments, ct);
+                return Results.Ok(result);
+            }));
+
+        group.MapPost("/orders/{id:guid}/payments/{paymentId:guid}/refund", (Guid id, Guid paymentId, RefundPaymentRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var result = await sender.Send(new RefundPaymentCommand(id, paymentId, body.Amount, body.Reason, body.ManagerUserName, body.ManagerPassword), ct);
+                await live.NotifyAsync(LiveScopes.Payments, ct);
+                return Results.Ok(result);
+            }));
+
+        group.MapPost("/orders/{id:guid}/cancel", (Guid id, CancelRequest? body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new ChangeOrderStatusCommand(id, OrderStatus.Cancelled, body?.Reason), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
                 return Results.NoContent();
+            }));
+
+        // ---------- cash drawer / shift (cashier-accessible; handlers enforce role) ----------
+        // The cashier's open drawer (null if none) — POS checks this before allowing a cash tender.
+        group.MapGet("/drawers/current", (ISender sender, CancellationToken ct) =>
+            Exec(async () => Results.Ok(await sender.Send(new GetCurrentDrawerQuery(), ct))));
+
+        // Takings broken down by payment method, for the end-of-shift close screen.
+        group.MapGet("/drawers/{id:guid}/summary", (Guid id, ISender sender, CancellationToken ct) =>
+            Exec(async () => Results.Ok(await sender.Send(new GetDrawerSummaryQuery(id), ct))));
+
+        group.MapPost("/drawers/open", (OpenDrawerRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var result = await sender.Send(new OpenDrawerCommand(body.OpeningBalance, body.CashAccountId, body.Notes), ct);
+                await live.NotifyAsync(LiveScopes.Payments, ct);
+                return Results.Created($"/api/v1/staff/pos/drawers/{result.Id}", result);
+            }));
+
+        group.MapPost("/drawers/{id:guid}/close", (Guid id, CloseDrawerRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var result = await sender.Send(new CloseDrawerCommand(id, body.CountedBalance, body.Notes), ct);
+                await live.NotifyAsync(LiveScopes.Payments, ct);
+                return Results.Ok(result);
             }));
 
         // ---------- KOT PDF (Staff-auth fallback when no thermal printer; receipt reuses /admin/orders/{id}/pos-receipt.pdf) ----------
@@ -163,13 +217,17 @@ public static class StaffPosEndpoints
             .ToList();
 
     // ---------- request bodies ----------
-    public record CreatePosOrderRequest(OrderType Type, Guid? TableId, string? CustomerPhone, string? CustomerName, string? CustomerAddress);
+    public record CreatePosOrderRequest(OrderType Type, Guid? TableId, string? CustomerPhone, string? CustomerName, string? CustomerAddress, decimal? DeliveryCharge = null);
     public record UpdatePosOrderRequest(OrderType Type, Guid? TableId, string? CustomerPhone, string? CustomerName, string? CustomerAddress);
     public record PosLineRequest(Guid MenuItemId, int Quantity, Guid? VariantId = null, string? Notes = null, List<Guid>? OptionIds = null);
     public record SetLinesRequest(List<PosLineRequest> Lines);
     public record DiscountRequest(decimal? Percent, decimal? Amount, string? Reason);
     public record RoundingRequest(PosRoundingMode Mode);
     public record PaymentEntryRequest(PaymentMethod Method, PaymentProvider? Provider, decimal Amount, decimal Tendered, string? Reference = null);
-    public record PaymentsRequest(List<PaymentEntryRequest> Payments);
+    public record PaymentsRequest(List<PaymentEntryRequest> Payments, string? IdempotencyKey = null);
     public record CancelRequest(string? Reason);
+    public record VoidPaymentRequest(string Reason, string? ManagerUserName = null, string? ManagerPassword = null);
+    public record RefundPaymentRequest(decimal Amount, string Reason, string? ManagerUserName = null, string? ManagerPassword = null);
+    public record OpenDrawerRequest(decimal OpeningBalance, Guid? CashAccountId = null, string? Notes = null);
+    public record CloseDrawerRequest(decimal CountedBalance, string? Notes = null);
 }

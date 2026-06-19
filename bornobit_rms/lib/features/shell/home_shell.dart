@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/auth_controller.dart';
+import '../../core/i18n/locale_controller.dart';
 import '../../core/models/dtos.dart';
 import '../../core/providers/providers.dart';
+import '../../core/realtime/live_indicator.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/fluent_icons.dart';
+import '../../l10n/app_localizations.dart';
 import '../module_registry.dart';
 
 /// Below this width we switch from a permanent sidebar to a drawer (phones).
@@ -61,6 +64,7 @@ class _NarrowShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).user;
     final sel = ref.watch(selectedNavProvider);
+    final t = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Bo.surface,
@@ -69,8 +73,10 @@ class _NarrowShell extends ConsumerWidget {
         shape: const Border(bottom: BorderSide(color: Bo.border)),
         title: Text(sel.title, style: const TextStyle(fontWeight: FontWeight.w700)),
         actions: [
+          const LiveIndicator(),
+          const _LanguageButton(),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: t.actionRefresh,
             icon: const Icon(Icons.refresh),
             onPressed: () => _refreshCurrent(ref),
           ),
@@ -92,7 +98,7 @@ class _NarrowShell extends ConsumerWidget {
                   enabled: false,
                   child: Text('${user.fullName.isNotEmpty ? user.fullName : user.email}\n${user.roles.join(', ')}'),
                 ),
-              const PopupMenuItem<String>(value: 'logout', child: Text('Sign out')),
+              PopupMenuItem<String>(value: 'logout', child: Text(t.actionSignOut)),
             ],
           ),
         ],
@@ -112,8 +118,8 @@ class _ModuleContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final builder = moduleRoutes[selection.url];
-    if (builder != null) return builder(context);
-    return _ModulePlaceholder(selection: selection);
+    final child = builder != null ? builder(context) : _ModulePlaceholder(selection: selection);
+    return Column(children: [const OfflineBanner(), Expanded(child: child)]);
   }
 }
 
@@ -139,8 +145,8 @@ class _ModulePlaceholder extends StatelessWidget {
             const SizedBox(height: 16),
             Text(selection.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Bo.text)),
             const SizedBox(height: 6),
-            const Text('This module is not built yet.',
-                style: TextStyle(color: Bo.textSubtle)),
+            Text(AppLocalizations.of(context).shellModuleNotBuilt,
+                style: const TextStyle(color: Bo.textSubtle)),
             const SizedBox(height: 2),
             Text(selection.url, style: const TextStyle(color: Bo.slate400, fontSize: 12)),
           ],
@@ -154,6 +160,7 @@ void _refreshCurrent(WidgetRef ref) {
   switch (ref.read(selectedNavProvider).url) {
     case ordersRoute:
       ref.invalidate(ordersProvider);
+      ref.invalidate(ordersSummaryProvider);
       break;
     case dashboardRoute:
     default:
@@ -364,6 +371,37 @@ class _LeafTile extends ConsumerWidget {
   }
 }
 
+/// Language switch available to every role — flips the app locale (local-only,
+/// persisted). Shows the current language and a check beside the active one.
+class _LanguageButton extends ConsumerWidget {
+  const _LanguageButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
+    final isBn = ref.watch(isBengaliProvider);
+    return PopupMenuButton<String>(
+      tooltip: t.language,
+      icon: const Icon(Icons.translate, size: 20),
+      onSelected: (code) => ref
+          .read(localeProvider.notifier)
+          .setLocale(code == 'bn' ? const Locale('bn') : const Locale('en')),
+      itemBuilder: (_) => [
+        CheckedPopupMenuItem<String>(
+          value: 'en',
+          checked: !isBn,
+          child: Text(t.languageEnglish),
+        ),
+        CheckedPopupMenuItem<String>(
+          value: 'bn',
+          checked: isBn,
+          child: Text(t.languageBengali),
+        ),
+      ],
+    );
+  }
+}
+
 class _HeaderBar extends ConsumerWidget {
   final String title;
   final bool showMenuButton;
@@ -372,6 +410,7 @@ class _HeaderBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authControllerProvider).user;
+    final t = AppLocalizations.of(context);
     return Container(
       height: 60,
       color: Bo.surface,
@@ -380,15 +419,18 @@ class _HeaderBar extends ConsumerWidget {
         children: [
           if (showMenuButton)
             IconButton(
-              tooltip: 'Toggle menu',
+              tooltip: t.shellToggleMenu,
               icon: const Icon(Icons.menu),
               onPressed: () => ref.read(navCollapsedProvider.notifier).update((v) => !v),
             ),
           const SizedBox(width: 8),
           Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Bo.text)),
           const Spacer(),
+          const LiveIndicator(),
+          const SizedBox(width: 8),
+          const _LanguageButton(),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: t.actionRefresh,
             icon: const Icon(Icons.refresh),
             onPressed: () => _refreshCurrent(ref),
           ),
@@ -413,7 +455,7 @@ class _HeaderBar extends ConsumerWidget {
             const SizedBox(width: 8),
           ],
           IconButton(
-            tooltip: 'Sign out',
+            tooltip: t.actionSignOut,
             icon: const Icon(Icons.logout),
             onPressed: () => ref.read(authControllerProvider.notifier).logout(),
           ),

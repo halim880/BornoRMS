@@ -22,7 +22,7 @@ namespace BornoBit.Restaurant.Application.Ordering.Commands;
 /// (e.g. 300 cash + 200 bKash). Cashier+ only. Each cash tender is attributed to the cashier's open
 /// drawer (cash-received bumped). Returns the updated settlement state.
 /// </summary>
-public record AddPaymentCommand(Guid OrderId, IReadOnlyList<PaymentEntryInput> Payments)
+public record AddPaymentCommand(Guid OrderId, IReadOnlyList<PaymentEntryInput> Payments, string? IdempotencyKey = null)
     : IRequest<SettlementResultDto>;
 
 public class AddPaymentCommandValidator : AbstractValidator<AddPaymentCommand>
@@ -73,6 +73,16 @@ public class AddPaymentCommandHandler : IRequestHandler<AddPaymentCommand, Settl
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order not found.");
 
+        // Idempotency: a replayed settle request (double-tap, network retry after a lost response) carries the
+        // same client key. If any tender from that request already landed, return the current state untouched
+        // instead of double-charging. Concurrent duplicates are caught separately by the row-version guard below.
+        var key = string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey.Trim();
+        if (key is not null && order.Payments.Any(p => p.IdempotencyKey == key))
+        {
+            var priorChange = order.Payments.OrderBy(p => p.CreatedAtUtc).LastOrDefault()?.Change ?? 0m;
+            return order.ToSettlementResult(priorChange, Array.Empty<string>());
+        }
+
         var drawer = await CashDrawerLookup.GetOpenDrawerAsync(_db, _currentUser, cancellationToken);
         var before = FinancialAudit.Snapshot(order);
         decimal captured = 0m;
@@ -83,7 +93,7 @@ public class AddPaymentCommandHandler : IRequestHandler<AddPaymentCommand, Settl
             {
                 var tender = await _gateway.AuthorizeIfNonCashAsync(input, order.OrderNumber, cancellationToken);
                 var payment = order.AddPayment(tender.Method, tender.Provider, tender.Amount, tender.Tendered,
-                    _currentUser.UserId, _currentUser.UserName, drawer?.Id, tender.Reference);
+                    _currentUser.UserId, _currentUser.UserName, drawer?.Id, tender.Reference, key);
                 captured += payment.Amount;
 
                 if (drawer is not null && tender.Method == PaymentMethod.Cash)

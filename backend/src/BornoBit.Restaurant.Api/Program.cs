@@ -9,11 +9,13 @@ using Asp.Versioning;
 using Asp.Versioning.Builder;
 using BornoBit.Restaurant.Api.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +27,17 @@ builder.Host.UseSerilog((ctx, services, cfg) =>
 builder.Services.AddApplication(typeof(BornoBit.Restaurant.Infrastructure.DependencyInjection).Assembly);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddReporting();
+
+// Posts each business day's cash-counter takings to the GL automatically (day-end), so the books never
+// silently drift behind the till. Idempotent — safe alongside the manual Cash Counter import.
+builder.Services.AddHostedService<BornoBit.Restaurant.Api.Services.CashCounterImportService>();
+
+// Real-time tick channel for the Flutter staff console (POS / KDS / waiter / dashboard). The hub
+// only emits content-free "changed" signals; clients re-fetch via their existing authenticated REST
+// queries. Polling stays as a fallback when the socket is down.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<BornoBit.Restaurant.Api.Services.ILiveNotifier,
+    BornoBit.Restaurant.Api.Services.LiveNotifier>();
 
 builder.Services.Configure<OtpOptions>(builder.Configuration.GetSection(OtpOptions.SectionName));
 builder.Services.Configure<BornoBit.Restaurant.Reporting.Models.ReceiptBranding>(
@@ -53,6 +66,22 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
             ClockSkew = TimeSpan.FromSeconds(30)
         };
+
+        // WebSockets can't send an Authorization header, so SignalR clients pass the JWT via the
+        // access_token query string. Lift it onto the request only for the live hub handshake.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/live"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization(options =>
@@ -78,6 +107,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Inventory", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
     options.AddPolicy("Store", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
     options.AddPolicy("Reports", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
+    options.AddPolicy("Delivery", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Cashier));
     options.AddPolicy("Kitchen", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager, Roles.Chef));
     options.AddPolicy("CanDiscount", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
     options.AddPolicy("CanVoid", p => p.RequireAuthenticatedUser().RequireRole(Roles.SuperAdmin, Roles.Admin, Roles.Manager));
@@ -97,6 +127,42 @@ builder.Services.AddCors(options =>
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
+
+// Rate limiting. The "auth" policy is a strict brute-force guard on the credential endpoints
+// (login/refresh); a lenient per-IP global limiter is a backstop against runaway clients. The
+// global limiter is only enforced when the middleware is added (gated by RateLimiting:Enabled),
+// so the named policy is always registered safely.
+var rlSection = builder.Configuration.GetSection("RateLimiting");
+var rateLimitingEnabled = !bool.TryParse(rlSection["Enabled"], out var rlEnabled) || rlEnabled;
+var globalPerMinute = int.TryParse(rlSection["GlobalPermitPerMinute"], out var gpm) && gpm > 0 ? gpm : 1000;
+var authPerMinute = int.TryParse(rlSection["AuthPermitPerMinute"], out var apm) && apm > 0 ? apm : 10;
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter("auth", o =>
+    {
+        o.Window = TimeSpan.FromMinutes(1);
+        o.PermitLimit = authPerMinute;
+        o.QueueLimit = 0;
+    });
+
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
+    {
+        // The live SignalR hub holds a long-lived connection — exempt it.
+        if (http.Request.Path.StartsWithSegments("/hubs"))
+            return RateLimitPartition.GetNoLimiter("hub");
+
+        var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(1),
+            PermitLimit = globalPerMinute,
+            QueueLimit = 0
+        });
+    });
 });
 
 // URL-segment API versioning (/api/v1/...). New staff endpoints live under the versioned group;
@@ -172,6 +238,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontends");
+if (rateLimitingEnabled)
+{
+    app.UseRateLimiter();
+}
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -185,6 +255,9 @@ app.MapAdminOrderEndpoints();
 app.MapCustomerRequestEndpoints();
 app.MapReceiptEndpoints();
 app.MapWaiterEndpoints();
+
+// Real-time tick channel — emits only content-free "changed" signals (auth = staff JWT).
+app.MapHub<BornoBit.Restaurant.Api.Hubs.LiveHub>("/hubs/live").RequireCors("Frontends");
 
 // Versioned staff API (/api/v1/...). The version set is shared by all v1 endpoint mappers.
 var apiVersionSet = app.NewApiVersionSet()
@@ -208,6 +281,7 @@ apiV1.MapAccountsEndpoints();
 apiV1.MapStoreEndpoints();
 apiV1.MapAdminEndpoints();
 apiV1.MapSettingsEndpoints();
+apiV1.MapLogisticsEndpoints();
 
 app.MapGet("/", () => Results.Ok(new { app = "BornoBit.Restaurant.Api", version = "0.1.0" }));
 

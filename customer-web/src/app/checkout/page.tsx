@@ -11,8 +11,15 @@ export default function CheckoutPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [table, setTable] = useState<TableInfo | null>(null);
   const [notes, setNotes] = useState("");
+  // When there's no table, the guest chooses takeaway or delivery.
+  const [fulfillment, setFulfillment] = useState<"Takeaway" | "Delivery">("Takeaway");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const orderType = table ? "DineIn" : fulfillment;
+  const isDelivery = orderType === "Delivery";
 
   useEffect(() => {
     setCart(readCart());
@@ -25,6 +32,10 @@ export default function CheckoutPage() {
   const currency = cart[0]?.currency || "Tk";
 
   async function placeOrder() {
+    if (isDelivery && address.trim().length === 0) {
+      setError("Please enter a delivery address.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -32,9 +43,11 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: table ? "DineIn" : "Takeaway",
+          type: orderType,
           tableId: table?.id ?? null,
           notes: notes.trim() || null,
+          deliveryAddress: isDelivery ? address.trim() : null,
+          contactPhone: isDelivery && phone.trim() ? phone.trim() : null,
           lines: cart.map((c) => ({
             menuItemId: c.menuItemId,
             variantId: c.variantId,
@@ -106,7 +119,48 @@ export default function CheckoutPage() {
             </button>
           </div>
         ) : (
-          <div className="text-sm text-slate-600">Takeaway</div>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              {(["Takeaway", "Delivery"] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setFulfillment(opt)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    fulfillment === opt
+                      ? "border-emerald-600 bg-emerald-50 font-medium text-emerald-700"
+                      : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+            {isDelivery && (
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-sm font-medium">Delivery address</label>
+                  <textarea
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    rows={2}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="House, road, area"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Contact phone (optional)</label>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="01XXXXXXXXX"
+                  />
+                </div>
+                <p className="text-xs text-slate-500">A delivery charge will be added to your bill.</p>
+              </div>
+            )}
+          </div>
         )}
         <label className="mt-4 block text-sm font-medium">Notes (optional)</label>
         <textarea

@@ -98,6 +98,39 @@ class DashboardSummary {
       );
 }
 
+// ---------- orders screen: KPI tiles + per-status tab counts ----------
+class OrdersSummary {
+  final int totalOrders;
+  final int activeOrders;
+  final double paidRevenue;
+  final double outstanding;
+  final String currency;
+
+  /// Order count keyed by status name (e.g. {'Placed': 4, 'Completed': 12}).
+  final Map<String, int> statusCounts;
+
+  OrdersSummary({
+    required this.totalOrders,
+    required this.activeOrders,
+    required this.paidRevenue,
+    required this.outstanding,
+    required this.currency,
+    required this.statusCounts,
+  });
+
+  factory OrdersSummary.fromJson(Map<String, dynamic> j) => OrdersSummary(
+        totalOrders: _i(j['totalOrders']),
+        activeOrders: _i(j['activeOrders']),
+        paidRevenue: _d(j['paidRevenue']),
+        outstanding: _d(j['outstanding']),
+        currency: j['currency'] as String? ?? 'Tk',
+        statusCounts: ((j['statusCounts'] as Map?) ?? const {})
+            .map((k, v) => MapEntry(k.toString(), _i(v))),
+      );
+
+  int countFor(String status) => statusCounts[status] ?? 0;
+}
+
 // ---------- section 2: live floor ----------
 class TableOverviewRow {
   final String tableId;
@@ -449,6 +482,51 @@ class OrderLineModifier {
       );
 }
 
+class OrderPayment {
+  final String id;
+  final String method; // Cash | Card | Mobile
+  final String? provider;
+  final double amount;
+  final double tendered;
+  final double change;
+  final String kind; // Charge | Refund
+  final String status; // Captured | Voided | Refunded
+  final DateTime? createdAtUtc;
+  final String? cashierName;
+  final String? reference;
+
+  OrderPayment({
+    required this.id,
+    required this.method,
+    required this.provider,
+    required this.amount,
+    required this.tendered,
+    required this.change,
+    required this.kind,
+    required this.status,
+    required this.createdAtUtc,
+    required this.cashierName,
+    required this.reference,
+  });
+
+  bool get isCaptured => status == 'Captured';
+  bool get isCharge => kind == 'Charge';
+
+  factory OrderPayment.fromJson(Map<String, dynamic> j) => OrderPayment(
+        id: _s(j['id']),
+        method: _s(j['method']),
+        provider: _sOrNull(j['provider']),
+        amount: _d(j['amount']),
+        tendered: _d(j['tendered']),
+        change: _d(j['change']),
+        kind: _s(j['kind']),
+        status: _s(j['status']),
+        createdAtUtc: DateTime.tryParse(_s(j['createdAtUtc']))?.toLocal(),
+        cashierName: _sOrNull(j['cashierName']),
+        reference: _sOrNull(j['reference']),
+      );
+}
+
 class OrderLine {
   final String menuItemId;
   final String? variantId;
@@ -505,6 +583,7 @@ class OrderDetail {
   final double taxAmount;
   final double serviceChargeAmount;
   final double tipAmount;
+  final double deliveryChargeAmount;
   final double roundingAdjustment;
   final double grandTotal;
   final bool isPaid;
@@ -513,6 +592,7 @@ class OrderDetail {
   final String? paymentMethod;
   final String? waiterName;
   final List<OrderLine> lines;
+  final List<OrderPayment> payments;
 
   OrderDetail({
     required this.id,
@@ -530,6 +610,7 @@ class OrderDetail {
     required this.taxAmount,
     required this.serviceChargeAmount,
     required this.tipAmount,
+    required this.deliveryChargeAmount,
     required this.roundingAdjustment,
     required this.grandTotal,
     required this.isPaid,
@@ -538,6 +619,7 @@ class OrderDetail {
     required this.paymentMethod,
     required this.waiterName,
     required this.lines,
+    required this.payments,
   });
 
   factory OrderDetail.fromJson(Map<String, dynamic> j) => OrderDetail(
@@ -556,6 +638,7 @@ class OrderDetail {
         taxAmount: _d(j['taxAmount']),
         serviceChargeAmount: _d(j['serviceChargeAmount']),
         tipAmount: _d(j['tipAmount']),
+        deliveryChargeAmount: _d(j['deliveryChargeAmount']),
         roundingAdjustment: _d(j['roundingAdjustment']),
         grandTotal: _d(j['grandTotal']),
         isPaid: j['isPaid'] == true,
@@ -564,6 +647,7 @@ class OrderDetail {
         paymentMethod: _sOrNull(j['paymentMethod']),
         waiterName: _sOrNull(j['waiterName']),
         lines: (j['lines'] as List? ?? []).map((e) => OrderLine.fromJson(e as Map<String, dynamic>)).toList(),
+        payments: (j['payments'] as List? ?? []).map((e) => OrderPayment.fromJson(e as Map<String, dynamic>)).toList(),
       );
 }
 

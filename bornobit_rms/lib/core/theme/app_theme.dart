@@ -85,8 +85,13 @@ ThemeData buildBornoTheme() {
     outlineVariant: c.borderStrong,
   );
 
+  // Bengali glyph fallback: Latin stays Inter; any Bengali codepoints fall back
+  // to the bundled Noto Sans Bengali so বাংলা renders everywhere (offline-safe).
+  const bn = <String>['NotoSansBengali'];
+
   // Inter mapped onto the typographic scale. The two numeric styles with
-  // tabular figures (displayTotal / priceText) live in AppColors.
+  // tabular figures (displayTotal / priceText) live in AppColors. The trailing
+  // .apply propagates the Bengali fallback onto every slot, including overrides.
   final textTheme = GoogleFonts.interTextTheme().copyWith(
     titleLarge: GoogleFonts.inter(
       fontSize: 18,
@@ -114,7 +119,7 @@ ThemeData buildBornoTheme() {
       color: c.textTertiary,
     ),
     labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
-  );
+  ).apply(fontFamilyFallback: bn);
 
   return ThemeData(
     useMaterial3: true,

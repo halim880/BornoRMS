@@ -18,6 +18,16 @@ import 'reports/sales_report_screen.dart';
 import 'reports/sales_invoice_report_screen.dart';
 import 'reports/collection_report_screen.dart';
 import 'reports/top_items_report_screen.dart';
+import 'reports/category_sales_report_screen.dart';
+import 'reports/cashier_report_screen.dart';
+import 'reports/purchase_report_screen.dart';
+import 'reports/stock_valuation_report_screen.dart';
+import 'printing/print_queue_screen.dart';
+
+// Wave 4 — delivery / logistics
+import 'delivery/dispatch_board_screen.dart';
+import 'delivery/cod_reconciliation_screen.dart';
+import 'delivery/riders_screen.dart';
 
 // Wave 2 — stock
 import 'stock/stock_dashboard_screen.dart';
@@ -98,6 +108,15 @@ final Map<String, WidgetBuilder> moduleRoutes = {
   salesInvoiceReportRoute: (_) => const SalesInvoiceReportScreen(),
   collectionReportRoute: (_) => const CollectionReportScreen(),
   topItemsReportRoute: (_) => const TopItemsReportScreen(),
+  categorySalesReportRoute: (_) => const CategorySalesReportScreen(),
+  cashierReportRoute: (_) => const CashierReportScreen(),
+  purchaseReportRoute: (_) => const PurchaseReportScreen(),
+  stockValuationReportRoute: (_) => const StockValuationReportScreen(),
+  printQueueRoute: (_) => const PrintQueueScreen(),
+  // delivery / logistics
+  dispatchBoardRoute: (_) => const DispatchBoardScreen(),
+  codReconciliationRoute: (_) => const CodReconciliationScreen(),
+  ridersRoute: (_) => const RidersScreen(),
   // stock
   stockDashboardRoute: (_) => const StockDashboardScreen(),
   stockItemsRoute: (_) => const StockItemsScreen(),

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/providers/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_page.dart';
 import '../dashboard/widgets.dart';
+import 'accounts_api.dart';
 import 'accounts_models.dart';
 import 'accounts_providers.dart';
 import 'widgets.dart';
@@ -47,6 +49,8 @@ class DayEndScreen extends ConsumerWidget {
                   }
                 },
               ),
+              const Spacer(),
+              _PostToGlButton(date: date),
             ],
           ),
         ),
@@ -134,6 +138,50 @@ class DayEndScreen extends ConsumerWidget {
                 ]),
         ),
       ],
+    );
+  }
+}
+
+/// Posts the selected day's un-accounted takings to the GL on demand. The background service does this
+/// automatically at day-end; this is the manual override + visible "books are behind" remedy.
+class _PostToGlButton extends ConsumerStatefulWidget {
+  final DateTime date;
+  const _PostToGlButton({required this.date});
+
+  @override
+  ConsumerState<_PostToGlButton> createState() => _PostToGlButtonState();
+}
+
+class _PostToGlButtonState extends ConsumerState<_PostToGlButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    setState(() => _busy = true);
+    try {
+      final result = await ref.read(staffApiProvider).cashCounterImport(date: widget.date);
+      ref.invalidate(dayEndProvider);
+      if (!mounted) return;
+      final msg = result.count == 0
+          ? 'Nothing to post — the books are already up to date.'
+          : 'Posted ${result.count} order(s) totalling ${money(result.total, 'Tk')} to the GL.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Import failed: $e'), backgroundColor: Bo.danger));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: _busy ? null : _run,
+      icon: _busy
+          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+          : const Icon(Icons.account_balance, size: 16),
+      label: const Text('Post to GL'),
     );
   }
 }

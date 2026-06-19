@@ -12,6 +12,8 @@ export async function POST(req: Request) {
           tableId: body.tableId ?? null,
           type: body.type,
           notes: body.notes ?? null,
+          deliveryAddress: body.deliveryAddress ?? null,
+          contactPhone: body.contactPhone ?? null,
           lines: body.lines,
         }),
       }

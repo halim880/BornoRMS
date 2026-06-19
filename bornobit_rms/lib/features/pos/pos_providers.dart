@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/models/dtos.dart';
 import '../../core/providers/providers.dart';
+import '../../core/realtime/live_connection.dart';
 import 'pos_models.dart';
 
 // ---------- catalog (fetched once; refreshable) ----------
@@ -36,8 +37,41 @@ final posActiveOrdersProvider =
 
 class PosActiveOrdersNotifier extends PollingNotifier<List<ActiveOrder>> {
   @override
+  List<String> get liveScopes =>
+      const [LiveScope.orders, LiveScope.payments, LiveScope.kitchen];
+
+  @override
   Future<List<ActiveOrder>> fetch() => ref.read(staffApiProvider).posActiveOrders();
 }
+
+// ---------- cash drawer / shift (polled; reacts to payment ticks) ----------
+final posDrawerProvider =
+    AsyncNotifierProvider<PosDrawerNotifier, CashDrawer?>(PosDrawerNotifier.new);
+
+class PosDrawerNotifier extends PollingNotifier<CashDrawer?> {
+  @override
+  List<String> get liveScopes => const [LiveScope.payments];
+
+  @override
+  Future<CashDrawer?> fetch() => ref.read(staffApiProvider).drawerCurrent();
+
+  Future<CashDrawer> open({required double openingBalance, String? notes}) async {
+    final drawer = await ref.read(staffApiProvider).drawerOpen(openingBalance: openingBalance, notes: notes);
+    state = AsyncData(drawer);
+    return drawer;
+  }
+
+  Future<DrawerCloseResult> close(String id, {required double countedBalance, String? notes}) async {
+    final result = await ref.read(staffApiProvider).drawerClose(id, countedBalance: countedBalance, notes: notes);
+    state = const AsyncData(null);
+    return result;
+  }
+}
+
+/// Drawer takings broken down by payment method, for the close screen.
+final posDrawerSummaryProvider =
+    FutureProvider.family<DrawerSummary, String>((ref, drawerId) =>
+        ref.read(staffApiProvider).drawerSummary(drawerId));
 
 // ---------- filters ----------
 final posCategoryProvider = StateProvider<String?>((ref) => null);
@@ -106,6 +140,7 @@ class PosController extends Notifier<PosState> {
     String? customerPhone,
     String? customerName,
     String? customerAddress,
+    double? deliveryCharge,
   }) async {
     PlaceOrderResult? result;
     await _run(() async {
@@ -115,6 +150,7 @@ class PosController extends Notifier<PosState> {
         customerPhone: customerPhone,
         customerName: customerName,
         customerAddress: customerAddress,
+        deliveryCharge: deliveryCharge,
       );
       state = PosState(orderId: result!.orderId, busy: true);
       await _reloadDetail();
@@ -239,9 +275,9 @@ class PosController extends Notifier<PosState> {
     return summary;
   }
 
-  Future<SettlementResult> addPayment(List<Map<String, dynamic>> payments) async {
+  Future<SettlementResult> addPayment(List<Map<String, dynamic>> payments, {String? idempotencyKey}) async {
     final id = state.orderId!;
-    final result = await _api.posAddPayment(id, payments);
+    final result = await _api.posAddPayment(id, payments, idempotencyKey: idempotencyKey);
     await _reloadDetail();
     _refreshQueue();
     return result;

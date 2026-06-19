@@ -34,3 +34,23 @@ final topItemsReportProvider = FutureProvider.autoDispose<List<TopSellingItemRow
   final top = ref.watch(topItemsCountProvider);
   return ref.read(staffApiProvider).topSellingItems(from: w.from, to: w.to, top: top);
 });
+
+final categorySalesReportProvider = FutureProvider.autoDispose<List<CategorySalesRow>>((ref) {
+  final w = _window(ref);
+  return ref.read(staffApiProvider).categorySales(from: w.from, to: w.to);
+});
+
+final cashierReportProvider = FutureProvider.autoDispose<CashierReport>((ref) {
+  final w = _window(ref);
+  return ref.read(staffApiProvider).cashierReport(from: w.from, to: w.to);
+});
+
+final purchaseReportProvider = FutureProvider.autoDispose<PurchaseReport>((ref) {
+  final w = _window(ref);
+  return ref.read(staffApiProvider).purchaseReport(from: w.from, to: w.to);
+});
+
+/// Point-in-time snapshot — does not depend on the range selector.
+final stockValuationReportProvider = FutureProvider.autoDispose<StockValuation>((ref) {
+  return ref.read(staffApiProvider).stockValuation();
+});

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 
 /// Shared scaffolding for the back-office module screens ported from the Blazor
@@ -104,7 +105,10 @@ class ErrorRetry extends StatelessWidget {
           ),
           if (onRetry != null) ...[
             const SizedBox(height: 12),
-            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+            FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: Text(AppLocalizations.of(context).actionRetry)),
           ],
         ],
       ),
@@ -208,7 +212,8 @@ class Pager extends StatelessWidget {
             icon: const Icon(Icons.chevron_left),
             onPressed: page > 1 ? () => onPage(page - 1) : null,
           ),
-          Text('Page $page of ${totalPages == 0 ? 1 : totalPages}', style: const TextStyle(fontSize: 13)),
+          Text(AppLocalizations.of(context).pageOf(page, totalPages == 0 ? 1 : totalPages),
+              style: const TextStyle(fontSize: 13)),
           IconButton(
             icon: const Icon(Icons.chevron_right),
             onPressed: page < totalPages ? () => onPage(page + 1) : null,

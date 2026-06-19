@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/dtos.dart';
 import '../../core/theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
 import '../dashboard/widgets.dart' show money;
 
 /// Bill breakdown for the cart panel: subtotal, optional discount, VAT, a dashed
@@ -14,17 +15,18 @@ class SummaryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = context.appColors;
+    final t = AppLocalizations.of(context);
     final d = detail;
     final cur = d?.currency ?? 'Tk';
 
     return Column(
       children: [
-        _row(context, 'Subtotal', money(d?.subtotal ?? 0, cur)),
+        _row(context, t.billSubtotal, money(d?.subtotal ?? 0, cur)),
         if (d != null && d.discountAmount != 0)
-          _row(context, 'Discount', '-${money(d.discountAmount, cur)}', color: a.success),
-        if (d != null && d.taxAmount != 0) _row(context, 'VAT (5%)', money(d.taxAmount, cur)),
+          _row(context, t.billDiscount, '-${money(d.discountAmount, cur)}', color: a.success),
+        if (d != null && d.taxAmount != 0) _row(context, t.billVat, money(d.taxAmount, cur)),
         if (d != null && d.roundingAdjustment != 0)
-          _row(context, 'Rounding', money(d.roundingAdjustment, cur)),
+          _row(context, t.billRounding, money(d.roundingAdjustment, cur)),
         const SizedBox(height: 8),
         _DashedDivider(color: a.borderStrong),
         const SizedBox(height: 8),
@@ -32,7 +34,7 @@ class SummaryBar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text('Total payable', style: Theme.of(context).textTheme.bodyLarge),
+            Text(t.billTotalPayable, style: Theme.of(context).textTheme.bodyLarge),
             Text(
               money(d?.grandTotal ?? 0, cur),
               style: AppColors.displayTotal.copyWith(color: a.textPrimary),

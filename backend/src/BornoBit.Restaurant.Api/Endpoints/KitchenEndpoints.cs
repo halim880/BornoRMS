@@ -1,3 +1,4 @@
+using BornoBit.Restaurant.Api.Services;
 using BornoBit.Restaurant.Application.Kitchen.Commands;
 using BornoBit.Restaurant.Application.Kitchen.Queries;
 using BornoBit.Restaurant.Application.Operations.Dashboard;
@@ -77,40 +78,45 @@ public static class KitchenEndpoints
 
         // ---------- order actions ----------
         // Accept a still-Placed order: confirms it and fires the kitchen ticket.
-        group.MapPost("/orders/{id:guid}/accept", (Guid id, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/accept", (Guid id, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var newStatus = await sender.Send(new AcceptKitchenOrderCommand(id), ct);
+                await live.NotifyAsync(LiveScopes.Kitchen, ct);
                 return Results.Ok(new { status = newStatus.ToString() });
             }));
 
         // Single-click advance through the fulfilment track (Confirmed → Preparing → Ready → Served).
-        group.MapPost("/orders/{id:guid}/advance", (Guid id, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/advance", (Guid id, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var newStatus = await sender.Send(new AdvanceKitchenOrderCommand(id), ct);
+                await live.NotifyAsync(LiveScopes.Kitchen, ct);
                 return Results.Ok(new { status = newStatus.ToString() });
             }));
 
         // Explicit status change (e.g. bump Preparing → Ready, or cancel) via the shared order command.
-        group.MapPost("/orders/{id:guid}/status", (Guid id, ChangeStatusRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/status", (Guid id, ChangeStatusRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new ChangeOrderStatusCommand(id, body.Target, body.CancellationReason), ct);
+                await live.NotifyAsync(LiveScopes.Kitchen, ct);
                 return Results.NoContent();
             }));
 
-        group.MapPost("/orders/{id:guid}/priority", (Guid id, PriorityRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/priority", (Guid id, PriorityRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new ToggleOrderPriorityCommand(id, body.IsPriority), ct);
+                await live.NotifyAsync(LiveScopes.Kitchen, ct);
                 return Results.NoContent();
             }));
 
-        group.MapPost("/orders/{id:guid}/notes", (Guid id, NotesRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/notes", (Guid id, NotesRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new UpdateKitchenNotesCommand(id, body.Notes), ct);
+                await live.NotifyAsync(LiveScopes.Kitchen, ct);
                 return Results.NoContent();
             }));
 

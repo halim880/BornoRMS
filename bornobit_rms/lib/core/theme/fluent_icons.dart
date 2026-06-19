@@ -35,6 +35,9 @@ IconData fluentIcon(String? name) {
       return Icons.inventory_2_outlined;
     case 'Box':
       return Icons.inventory_outlined;
+    case 'VehicleTruck':
+    case 'Vehicle':
+      return Icons.local_shipping_outlined;
     case 'FolderList':
       return Icons.folder_outlined;
     case 'Table':

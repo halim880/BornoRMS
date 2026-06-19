@@ -23,7 +23,8 @@ public enum StockMovementType
     WastageOut = 3,
     AdjustmentIn = 4,
     AdjustmentOut = 5,
-    ConsumptionOut = 6
+    ConsumptionOut = 6,
+    PurchaseReturn = 7
 }
 
 /// <summary>Lifecycle of a goods receipt. Only a Posted receipt has moved stock.</summary>

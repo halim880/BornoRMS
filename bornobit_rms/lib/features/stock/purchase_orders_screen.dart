@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/dtos.dart';
+import '../../core/providers/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_page.dart';
+import '../../core/widgets/app_toast.dart';
 import '../dashboard/widgets.dart';
+import 'goods_receipt_form.dart';
+import 'purchase_order_form.dart';
+import 'stock_api.dart';
 import 'stock_models.dart';
 import 'stock_providers.dart';
 
 const purchaseOrdersRoute = '/stock/po';
 
-/// Stock → Purchase Orders. Read-only list + detail dialog (the multi-line
-/// create/receive flow is deferred). Mirrors the Blazor PurchaseOrders.razor page.
+/// Stock → Purchase Orders. Full lifecycle: raise a draft, approve, then receive (GRN) or cancel.
+/// Mirrors the Blazor PurchaseOrders.razor page.
 class PurchaseOrdersScreen extends ConsumerWidget {
   const PurchaseOrdersScreen({super.key});
 
@@ -24,8 +29,14 @@ class PurchaseOrdersScreen extends ConsumerWidget {
       children: [
         PageHeader(
           title: 'Purchase Orders',
-          subtitle: 'Orders raised against suppliers. Tap a row for line detail.',
+          subtitle: 'Raise an order, approve it, then receive against it. Tap a row for line detail.',
           actions: [
+            FilledButton.icon(
+              onPressed: () => showPurchaseOrderForm(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('New PO'),
+            ),
+            const SizedBox(width: 8),
             IconButton(
               tooltip: 'Refresh',
               onPressed: () => ref.invalidate(stockPurchaseOrdersProvider),
@@ -69,11 +80,14 @@ class PurchaseOrdersScreen extends ConsumerWidget {
             DataCell(Text('${p.lineCount}')),
             DataCell(Text(money(p.subtotal, p.currency))),
             DataCell(ToneChip(poStatusLabel(p.status), poStatusTone(p.status))),
-            DataCell(IconButton(
-              tooltip: 'View',
-              icon: const Icon(Icons.open_in_new, size: 18),
-              onPressed: () => _showDetail(context, ref, p.id),
-            )),
+            DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: 'View',
+                icon: const Icon(Icons.open_in_new, size: 18),
+                onPressed: () => _showDetail(context, ref, p.id),
+              ),
+              _RowMenu(po: p),
+            ])),
           ]),
       ],
       pager: Pager(
@@ -182,4 +196,92 @@ class PurchaseOrdersScreen extends ConsumerWidget {
           Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       );
+}
+
+/// Status-aware actions for a PO row. Draft → edit / approve / delete; Approved or
+/// Partially-Received → cancel. Received / Cancelled are terminal (no menu).
+class _RowMenu extends ConsumerWidget {
+  final PurchaseOrderRow po;
+  const _RowMenu({required this.po});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDraft = po.status == 1;
+    final isOpen = po.status == 2 || po.status == 3; // Approved / PartiallyReceived
+    if (!isDraft && !isOpen) return const SizedBox.shrink();
+
+    return PopupMenuButton<String>(
+      tooltip: 'Actions',
+      icon: const Icon(Icons.more_vert, size: 18),
+      onSelected: (v) => _onSelect(context, ref, v),
+      itemBuilder: (_) => [
+        if (isDraft) ...const [
+          PopupMenuItem(value: 'edit', child: Text('Edit')),
+          PopupMenuItem(value: 'approve', child: Text('Approve')),
+          PopupMenuItem(value: 'delete', child: Text('Delete')),
+        ],
+        if (isOpen) ...const [
+          PopupMenuItem(value: 'receive', child: Text('Receive (GRN)')),
+          PopupMenuItem(value: 'cancel', child: Text('Cancel')),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _onSelect(BuildContext context, WidgetRef ref, String action) async {
+    final api = ref.read(staffApiProvider);
+    try {
+      switch (action) {
+        case 'edit':
+          final detail = await ref.read(stockPurchaseOrderProvider(po.id).future);
+          if (context.mounted) await showPurchaseOrderForm(context, existing: detail);
+          return;
+        case 'receive':
+          final detail = await ref.read(stockPurchaseOrderProvider(po.id).future);
+          if (context.mounted) await showGoodsReceiptForm(context, fromPo: detail);
+          return;
+        case 'approve':
+          if (!await _confirm(context, 'Approve ${po.poNumber}?', 'Approve')) return;
+          await api.stockApprovePurchaseOrder(po.id);
+          if (context.mounted) _done(context, ref, 'Purchase order approved');
+          return;
+        case 'cancel':
+          if (!await _confirm(context, 'Cancel ${po.poNumber}?', 'Cancel PO', danger: true)) return;
+          await api.stockCancelPurchaseOrder(po.id);
+          if (context.mounted) _done(context, ref, 'Purchase order cancelled');
+          return;
+        case 'delete':
+          if (!await _confirm(context, 'Delete draft ${po.poNumber}?', 'Delete', danger: true)) return;
+          await api.stockDeletePurchaseOrder(po.id);
+          if (context.mounted) _done(context, ref, 'Purchase order deleted');
+          return;
+      }
+    } catch (e) {
+      if (context.mounted) AppToast.show(context, e.toString(), type: ToastType.error);
+    }
+  }
+
+  void _done(BuildContext context, WidgetRef ref, String msg) {
+    ref.invalidate(stockPurchaseOrdersProvider);
+    ref.invalidate(stockPurchaseOrderProvider(po.id));
+    AppToast.show(context, msg);
+  }
+
+  Future<bool> _confirm(BuildContext context, String title, String confirmLabel, {bool danger = false}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            style: danger ? FilledButton.styleFrom(backgroundColor: Bo.danger) : null,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
 }

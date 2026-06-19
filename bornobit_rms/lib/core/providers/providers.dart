@@ -7,6 +7,7 @@ import '../auth/auth_controller.dart';
 import '../auth/token_store.dart';
 import '../config/app_config.dart';
 import '../models/dtos.dart';
+import '../realtime/live_connection.dart';
 
 // ---------- infrastructure ----------
 final tokenStoreProvider = Provider<TokenStore>((ref) => TokenStore());
@@ -14,8 +15,10 @@ final tokenStoreProvider = Provider<TokenStore>((ref) => TokenStore());
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     tokenStore: ref.read(tokenStoreProvider),
-    // Deferred: invoked only on a 401, after the token has been cleared.
+    // Deferred: invoked only on a 401, after a refresh attempt has failed and the token cleared.
     onUnauthorized: () => ref.read(authControllerProvider.notifier).onUnauthorized(),
+    // Deferred: invoked on a 401 to silently rotate the access token before giving up.
+    refreshSession: () => ref.read(authControllerProvider.notifier).refreshSession(),
   );
 });
 
@@ -46,13 +49,79 @@ final selectedNavProvider =
     StateProvider<NavSelection>((ref) => const NavSelection(dashboardRoute, 'Dashboard'));
 
 // ---------- orders module ----------
-final ordersStatusProvider = StateProvider<String?>((ref) => null);
-final ordersPageProvider = StateProvider<int>((ref) => 1);
+/// All scoping for the back-office Orders screen. `status`/`page` drive the paged
+/// list; `from`/`to`/`search`/`orderNumber` scope both the list and the KPI summary.
+class OrdersFilter {
+  final String? status;
+  final int page;
+  final DateTime? fromDate;
+  final DateTime? toDate;
+  final String? search;
+  final String? orderNumber;
+
+  const OrdersFilter({
+    this.status,
+    this.page = 1,
+    this.fromDate,
+    this.toDate,
+    this.search,
+    this.orderNumber,
+  });
+
+  /// copyWith with explicit clearing: pass `clearStatus`/`clearDates`/`clearOrderNumber`
+  /// to reset a field to null (a plain null arg keeps the current value).
+  OrdersFilter copyWith({
+    String? status,
+    int? page,
+    DateTime? fromDate,
+    DateTime? toDate,
+    String? search,
+    String? orderNumber,
+    bool clearStatus = false,
+    bool clearDates = false,
+    bool clearOrderNumber = false,
+  }) =>
+      OrdersFilter(
+        status: clearStatus ? null : (status ?? this.status),
+        page: page ?? this.page,
+        fromDate: clearDates ? null : (fromDate ?? this.fromDate),
+        toDate: clearDates ? null : (toDate ?? this.toDate),
+        search: search ?? this.search,
+        orderNumber: clearOrderNumber ? null : (orderNumber ?? this.orderNumber),
+      );
+}
+
+final ordersFilterProvider = StateProvider<OrdersFilter>((ref) => const OrdersFilter());
 
 final ordersProvider = FutureProvider<Paged<OrderListItem>>((ref) {
-  final status = ref.watch(ordersStatusProvider);
-  final page = ref.watch(ordersPageProvider);
-  return ref.read(staffApiProvider).orderList(status: status, page: page, pageSize: 25);
+  final f = ref.watch(ordersFilterProvider);
+  return ref.read(staffApiProvider).orderList(
+        status: f.status,
+        page: f.page,
+        from: f.fromDate,
+        to: f.toDate,
+        search: f.search,
+        orderNumber: f.orderNumber,
+        pageSize: 25,
+      );
+});
+
+/// KPI tiles + per-status tab counts. Reacts only to the scoping fields (date /
+/// search / order number) — not status or page — so the counts stay stable while
+/// the user switches status tabs.
+final ordersSummaryProvider = FutureProvider<OrdersSummary>((ref) {
+  final f = ref.watch(ordersFilterProvider.select((f) => (
+        f.fromDate,
+        f.toDate,
+        f.search,
+        f.orderNumber,
+      )));
+  return ref.read(staffApiProvider).orderSummary(
+        from: f.$1,
+        to: f.$2,
+        search: f.$3,
+        orderNumber: f.$4,
+      );
 });
 
 final orderDetailProvider =
@@ -96,19 +165,37 @@ abstract class PollingNotifier<T> extends AsyncNotifier<T> {
 
   Future<T> fetch();
 
+  /// Real-time scopes this notifier reacts to. A live tick whose scope is in this
+  /// list (or the wildcard [LiveScope.all]) triggers an immediate refresh, so the
+  /// timer is only a fallback. Empty = react to [LiveScope.all] ticks only.
+  List<String> get liveScopes => const [];
+
   @override
   Future<T> build() async {
     _timer = Timer.periodic(AppConfig.pollInterval, (_) => _tick());
+
+    // Refresh the instant the server signals a relevant change — only mounted
+    // notifiers are listening, so refreshes stay scoped to the active screens.
+    ref.listen(liveTickProvider, (_, next) {
+      final scope = next.valueOrNull;
+      if (scope != null && _matchesScope(scope)) _tick();
+    });
+
     ref.onDispose(() => _timer?.cancel());
     return fetch();
   }
+
+  bool _matchesScope(String scope) =>
+      scope == LiveScope.all || liveScopes.contains(scope);
 
   Future<void> _tick() async {
     if (!ref.read(pollingEnabledProvider)) return;
     try {
       state = AsyncData(await fetch());
     } catch (e, st) {
-      state = AsyncError(e, st);
+      // Keep the last good snapshot on a transient failure (e.g. a network blip)
+      // so a busy floor never blanks; only surface an error if we have no data yet.
+      if (!state.hasValue) state = AsyncError(e, st);
     }
   }
 
@@ -121,6 +208,18 @@ final dashboardProvider =
     AsyncNotifierProvider<DashboardNotifier, DashboardData>(DashboardNotifier.new);
 
 class DashboardNotifier extends PollingNotifier<DashboardData> {
+  // The live ops view reflects every operational change.
+  @override
+  List<String> get liveScopes => const [
+        LiveScope.orders,
+        LiveScope.kitchen,
+        LiveScope.sessions,
+        LiveScope.tables,
+        LiveScope.requests,
+        LiveScope.payments,
+        LiveScope.inventory,
+      ];
+
   @override
   Future<DashboardData> fetch() async {
     final api = ref.read(staffApiProvider);

@@ -7,6 +7,7 @@ using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.FixedAssets;
 using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Domain.Kitchen;
+using BornoBit.Restaurant.Domain.Logistics;
 using BornoBit.Restaurant.Domain.Menus;
 using BornoBit.Restaurant.Domain.Numbering;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -51,6 +52,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<KitchenStation> KitchenStations => Set<KitchenStation>();
 
+    public DbSet<Rider> Riders => Set<Rider>();
+    public DbSet<Delivery> Deliveries => Set<Delivery>();
+
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<AppMenu> AppMenus => Set<AppMenu>();
     public DbSet<AppMenuRolePermission> AppMenuRolePermissions => Set<AppMenuRolePermission>();
@@ -67,6 +71,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
     public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
     public DbSet<SupplierPayment> SupplierPayments => Set<SupplierPayment>();
+    public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
 
     public DbSet<StoreUnit> StoreUnits => Set<StoreUnit>();
     public DbSet<StoreCategory> StoreCategories => Set<StoreCategory>();
@@ -102,6 +107,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<PayrollRunLine> PayrollRunLines => Set<PayrollRunLine>();
 
     public DbSet<RestaurantBillingSettings> RestaurantBillingSettings => Set<RestaurantBillingSettings>();
+
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -7,7 +7,23 @@ final _money = NumberFormat('#,##0.00');
 final _int = NumberFormat('#,##0');
 final _time = DateFormat('dd/MM HH:mm'); // project rule: dd/MM/yyyy date style
 
-String money(num v, String currency) => '${_money.format(v)} $currency';
+/// Normalizes a raw currency string for display: Taka aliases render as the ৳
+/// symbol; anything else passes through (so an admin-set code still shows).
+/// Western digits + ৳ is the project convention (see plan).
+String currencySymbol(String raw) {
+  switch (raw.trim().toLowerCase()) {
+    case 'tk':
+    case 'tk.':
+    case 'bdt':
+    case 'taka':
+    case '৳':
+      return '৳';
+    default:
+      return raw.trim();
+  }
+}
+
+String money(num v, String currency) => '${_money.format(v)} ${currencySymbol(currency)}';
 String count(num v) => _int.format(v);
 String shortDateTime(DateTime d) => _time.format(d);
 

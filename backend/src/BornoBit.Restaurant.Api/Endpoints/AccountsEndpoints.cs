@@ -8,6 +8,7 @@ using BornoBit.Restaurant.Application.Accounting.Payroll;
 using BornoBit.Restaurant.Application.Accounting.Periods;
 using BornoBit.Restaurant.Application.Accounting.Reports;
 using BornoBit.Restaurant.Application.Accounting.Transactions;
+using BornoBit.Restaurant.Application.Ordering.Queries;
 using BornoBit.Restaurant.Application.Inventory.Payables;
 using BornoBit.Restaurant.Application.Inventory.Reports;
 using BornoBit.Restaurant.Domain.Accounting;
@@ -79,12 +80,39 @@ public static class AccountsEndpoints
                 return Results.Created($"/api/v1/staff/accounts/categories/{id}", new { id });
             }));
 
+        // ---------- cash-counter → GL import ----------
+        // Un-accounted takings for a day (the "what's waiting to post" indicator). Defaults to today (UTC).
+        group.MapGet("/cash-counter/pending", (ISender sender, DateTime? date, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var d = DateOnly.FromDateTime(date?.Date ?? DateTime.UtcNow.Date);
+                return Results.Ok(await sender.Send(new GetPendingCashImportQuery(d), ct));
+            }));
+
+        // Manually post a day's takings to the GL (the background service does this automatically at day-end;
+        // this lets a manager run it on demand). Idempotent — re-running posts only what's still un-accounted.
+        group.MapPost("/cash-counter/import", (CashImportRequest? body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var d = DateOnly.FromDateTime(body?.Date?.Date ?? DateTime.UtcNow.Date);
+                return Results.Ok(await sender.Send(new ImportCashCounterCommand(d), ct));
+            }));
+
         // ---------- payables (accounts payable, in Inventory.Payables) ----------
         group.MapGet("/payables", (ISender sender, bool? outstandingOnly, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetPayablesQuery(outstandingOnly ?? false), ct))));
 
         group.MapGet("/payables/payments", (ISender sender, Guid? supplierId, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetSupplierPaymentsQuery(supplierId), ct))));
+
+        // Record a payment against a supplier's outstanding balance: Dr Accounts Payable / Cr cash account.
+        group.MapPost("/payables/record-payment", (RecordSupplierPaymentRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                await sender.Send(new RecordSupplierPaymentCommand(
+                    body.SupplierId, body.CashAccountId, body.PaidOn, body.Amount, body.Reference, body.Notes), ct);
+                return Results.NoContent();
+            }));
 
         // ---------- fiscal periods ----------
         group.MapGet("/periods", (ISender sender, CancellationToken ct) =>
@@ -242,6 +270,11 @@ public static class AccountsEndpoints
     public record CreateTransactionRequest(
         DateTime OccurredOn, TransactionType Type, Guid CashAccountId, Guid CategoryId,
         decimal Amount, string? Reference, string? Notes);
+
+    public record CashImportRequest(DateTime? Date);
+
+    public record RecordSupplierPaymentRequest(
+        Guid SupplierId, Guid CashAccountId, DateTime PaidOn, decimal Amount, string? Reference, string? Notes);
 
     public record CreateCashAccountRequest(string Name, CashAccountKind Kind, decimal OpeningBalance);
 

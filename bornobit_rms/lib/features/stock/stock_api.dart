@@ -145,6 +145,52 @@ extension StockApi on StaffApi {
         return PurchaseOrderDetail.fromJson(res.data as Map<String, dynamic>);
       });
 
+  /// lines: each map = { itemId, qty, unitId, unitCost }. Returns the new PO id.
+  Future<String> stockCreatePurchaseOrder({
+    required String supplierId,
+    DateTime? orderedAtUtc,
+    DateTime? expectedAtUtc,
+    String? notes,
+    required List<Map<String, dynamic>> lines,
+  }) =>
+      client.guard(() async {
+        final res = await client.dio.post('$_stockBase/purchase-orders', data: {
+          'supplierId': supplierId,
+          if (orderedAtUtc != null) 'orderedAtUtc': orderedAtUtc.toUtc().toIso8601String(),
+          if (expectedAtUtc != null) 'expectedAtUtc': expectedAtUtc.toUtc().toIso8601String(),
+          if (notes != null) 'notes': notes,
+          'lines': lines,
+        });
+        return (res.data as Map<String, dynamic>)['id'].toString();
+      });
+
+  Future<void> stockUpdatePurchaseOrder(
+    String id, {
+    required String supplierId,
+    DateTime? orderedAtUtc,
+    DateTime? expectedAtUtc,
+    String? notes,
+    required List<Map<String, dynamic>> lines,
+  }) =>
+      client.guard(() async {
+        await client.dio.put('$_stockBase/purchase-orders/$id', data: {
+          'supplierId': supplierId,
+          if (orderedAtUtc != null) 'orderedAtUtc': orderedAtUtc.toUtc().toIso8601String(),
+          if (expectedAtUtc != null) 'expectedAtUtc': expectedAtUtc.toUtc().toIso8601String(),
+          if (notes != null) 'notes': notes,
+          'lines': lines,
+        });
+      });
+
+  Future<void> stockApprovePurchaseOrder(String id) =>
+      client.guard(() async => client.dio.post('$_stockBase/purchase-orders/$id/approve'));
+
+  Future<void> stockCancelPurchaseOrder(String id) =>
+      client.guard(() async => client.dio.post('$_stockBase/purchase-orders/$id/cancel'));
+
+  Future<void> stockDeletePurchaseOrder(String id) =>
+      client.guard(() async => client.dio.delete('$_stockBase/purchase-orders/$id'));
+
   // ---------- goods receipts (read-only) ----------
   Future<Paged<GoodsReceiptRow>> stockGoodsReceipts({int? status, int page = 1, int pageSize = 25}) =>
       client.guard(() async {
@@ -159,6 +205,77 @@ extension StockApi on StaffApi {
   Future<GoodsReceiptDetail> stockGoodsReceipt(String id) => client.guard(() async {
         final res = await client.dio.get('$_stockBase/goods-receipts/$id');
         return GoodsReceiptDetail.fromJson(res.data as Map<String, dynamic>);
+      });
+
+  /// lines: each map = { itemId, qty, unitId, unitCost, purchaseOrderLineId? }. Returns the new GRN id.
+  Future<String> stockCreateGoodsReceipt({
+    required String supplierId,
+    String? invoiceNo,
+    DateTime? receivedAtUtc,
+    String? notes,
+    required List<Map<String, dynamic>> lines,
+    String? purchaseOrderId,
+  }) =>
+      client.guard(() async {
+        final res = await client.dio.post('$_stockBase/goods-receipts', data: {
+          'supplierId': supplierId,
+          if (invoiceNo != null) 'invoiceNo': invoiceNo,
+          if (receivedAtUtc != null) 'receivedAtUtc': receivedAtUtc.toUtc().toIso8601String(),
+          if (notes != null) 'notes': notes,
+          'lines': lines,
+          if (purchaseOrderId != null) 'purchaseOrderId': purchaseOrderId,
+        });
+        return (res.data as Map<String, dynamic>)['id'].toString();
+      });
+
+  Future<void> stockUpdateGoodsReceipt(
+    String id, {
+    required String supplierId,
+    String? invoiceNo,
+    DateTime? receivedAtUtc,
+    String? notes,
+    required List<Map<String, dynamic>> lines,
+  }) =>
+      client.guard(() async {
+        await client.dio.put('$_stockBase/goods-receipts/$id', data: {
+          'supplierId': supplierId,
+          if (invoiceNo != null) 'invoiceNo': invoiceNo,
+          if (receivedAtUtc != null) 'receivedAtUtc': receivedAtUtc.toUtc().toIso8601String(),
+          if (notes != null) 'notes': notes,
+          'lines': lines,
+        });
+      });
+
+  /// Posts the receipt → raises stock (moving-average cost) + Dr Purchases / Cr AP.
+  /// Pass [paymentCashAccountId] to pay the supplier immediately from that cash account.
+  Future<void> stockPostGoodsReceipt(String id, {String? paymentCashAccountId}) =>
+      client.guard(() async {
+        await client.dio.post('$_stockBase/goods-receipts/$id/post',
+            data: {if (paymentCashAccountId != null) 'paymentCashAccountId': paymentCashAccountId});
+      });
+
+  Future<void> stockDeleteGoodsReceipt(String id) =>
+      client.guard(() async => client.dio.delete('$_stockBase/goods-receipts/$id'));
+
+  // ---------- purchase returns ----------
+  /// Return goods to a supplier. lines: each map = { itemId, qty, unitId } (valued at current avg cost).
+  /// Posts immediately (stock out + reduces the payable). Returns the new return id.
+  Future<String> stockCreatePurchaseReturn({
+    required String supplierId,
+    DateTime? returnedAtUtc,
+    String? reason,
+    String? notes,
+    required List<Map<String, dynamic>> lines,
+  }) =>
+      client.guard(() async {
+        final res = await client.dio.post('$_stockBase/purchase-returns', data: {
+          'supplierId': supplierId,
+          if (returnedAtUtc != null) 'returnedAtUtc': returnedAtUtc.toUtc().toIso8601String(),
+          if (reason != null) 'reason': reason,
+          if (notes != null) 'notes': notes,
+          'lines': lines,
+        });
+        return (res.data as Map<String, dynamic>)['id'].toString();
       });
 
   // ---------- wastage / adjustments ----------

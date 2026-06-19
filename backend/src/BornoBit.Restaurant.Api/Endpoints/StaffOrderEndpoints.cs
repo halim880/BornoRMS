@@ -24,6 +24,10 @@ public static class StaffOrderEndpoints
             OrderStatus? status,
             bool? isPaid,
             bool? excludeCancelled,
+            DateOnly? from,
+            DateOnly? to,
+            string? search,
+            string? orderNumber,
             int? page,
             int? pageSize,
             CancellationToken ct) =>
@@ -33,7 +37,23 @@ public static class StaffOrderEndpoints
                 Page: page is > 0 ? page.Value : 1,
                 PageSize: pageSize is > 0 ? pageSize.Value : 25,
                 IsPaid: isPaid,
-                ExcludeCancelled: excludeCancelled ?? false), ct);
+                ExcludeCancelled: excludeCancelled ?? false,
+                From: from,
+                To: to,
+                Search: search,
+                OrderNumber: orderNumber), ct);
+            return Results.Ok(result);
+        });
+
+        group.MapGet("/summary", async (
+            ISender sender,
+            DateOnly? from,
+            DateOnly? to,
+            string? search,
+            string? orderNumber,
+            CancellationToken ct) =>
+        {
+            var result = await sender.Send(new GetOrdersSummaryQuery(from, to, search, orderNumber), ct);
             return Results.Ok(result);
         });
 

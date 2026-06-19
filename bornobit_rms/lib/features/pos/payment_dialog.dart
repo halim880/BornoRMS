@@ -1,10 +1,28 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../dashboard/widgets.dart';
 import 'pos_providers.dart';
+
+/// Localized label for a canonical payment method value (the value itself stays
+/// canonical for the API payload).
+String _methodLabelL10n(AppLocalizations t, String method) => switch (method) {
+      'Card' => t.payMethodCard,
+      'Mobile' => t.payMethodMobile,
+      _ => t.payMethodCash,
+    };
+
+/// Localized label for a canonical rounding mode value.
+String _roundingLabelL10n(AppLocalizations t, String mode) => switch (mode) {
+      'Floor' => t.payRoundingFloor,
+      'Ceil' => t.payRoundingCeil,
+      _ => t.payRoundingNone,
+    };
 
 const _methods = ['Cash', 'Card', 'Mobile'];
 const _providers = ['Bkash', 'Nagad', 'Rocket', 'Upay', 'Other'];
@@ -18,6 +36,11 @@ const _providerLabel = {
   'Upay': 'Upay',
   'Other': 'Other',
 };
+
+/// Snap a money value to whole cents. POS amounts are accumulated/subtracted as doubles, so without
+/// this a tender can carry a 100.09999999-style float that drifts the bill; every amount that reaches
+/// the API payload (and every remaining/staged comparison) is rounded to 2dp through this.
+double _round2(double v) => (v * 100).roundToDouble() / 100;
 
 class _Tender {
   final String method;
@@ -49,6 +72,11 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
   final _txnId = TextEditingController();
   bool _busy = false;
   String? _error;
+  // Dedup token for the in-flight settle. Persists across a failed retry (same key →
+  // server no-ops a duplicate), cleared once a settle commits so the next one is distinct.
+  String? _pendingKey;
+
+  String _newKey() => '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(0x7fffffff)}';
 
   @override
   void initState() {
@@ -70,8 +98,8 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
     super.dispose();
   }
 
-  double get _stagedSum => _staged.fold(0.0, (a, t) => a + t.amount);
-  double get _entered => double.tryParse(_amount.text) ?? 0;
+  double get _stagedSum => _round2(_staged.fold(0.0, (a, t) => a + t.amount));
+  double get _entered => _round2(double.tryParse(_amount.text) ?? 0);
 
   Future<void> _guard(Future<void> Function() body) async {
     setState(() {
@@ -97,8 +125,8 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
   _Tender? _entry(double remaining) {
     final amt = _entered;
     if (amt <= 0) return null;
-    final applied = amt > remaining ? remaining : amt;
-    final tendered = _method == 'Cash' ? amt : applied;
+    final applied = _round2(amt > remaining ? remaining : amt);
+    final tendered = _round2(_method == 'Cash' ? amt : applied);
     final ref = _reference.text.trim();
     final txn = _txnId.text.trim();
     return _Tender(
@@ -144,18 +172,31 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
         final pending = _entry(remaining);
         if (pending != null) tenders.add(pending);
         if (tenders.isEmpty) {
-          setState(() => _error = 'Add at least one payment');
+          setState(() => _error = AppLocalizations.of(context).payAddAtLeastOne);
+          return;
+        }
+        // Cash must land in an open drawer, else end-of-day variance is unprovable.
+        final hasCash = tenders.any((t) => t.method == 'Cash');
+        final drawerOpen = ref.read(posDrawerProvider).valueOrNull?.isOpen ?? false;
+        if (hasCash && !drawerOpen) {
+          setState(() => _error = 'Open a cash shift before taking a cash payment.');
           return;
         }
         final payload = tenders.map(_payload).toList();
-        final result = await ref.read(posControllerProvider.notifier).addPayment(payload);
+        // Reuse the key on a retry of a failed attempt; mint a fresh one for a new settle.
+        _pendingKey ??= _newKey();
+        final result = await ref
+            .read(posControllerProvider.notifier)
+            .addPayment(payload, idempotencyKey: _pendingKey);
+        _pendingKey = null; // committed — the next settle is a distinct payment
         if (result.isPaid) {
           if (mounted) Navigator.of(context).pop(result);
         } else {
           setState(() {
             _staged.clear();
             _clearEntry();
-            _error = 'Partial payment recorded — balance ${money(result.balanceDue, '')}';
+            _error = AppLocalizations.of(context)
+                .payPartialBalance(money(result.balanceDue, ''));
           });
         }
       });
@@ -191,7 +232,7 @@ class _PaymentDialogState extends ConsumerState<PaymentDialog> {
     final grand = detail.grandTotal;
     final alreadyPaid = detail.amountPaid;
     final remaining =
-        (grand - alreadyPaid - _stagedSum).clamp(0, double.infinity).toDouble();
+        _round2((grand - alreadyPaid - _stagedSum).clamp(0, double.infinity).toDouble());
     final locked = alreadyPaid > 0; // discount/rounding locked once any payment exists
     final wide = MediaQuery.of(context).size.width >= 760;
 
@@ -311,15 +352,15 @@ class _Header extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Checkout',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Bo.text)),
+                Text(AppLocalizations.of(context).payCheckout,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Bo.text)),
                 Text(orderNumber,
                     style: const TextStyle(fontSize: 13, color: Bo.textSubtle)),
               ],
             ),
           ),
           IconButton(
-            tooltip: 'Cancel',
+            tooltip: AppLocalizations.of(context).actionCancel,
             icon: const Icon(Icons.close, color: Bo.textSubtle),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -366,6 +407,7 @@ class _SummarySide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ready = remaining <= 0;
+    final t = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -381,7 +423,7 @@ class _SummarySide extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                ready ? 'READY TO SETTLE' : 'AMOUNT DUE',
+                ready ? t.payReadyToSettle : t.payAmountDue,
                 style: TextStyle(
                   fontSize: 13,
                   letterSpacing: 1.2,
@@ -400,13 +442,13 @@ class _SummarySide extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              _miniRow('Subtotal', money(detail.subtotal, cur)),
+              _miniRow(t.billSubtotal, money(detail.subtotal, cur)),
               if (detail.discountAmount != 0)
-                _miniRow('Discount', '-${money(detail.discountAmount, cur)}'),
+                _miniRow(t.billDiscount, '-${money(detail.discountAmount, cur)}'),
               if (detail.roundingAdjustment != 0)
-                _miniRow('Rounding', money(detail.roundingAdjustment, cur)),
-              _miniRow('Grand total', money(grand, cur), strong: true),
-              if (alreadyPaid > 0) _miniRow('Already paid', money(alreadyPaid, cur)),
+                _miniRow(t.billRounding, money(detail.roundingAdjustment, cur)),
+              _miniRow(t.billGrandTotal, money(grand, cur), strong: true),
+              if (alreadyPaid > 0) _miniRow(t.billAlreadyPaid, money(alreadyPaid, cur)),
             ],
           ),
         ),
@@ -414,17 +456,17 @@ class _SummarySide extends StatelessWidget {
         // Discount + rounding (locked once a payment exists).
         if (!locked) ...[
           const SizedBox(height: 16),
-          const _SectionLabel('Adjustments'),
+          _SectionLabel(t.payAdjustments),
           const SizedBox(height: 8),
           Row(children: [
-            const Text('Discount', style: TextStyle(fontWeight: FontWeight.w600, color: Bo.textMuted)),
+            Text(t.billDiscount, style: const TextStyle(fontWeight: FontWeight.w600, color: Bo.textMuted)),
             const Spacer(),
             ToggleButtons(
               isSelected: [discountPercent, !discountPercent],
               onPressed: (i) => onDiscountModeChanged(i == 0),
               borderRadius: BorderRadius.circular(Bo.radiusSm),
               constraints: const BoxConstraints(minHeight: 34, minWidth: 46),
-              children: const [Text('%'), Text('Tk')],
+              children: const [Text('%'), Text('৳')],
             ),
           ]),
           const SizedBox(height: 8),
@@ -434,16 +476,18 @@ class _SummarySide extends StatelessWidget {
                 label: Text(discountPercent ? '${v.toInt()}%' : v.toStringAsFixed(0)),
                 onPressed: busy ? null : () => onApplyDiscount(v.toDouble()),
               ),
-            ActionChip(label: const Text('Clear'), onPressed: busy ? null : () => onApplyDiscount(0)),
+            ActionChip(label: Text(t.actionClear), onPressed: busy ? null : () => onApplyDiscount(0)),
           ]),
           const SizedBox(height: 10),
           Row(children: [
-            const Text('Rounding', style: TextStyle(fontWeight: FontWeight.w600, color: Bo.textMuted)),
+            Text(t.billRounding, style: const TextStyle(fontWeight: FontWeight.w600, color: Bo.textMuted)),
             const SizedBox(width: 10),
             for (final m in const ['Floor', 'Ceil', 'None'])
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: ActionChip(label: Text(m), onPressed: busy ? null : () => onRounding(m)),
+                child: ActionChip(
+                    label: Text(_roundingLabelL10n(t, m)),
+                    onPressed: busy ? null : () => onRounding(m)),
               ),
           ]),
         ],
@@ -451,7 +495,7 @@ class _SummarySide extends StatelessWidget {
         // Staged tenders (split payments).
         if (staged.isNotEmpty) ...[
           const SizedBox(height: 16),
-          const _SectionLabel('Payments'),
+          _SectionLabel(t.payPayments),
           const SizedBox(height: 8),
           for (final t in staged)
             Container(
@@ -544,10 +588,11 @@ class _EntrySide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final change = (entered - remaining);
+    final t = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionLabel('Payment method'),
+        _SectionLabel(t.payMethod),
         const SizedBox(height: 10),
         Row(
           children: [
@@ -556,7 +601,7 @@ class _EntrySide extends StatelessWidget {
                 child: _MethodButton(
                   selected: method == m,
                   icon: _methodIcon(m),
-                  label: _methodLabel(m),
+                  label: _methodLabelL10n(t, m),
                   onTap: () => onMethod(m),
                 ),
               ),
@@ -571,7 +616,7 @@ class _EntrySide extends StatelessWidget {
               FadeTransition(opacity: anim, child: child),
           child: KeyedSubtree(
             key: ValueKey(method),
-            child: _methodSection(change),
+            child: _methodSection(t, change),
           ),
         ),
         const SizedBox(height: 14),
@@ -580,21 +625,21 @@ class _EntrySide extends StatelessWidget {
           child: TextButton.icon(
             onPressed: busy ? null : onAddTender,
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add another payment'),
+            label: Text(t.payAddAnother),
           ),
         ),
       ],
     );
   }
 
-  Widget _methodSection(double change) {
+  Widget _methodSection(AppLocalizations t, double change) {
     switch (method) {
       case 'Card':
         return Column(
           key: const ValueKey('card'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _SectionLabel('Card type'),
+            _SectionLabel(t.payCardType),
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
               for (final c in _cardTypes)
@@ -605,9 +650,9 @@ class _EntrySide extends StatelessWidget {
                 ),
             ]),
             const SizedBox(height: 14),
-            _amountField('Amount'),
+            _amountField(t.payAmount),
             const SizedBox(height: 12),
-            _textField(reference, 'Reference number'),
+            _textField(reference, t.payReferenceNumber),
           ],
         );
       case 'Mobile':
@@ -615,7 +660,7 @@ class _EntrySide extends StatelessWidget {
           key: const ValueKey('mobile'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _SectionLabel('Provider'),
+            _SectionLabel(t.payProvider),
             const SizedBox(height: 8),
             Wrap(spacing: 8, runSpacing: 8, children: [
               for (final p in _providers)
@@ -626,11 +671,11 @@ class _EntrySide extends StatelessWidget {
                 ),
             ]),
             const SizedBox(height: 14),
-            _amountField('Amount'),
+            _amountField(t.payAmount),
             const SizedBox(height: 12),
-            _textField(txnId, 'Transaction ID'),
+            _textField(txnId, t.payTransactionId),
             const SizedBox(height: 12),
-            _textField(reference, 'Reference number'),
+            _textField(reference, t.payReferenceNumber),
           ],
         );
       default: // Cash
@@ -638,10 +683,10 @@ class _EntrySide extends StatelessWidget {
           key: const ValueKey('cash'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _amountField('Amount received'),
+            _amountField(t.payAmountReceived),
             const SizedBox(height: 12),
             Wrap(spacing: 8, runSpacing: 8, children: [
-              _QuickChip(label: 'Exact', onTap: () => onFillAmount(remaining)),
+              _QuickChip(label: t.payExact, onTap: () => onFillAmount(remaining)),
               for (final v in quickCash)
                 _QuickChip(label: v.toStringAsFixed(0), onTap: () => onFillAmount(v)),
             ]),
@@ -657,8 +702,8 @@ class _EntrySide extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('CHANGE',
-                        style: TextStyle(
+                    Text(t.payChange,
+                        style: const TextStyle(
                             fontSize: 13,
                             letterSpacing: 1.2,
                             fontWeight: FontWeight.w700,
@@ -715,6 +760,7 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
@@ -752,7 +798,7 @@ class _ActionBar extends StatelessWidget {
                     side: const BorderSide(color: Bo.borderStrong),
                     foregroundColor: Bo.textMuted,
                   ),
-                  child: const Text('Cancel'),
+                  child: Text(t.actionCancel),
                 ),
               ),
               const SizedBox(width: 12),
@@ -774,7 +820,7 @@ class _ActionBar extends StatelessWidget {
                               strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.check_circle_outline),
                   label: Text(
-                    busy ? 'Processing…' : 'Complete payment',
+                    busy ? t.payProcessing : t.payComplete,
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -884,10 +930,4 @@ IconData _methodIcon(String method) => switch (method) {
       'Card' => Icons.credit_card,
       'Mobile' => Icons.smartphone,
       _ => Icons.payments,
-    };
-
-String _methodLabel(String method) => switch (method) {
-      'Card' => 'Card',
-      'Mobile' => 'Mobile',
-      _ => 'Cash',
     };

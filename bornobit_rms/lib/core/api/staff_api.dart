@@ -25,16 +25,58 @@ class StaffApi {
         return res.data as Map<String, dynamic>;
       });
 
+  /// POST /staff/auth/refresh → rotates the refresh token, returns a fresh access token.
+  Future<Map<String, dynamic>> refresh(String refreshToken) =>
+      client.guard(() async {
+        final res = await _dio.post('/staff/auth/refresh', data: {'refreshToken': refreshToken});
+        return res.data as Map<String, dynamic>;
+      });
+
+  /// POST /staff/auth/logout → revokes the refresh token server-side (best-effort).
+  Future<void> logout(String refreshToken) =>
+      client.guard(() async {
+        await _dio.post('/staff/auth/logout', data: {'refreshToken': refreshToken});
+      });
+
   // ---------- orders ----------
-  Future<Paged<OrderListItem>> orderList({String? status, bool? isPaid, int page = 1, int pageSize = 25}) =>
+  Future<Paged<OrderListItem>> orderList({
+    String? status,
+    bool? isPaid,
+    DateTime? from,
+    DateTime? to,
+    String? search,
+    String? orderNumber,
+    int page = 1,
+    int pageSize = 25,
+  }) =>
       client.guard(() async {
         final res = await _dio.get('$_p/staff/orders', queryParameters: {
           if (status != null) 'status': status,
           if (isPaid != null) 'isPaid': isPaid,
+          ..._range(from, to),
+          if (search != null && search.isNotEmpty) 'search': search,
+          if (orderNumber != null && orderNumber.isNotEmpty) 'orderNumber': orderNumber,
           'page': page,
           'pageSize': pageSize,
         });
         return Paged.fromJson(res.data as Map<String, dynamic>, OrderListItem.fromJson);
+      });
+
+  /// KPI tiles + per-status tab counts for the Orders screen. Scoped by the same
+  /// date/search/order-number filters as [orderList] but never by status.
+  Future<OrdersSummary> orderSummary({
+    DateTime? from,
+    DateTime? to,
+    String? search,
+    String? orderNumber,
+  }) =>
+      client.guard(() async {
+        final res = await _dio.get('$_p/staff/orders/summary', queryParameters: {
+          ..._range(from, to),
+          if (search != null && search.isNotEmpty) 'search': search,
+          if (orderNumber != null && orderNumber.isNotEmpty) 'orderNumber': orderNumber,
+        });
+        return OrdersSummary.fromJson(res.data as Map<String, dynamic>);
       });
 
   Future<OrderDetail> order(String id) => client.guard(() async {
@@ -81,6 +123,7 @@ class StaffApi {
     String? customerPhone,
     String? customerName,
     String? customerAddress,
+    double? deliveryCharge,
   }) =>
       client.guard(() async {
         final res = await _dio.post('$_pos/orders', data: {
@@ -89,6 +132,7 @@ class StaffApi {
           if (customerPhone != null) 'customerPhone': customerPhone,
           if (customerName != null) 'customerName': customerName,
           if (customerAddress != null) 'customerAddress': customerAddress,
+          if (deliveryCharge != null) 'deliveryCharge': deliveryCharge,
         });
         return PlaceOrderResult.fromJson(res.data as Map<String, dynamic>);
       });
@@ -134,15 +178,76 @@ class StaffApi {
         return BillSummary.fromJson(res.data as Map<String, dynamic>);
       });
 
-  /// payments: each map = { method, provider?, amount, tendered, reference? }
-  Future<SettlementResult> posAddPayment(String id, List<Map<String, dynamic>> payments) =>
+  /// payments: each map = { method, provider?, amount, tendered, reference? }.
+  /// [idempotencyKey] dedups a replayed settle (double-tap / retry) so a tender is never double-charged.
+  Future<SettlementResult> posAddPayment(String id, List<Map<String, dynamic>> payments, {String? idempotencyKey}) =>
       client.guard(() async {
-        final res = await _dio.post('$_pos/orders/$id/payments', data: {'payments': payments});
+        final res = await _dio.post('$_pos/orders/$id/payments', data: {
+          'payments': payments,
+          if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
+        });
         return SettlementResult.fromJson(res.data as Map<String, dynamic>);
       });
 
   Future<void> posCancel(String id, {String? reason}) => client.guard(() async {
         await _dio.post('$_pos/orders/$id/cancel', data: {if (reason != null) 'reason': reason});
+      });
+
+  /// Void a mistaken captured payment. Manager-gated server-side; pass manager creds when the
+  /// signed-in cashier lacks the role (else they're ignored and the role on the till authorizes it).
+  Future<SettlementResult> posVoidPayment(String orderId, String paymentId,
+          {required String reason, String? managerUserName, String? managerPassword}) =>
+      client.guard(() async {
+        final res = await _dio.post('$_pos/orders/$orderId/payments/$paymentId/void', data: {
+          'reason': reason,
+          if (managerUserName != null) 'managerUserName': managerUserName,
+          if (managerPassword != null) 'managerPassword': managerPassword,
+        });
+        return SettlementResult.fromJson(res.data as Map<String, dynamic>);
+      });
+
+  /// Refund part or all of a captured payment. Manager-gated server-side (see [posVoidPayment]).
+  Future<SettlementResult> posRefundPayment(String orderId, String paymentId,
+          {required double amount, required String reason, String? managerUserName, String? managerPassword}) =>
+      client.guard(() async {
+        final res = await _dio.post('$_pos/orders/$orderId/payments/$paymentId/refund', data: {
+          'amount': amount,
+          'reason': reason,
+          if (managerUserName != null) 'managerUserName': managerUserName,
+          if (managerPassword != null) 'managerPassword': managerPassword,
+        });
+        return SettlementResult.fromJson(res.data as Map<String, dynamic>);
+      });
+
+  // ---------- cash drawer / shift ----------
+  /// The current cashier's open drawer, or null if none is open.
+  Future<CashDrawer?> drawerCurrent() => client.guard(() async {
+        final res = await _dio.get('$_pos/drawers/current');
+        return res.data == null ? null : CashDrawer.fromJson(res.data as Map<String, dynamic>);
+      });
+
+  Future<DrawerSummary> drawerSummary(String id) => client.guard(() async {
+        final res = await _dio.get('$_pos/drawers/$id/summary');
+        return DrawerSummary.fromJson(res.data as Map<String, dynamic>);
+      });
+
+  Future<CashDrawer> drawerOpen({required double openingBalance, String? cashAccountId, String? notes}) =>
+      client.guard(() async {
+        final res = await _dio.post('$_pos/drawers/open', data: {
+          'openingBalance': openingBalance,
+          if (cashAccountId != null) 'cashAccountId': cashAccountId,
+          if (notes != null) 'notes': notes,
+        });
+        return CashDrawer.fromJson(res.data as Map<String, dynamic>);
+      });
+
+  Future<DrawerCloseResult> drawerClose(String id, {required double countedBalance, String? notes}) =>
+      client.guard(() async {
+        final res = await _dio.post('$_pos/drawers/$id/close', data: {
+          'countedBalance': countedBalance,
+          if (notes != null) 'notes': notes,
+        });
+        return DrawerCloseResult.fromJson(res.data as Map<String, dynamic>);
       });
 
   // ---------- navigation ----------

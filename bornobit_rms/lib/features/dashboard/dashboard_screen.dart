@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/i18n/labels.dart';
 import '../../core/models/dtos.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/app_theme.dart';
+import '../../l10n/app_localizations.dart';
 import 'charts.dart';
 import 'widgets.dart';
+
+/// Localized label for a [DashboardRange].
+String _rangeLabel(AppLocalizations t, DashboardRange r) => switch (r) {
+      DashboardRange.today => t.rangeToday,
+      DashboardRange.yesterday => t.rangeYesterday,
+      DashboardRange.last7Days => t.rangeLast7Days,
+      DashboardRange.thisMonth => t.rangeThisMonth,
+    };
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -28,6 +38,7 @@ class _DashboardBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     final range = ref.watch(dashboardRangeProvider);
     final cur = data.summary.currency;
 
@@ -47,8 +58,8 @@ class _DashboardBody extends ConsumerWidget {
               // Range selector
               Row(
                 children: [
-                  const Text('Overview',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Bo.text)),
+                  Text(t.dashOverview,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Bo.text)),
                   const Spacer(),
                   _RangeSelector(
                     selected: range,
@@ -64,44 +75,44 @@ class _DashboardBody extends ConsumerWidget {
               // Section 1: KPI cards
               _Grid(columns: kpiCols, ratioMinHeight: 150, children: [
                 KpiCard(
-                  label: "Today's Sales",
+                  label: t.dashTodaysSales,
                   value: money(data.summary.todayRevenue, cur),
                   icon: Icons.payments_outlined,
                   tint: Bo.primarySoft,
                   stats: [
-                    MiniStat('orders', count(data.summary.todayOrderCount), tone: 'info'),
-                    MiniStat('avg', money(data.summary.averageOrderValue, cur), tone: 'neutral'),
+                    MiniStat(t.dashStatOrders, count(data.summary.todayOrderCount), tone: 'info'),
+                    MiniStat(t.dashStatAvg, money(data.summary.averageOrderValue, cur), tone: 'neutral'),
                   ],
                 ),
                 KpiCard(
-                  label: 'Tables',
-                  value: '${data.summary.occupiedTables} occupied',
+                  label: t.dashTables,
+                  value: t.dashOccupiedValue(data.summary.occupiedTables),
                   icon: Icons.table_restaurant_outlined,
                   tint: Bo.successSoft,
                   stats: [
-                    MiniStat('free', count(data.summary.availableTables), tone: 'success'),
-                    MiniStat('reserved', count(data.summary.reservedTables), tone: 'info'),
-                    MiniStat('to pay', count(data.summary.waitingPaymentTables), tone: 'warning'),
+                    MiniStat(t.dashStatFree, count(data.summary.availableTables), tone: 'success'),
+                    MiniStat(t.dashStatReserved, count(data.summary.reservedTables), tone: 'info'),
+                    MiniStat(t.dashStatToPay, count(data.summary.waitingPaymentTables), tone: 'warning'),
                   ],
                 ),
                 KpiCard(
-                  label: 'Kitchen',
-                  value: '${data.summary.pendingOrders} pending',
+                  label: t.dashKitchen,
+                  value: t.dashPendingValue(data.summary.pendingOrders),
                   icon: Icons.soup_kitchen_outlined,
                   tint: Bo.warningSoft,
                   stats: [
-                    MiniStat('preparing', count(data.summary.preparingOrders), tone: 'warning'),
-                    MiniStat('ready', count(data.summary.readyOrders), tone: 'primary'),
+                    MiniStat(t.dashStatPreparing, count(data.summary.preparingOrders), tone: 'warning'),
+                    MiniStat(t.dashStatReady, count(data.summary.readyOrders), tone: 'primary'),
                   ],
                 ),
                 KpiCard(
-                  label: 'Customer Activity',
-                  value: '${data.summary.activeDiningSessions} sessions',
+                  label: t.dashCustomerActivity,
+                  value: t.dashSessionsValue(data.summary.activeDiningSessions),
                   icon: Icons.groups_outlined,
                   tint: Bo.infoSoft,
                   stats: [
-                    MiniStat('QR', count(data.summary.qrOrdersToday), tone: 'info'),
-                    MiniStat('staff', count(data.summary.walkInOrdersToday), tone: 'neutral'),
+                    MiniStat(t.dashStatQr, count(data.summary.qrOrdersToday), tone: 'info'),
+                    MiniStat(t.dashStatStaff, count(data.summary.walkInOrdersToday), tone: 'neutral'),
                   ],
                 ),
               ]),
@@ -109,7 +120,7 @@ class _DashboardBody extends ConsumerWidget {
 
               // Section 2: live floor
               SectionCard(
-                title: 'Live floor',
+                title: t.dashLiveFloor,
                 icon: Icons.grid_view_outlined,
                 child: _LiveFloor(tables: data.tables),
               ),
@@ -117,31 +128,31 @@ class _DashboardBody extends ConsumerWidget {
 
               // Section 3: analytics
               _Grid(columns: triCols, ratioMinHeight: 280, children: [
-                SectionCard(title: 'Sales by hour', icon: Icons.show_chart, child: SalesByHourChart(data: data.salesByHour)),
-                SectionCard(title: 'Sales by category', icon: Icons.pie_chart_outline, child: SalesByCategoryChart(data: data.salesByCategory)),
-                SectionCard(title: 'Top selling items', icon: Icons.local_fire_department_outlined, child: TopItemsChart(data: data.topItems)),
+                SectionCard(title: t.dashSalesByHour, icon: Icons.show_chart, child: SalesByHourChart(data: data.salesByHour)),
+                SectionCard(title: t.dashSalesByCategory, icon: Icons.pie_chart_outline, child: SalesByCategoryChart(data: data.salesByCategory)),
+                SectionCard(title: t.dashTopItems, icon: Icons.local_fire_department_outlined, child: TopItemsChart(data: data.topItems)),
               ]),
               const SizedBox(height: 16),
 
               // Section 4: live orders
               SectionCard(
-                title: 'Live orders',
+                title: t.dashLiveOrders,
                 icon: Icons.receipt_long_outlined,
-                trailing: Text('${data.orders.totalCount} total', style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
+                trailing: Text(t.dashTotalSuffix(data.orders.totalCount), style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
                 child: _LiveOrders(orders: data.orders.items, currency: cur),
               ),
               const SizedBox(height: 16),
 
               // Section 5 + 6: kitchen perf + requests
               _Grid(columns: halfCols, ratioMinHeight: 220, children: [
-                SectionCard(title: 'Kitchen performance', icon: Icons.timer_outlined, child: _KitchenPerf(k: data.kitchen)),
-                SectionCard(title: 'Customer requests', icon: Icons.notifications_active_outlined, child: _Requests(requests: data.requests)),
+                SectionCard(title: t.dashKitchenPerf, icon: Icons.timer_outlined, child: _KitchenPerf(k: data.kitchen)),
+                SectionCard(title: t.dashCustomerRequests, icon: Icons.notifications_active_outlined, child: _Requests(requests: data.requests)),
               ]),
               const SizedBox(height: 16),
 
               // Section 7: inventory alerts
               SectionCard(
-                title: 'Inventory alerts',
+                title: t.dashInventoryAlerts,
                 icon: Icons.inventory_2_outlined,
                 child: _InventoryAlerts(inv: data.inventory, columns: triCols),
               ),
@@ -149,8 +160,8 @@ class _DashboardBody extends ConsumerWidget {
 
               // Section 8 + 9: staff leaderboard + revenue breakdown
               _Grid(columns: halfCols, ratioMinHeight: 240, children: [
-                SectionCard(title: 'Staff leaderboard', icon: Icons.emoji_events_outlined, child: _StaffLeaderboard(staff: data.staff, currency: cur)),
-                SectionCard(title: 'Revenue breakdown', icon: Icons.account_balance_wallet_outlined, child: _RevenueBreakdown(r: data.revenue)),
+                SectionCard(title: t.dashStaffLeaderboard, icon: Icons.emoji_events_outlined, child: _StaffLeaderboard(staff: data.staff, currency: cur)),
+                SectionCard(title: t.dashRevenueBreakdown, icon: Icons.account_balance_wallet_outlined, child: _RevenueBreakdown(r: data.revenue)),
               ]),
             ],
           ),
@@ -191,6 +202,7 @@ class _RangeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return SegmentedButton<DashboardRange>(
       showSelectedIcon: false,
       style: ButtonStyle(
@@ -199,7 +211,7 @@ class _RangeSelector extends StatelessWidget {
       ),
       segments: [
         for (final r in DashboardRange.values)
-          ButtonSegment(value: r, label: Text(r.label)),
+          ButtonSegment(value: r, label: Text(_rangeLabel(t, r))),
       ],
       selected: {selected},
       onSelectionChanged: (s) => onChanged(s.first),
@@ -214,7 +226,8 @@ class _LiveFloor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (tables.isEmpty) return const _EmptyHint('No active tables');
+    final l10n = AppLocalizations.of(context);
+    if (tables.isEmpty) return _EmptyHint(l10n.dashNoActiveTables);
     return Wrap(
       spacing: 10,
       runSpacing: 10,
@@ -234,16 +247,16 @@ class _LiveFloor extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Table ${t.tableNumber}',
+                    Text(l10n.commonTable(t.tableNumber),
                         style: const TextStyle(fontWeight: FontWeight.w700, color: Bo.text)),
                     Text('${t.capacity}p', style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 6),
-                ToneChip(tableStatusLabel(t.status), tableStatusTone(t.status)),
+                ToneChip(tableStatusLabelL10n(l10n, t.status), tableStatusTone(t.status)),
                 if (t.status != 'Available' && t.status != 'Reserved') ...[
                   const SizedBox(height: 8),
-                  Text('${t.guestCount ?? 0} guests · ${t.sessionMinutes ?? 0}m',
+                  Text('${l10n.wtGuests(t.guestCount ?? 0)} · ${t.sessionMinutes ?? 0}m',
                       style: const TextStyle(color: Bo.textMuted, fontSize: 12)),
                   Text(money(t.currentBill, t.currency),
                       style: const TextStyle(fontWeight: FontWeight.w700, color: Bo.text)),
@@ -265,7 +278,8 @@ class _LiveOrders extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (orders.isEmpty) return const _EmptyHint('No orders yet');
+    final t = AppLocalizations.of(context);
+    if (orders.isEmpty) return _EmptyHint(t.dashNoOrdersYet);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -273,23 +287,23 @@ class _LiveOrders extends StatelessWidget {
         headingRowHeight: 40,
         dataRowMinHeight: 40,
         dataRowMaxHeight: 48,
-        columns: const [
-          DataColumn(label: Text('Order')),
-          DataColumn(label: Text('Table')),
-          DataColumn(label: Text('Source')),
-          DataColumn(label: Text('Time')),
-          DataColumn(label: Text('Amount')),
-          DataColumn(label: Text('Status')),
+        columns: [
+          DataColumn(label: Text(t.dashColOrder)),
+          DataColumn(label: Text(t.dashColTable)),
+          DataColumn(label: Text(t.dashColSource)),
+          DataColumn(label: Text(t.dashColTime)),
+          DataColumn(label: Text(t.dashColAmount)),
+          DataColumn(label: Text(t.dashColStatus)),
         ],
         rows: [
           for (final o in orders)
             DataRow(cells: [
               DataCell(Text(o.orderNumber, style: const TextStyle(fontWeight: FontWeight.w600))),
               DataCell(Text(o.tableNumber ?? '—')),
-              DataCell(Text('${o.orderType} · ${o.channel}')),
+              DataCell(Text('${orderTypeLabel(t, o.orderType)} · ${o.channel}')),
               DataCell(Text(shortDateTime(o.orderedAtUtc))),
               DataCell(Text(money(o.total, o.currency))),
-              DataCell(ToneChip(o.status, orderStatusTone(o.status))),
+              DataCell(ToneChip(orderStatusLabel(t, o.status), orderStatusTone(o.status))),
             ]),
         ],
       ),
@@ -303,29 +317,30 @@ class _KitchenPerf extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Wrap(spacing: 8, runSpacing: 8, children: [
-          MiniStat('avg prep (min)', k.averagePrepMinutes.toStringAsFixed(1), tone: 'info'),
-          MiniStat('completed', count(k.completedToday), tone: 'success'),
-          MiniStat('waiting >10m', count(k.ordersWaitingOver10Min), tone: k.ordersWaitingOver10Min > 0 ? 'danger' : 'neutral'),
+          MiniStat(t.dashStatAvgPrep, k.averagePrepMinutes.toStringAsFixed(1), tone: 'info'),
+          MiniStat(t.dashStatCompleted, count(k.completedToday), tone: 'success'),
+          MiniStat(t.dashStatWaitingOver10, count(k.ordersWaitingOver10Min), tone: k.ordersWaitingOver10Min > 0 ? 'danger' : 'neutral'),
         ]),
         const SizedBox(height: 12),
         if (k.longestWaitingOrderNumber != null)
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(color: Bo.warningSoft, borderRadius: BorderRadius.circular(Bo.radiusSm)),
-            child: Text('Longest waiting: ${k.longestWaitingOrderNumber} (${k.longestWaitingMinutes ?? 0} min)',
+            child: Text(t.dashLongestWaiting(k.longestWaitingOrderNumber!, k.longestWaitingMinutes ?? 0),
                 style: const TextStyle(color: Bo.warning, fontWeight: FontWeight.w600, fontSize: 12)),
           ),
         const SizedBox(height: 12),
-        const Text('Kitchen load', style: TextStyle(color: Bo.textSubtle, fontSize: 12, fontWeight: FontWeight.w600)),
+        Text(t.dashKitchenLoad, style: const TextStyle(color: Bo.textSubtle, fontSize: 12, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          MiniStat('pending', count(k.pendingCount), tone: 'neutral'),
-          MiniStat('preparing', count(k.preparingCount), tone: 'warning'),
-          MiniStat('ready', count(k.readyCount), tone: 'primary'),
+          MiniStat(t.dashStatPending, count(k.pendingCount), tone: 'neutral'),
+          MiniStat(t.dashStatPreparing, count(k.preparingCount), tone: 'warning'),
+          MiniStat(t.dashStatReady, count(k.readyCount), tone: 'primary'),
         ]),
       ],
     );
@@ -338,7 +353,8 @@ class _Requests extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (requests.isEmpty) return const _EmptyHint('No pending requests');
+    final l10n = AppLocalizations.of(context);
+    if (requests.isEmpty) return _EmptyHint(l10n.dashNoPendingRequests);
     return Column(
       children: [
         for (final r in requests)
@@ -346,7 +362,7 @@ class _Requests extends StatelessWidget {
             dense: true,
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.notifications_none, size: 20, color: Bo.textMuted),
-            title: Text('Table ${r.tableNumber} · ${requestLabel(r.type)}',
+            title: Text('${l10n.commonTable(r.tableNumber)} · ${requestTypeLabel(l10n, r.type)}',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             subtitle: r.note != null ? Text(r.note!, style: const TextStyle(fontSize: 12)) : null,
             trailing: ToneChip('${r.waitingMinutes}m', r.waitingMinutes > 5 ? 'danger' : 'neutral'),
@@ -363,19 +379,20 @@ class _InventoryAlerts extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return _Grid(columns: columns, ratioMinHeight: 160, children: [
       _AlertList(
-        title: 'Low stock',
+        title: t.dashLowStock,
         tone: 'warning',
         rows: [for (final i in inv.lowStock) '${i.name} — ${i.qtyOnHand} ${i.unitCode}'],
       ),
       _AlertList(
-        title: 'Out of stock',
+        title: t.dashOutOfStock,
         tone: 'danger',
         rows: [for (final i in inv.outOfStock) i.name],
       ),
       _AlertList(
-        title: "Today's consumption",
+        title: t.dashTodaysConsumption,
         tone: 'info',
         rows: [for (final i in inv.todaysConsumption) '${i.name} — ${i.qtyConsumed} ${i.unitCode}'],
       ),
@@ -391,6 +408,7 @@ class _AlertList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final c = toneColors(tone);
     return Container(
       padding: const EdgeInsets.all(12),
@@ -411,7 +429,7 @@ class _AlertList extends StatelessWidget {
           ]),
           const SizedBox(height: 8),
           if (rows.isEmpty)
-            const Text('None', style: TextStyle(color: Bo.textSubtle, fontSize: 12))
+            Text(t.dashNone, style: const TextStyle(color: Bo.textSubtle, fontSize: 12))
           else
             for (final r in rows.take(6))
               Padding(
@@ -419,7 +437,7 @@ class _AlertList extends StatelessWidget {
                 child: Text(r, style: const TextStyle(fontSize: 12, color: Bo.textMuted), overflow: TextOverflow.ellipsis),
               ),
           if (rows.length > 6)
-            Text('+${rows.length - 6} more', style: const TextStyle(fontSize: 11, color: Bo.textSubtle)),
+            Text(t.dashMore(rows.length - 6), style: const TextStyle(fontSize: 11, color: Bo.textSubtle)),
         ],
       ),
     );
@@ -433,7 +451,8 @@ class _StaffLeaderboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (staff.isEmpty) return const _EmptyHint('No staff activity today');
+    final t = AppLocalizations.of(context);
+    if (staff.isEmpty) return _EmptyHint(t.dashNoStaffActivity);
     return Column(
       children: [
         for (final s in staff.take(8))
@@ -442,8 +461,8 @@ class _StaffLeaderboard extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(flex: 4, child: Text(s.waiterName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Bo.text))),
-                Expanded(flex: 2, child: Text('${s.ordersProcessed} ord', style: const TextStyle(fontSize: 12, color: Bo.textSubtle))),
-                Expanded(flex: 2, child: Text('${s.tablesAssigned} tbl', style: const TextStyle(fontSize: 12, color: Bo.textSubtle))),
+                Expanded(flex: 2, child: Text('${s.ordersProcessed} ${t.dashStatOrd}', style: const TextStyle(fontSize: 12, color: Bo.textSubtle))),
+                Expanded(flex: 2, child: Text('${s.tablesAssigned} ${t.dashStatTbl}', style: const TextStyle(fontSize: 12, color: Bo.textSubtle))),
                 Expanded(flex: 3, child: Text(money(s.revenue, currency), textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Bo.text))),
               ],
             ),
@@ -459,6 +478,7 @@ class _RevenueBreakdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     Widget row(String label, double v, {bool bold = false}) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
@@ -472,16 +492,16 @@ class _RevenueBreakdown extends StatelessWidget {
 
     return Column(
       children: [
-        row('Dine-in', r.dineInRevenue),
-        row('Takeaway', r.takeawayRevenue),
-        row('Delivery', r.deliveryRevenue),
-        row('QR ordering', r.qrOrderingRevenue),
+        row(t.dashRevDineIn, r.dineInRevenue),
+        row(t.dashRevTakeaway, r.takeawayRevenue),
+        row(t.dashRevDelivery, r.deliveryRevenue),
+        row(t.dashRevQrOrdering, r.qrOrderingRevenue),
         const Divider(),
-        row('Discount', r.discountAmount),
-        row('Tax collected', r.taxCollected),
-        row('Service charge', r.serviceChargeCollected),
+        row(t.dashRevDiscount, r.discountAmount),
+        row(t.dashRevTaxCollected, r.taxCollected),
+        row(t.dashRevServiceCharge, r.serviceChargeCollected),
         const Divider(),
-        row('Grand total', r.grandTotal, bold: true),
+        row(t.dashRevGrandTotal, r.grandTotal, bold: true),
       ],
     );
   }
@@ -514,7 +534,7 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Bo.textMuted)),
             const SizedBox(height: 16),
-            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: Text(AppLocalizations.of(context).actionRetry)),
           ],
         ),
       ),

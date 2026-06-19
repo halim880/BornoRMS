@@ -29,6 +29,7 @@ class _NewOrderDialogState extends ConsumerState<NewOrderDialog> {
   final _phone = TextEditingController();
   final _name = TextEditingController();
   final _address = TextEditingController();
+  final _deliveryCharge = TextEditingController();
   bool _busy = false;
   String? _error;
 
@@ -51,6 +52,7 @@ class _NewOrderDialogState extends ConsumerState<NewOrderDialog> {
     _phone.dispose();
     _name.dispose();
     _address.dispose();
+    _deliveryCharge.dispose();
     super.dispose();
   }
 
@@ -65,10 +67,11 @@ class _NewOrderDialogState extends ConsumerState<NewOrderDialog> {
         name: _name.text.trim().isEmpty ? null : _name.text.trim(),
         address: _address.text.trim().isEmpty ? null : _address.text.trim(),
       );
+      final charge = _type == 'Delivery' ? (double.tryParse(_deliveryCharge.text.trim()) ?? 0) : 0.0;
       if (widget.edit) {
         await c.updateMeta(type: args.type, tableId: args.tableId, customerPhone: args.phone, customerName: args.name, customerAddress: args.address);
       } else {
-        await c.createOrder(type: args.type, tableId: args.tableId, customerPhone: args.phone, customerName: args.name, customerAddress: args.address);
+        await c.createOrder(type: args.type, tableId: args.tableId, customerPhone: args.phone, customerName: args.name, customerAddress: args.address, deliveryCharge: charge);
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -128,6 +131,12 @@ class _NewOrderDialogState extends ConsumerState<NewOrderDialog> {
               if (_type == 'Delivery') ...[
                 const SizedBox(height: 8),
                 TextField(controller: _address, decoration: const InputDecoration(labelText: 'Delivery address')),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _deliveryCharge,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Delivery charge'),
+                ),
               ],
               if (_error != null) ...[
                 const SizedBox(height: 10),
@@ -290,6 +299,219 @@ Future<bool?> showCancelDialog(BuildContext context, WidgetRef ref) {
       ],
     ),
   );
+}
+
+/// Cash-drawer / shift dialog. Opens a shift (with a starting float) when none is
+/// open, otherwise shows the running drawer and lets the cashier close it against a
+/// physical count, surfacing the variance. Defaults to the first active cash account.
+class ShiftDialog extends ConsumerStatefulWidget {
+  const ShiftDialog({super.key});
+  @override
+  ConsumerState<ShiftDialog> createState() => _ShiftDialogState();
+}
+
+class _ShiftDialogState extends ConsumerState<ShiftDialog> {
+  final _amount = TextEditingController();
+  final _notes = TextEditingController();
+  bool _busy = false;
+  String? _error;
+  DrawerCloseResult? _closed;
+
+  static const _ccy = 'Tk';
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> _open() async {
+    final value = double.tryParse(_amount.text.trim());
+    if (value == null || value < 0) {
+      setState(() => _error = 'Enter a valid opening float.');
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      await ref.read(posDrawerProvider.notifier).open(
+            openingBalance: value,
+            notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+          );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      setState(() { _busy = false; _error = e.toString(); });
+    }
+  }
+
+  Future<void> _close(CashDrawer drawer) async {
+    final value = double.tryParse(_amount.text.trim());
+    if (value == null || value < 0) {
+      setState(() => _error = 'Enter the counted cash amount.');
+      return;
+    }
+    setState(() { _busy = true; _error = null; });
+    try {
+      final result = await ref.read(posDrawerProvider.notifier).close(
+            drawer.id,
+            countedBalance: value,
+            notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+          );
+      if (mounted) setState(() { _busy = false; _closed = result; });
+    } catch (e) {
+      setState(() { _busy = false; _error = e.toString(); });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final drawerAsync = ref.watch(posDrawerProvider);
+
+    // Post-close summary.
+    if (_closed != null) {
+      final r = _closed!;
+      return AlertDialog(
+        title: Text('Shift closed — ${r.drawerNumber}'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _row('Expected in drawer', money(r.expected, _ccy)),
+              _row('Counted', money(r.counted, _ccy)),
+              const Divider(),
+              _row(
+                r.variance == 0 ? 'Balanced' : (r.variance > 0 ? 'Over' : 'Short'),
+                money(r.variance, _ccy),
+                tone: r.variance == 0 ? Bo.success : Bo.danger,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Done')),
+        ],
+      );
+    }
+
+    return drawerAsync.when(
+      loading: () => const AlertDialog(content: SizedBox(height: 80, child: Center(child: CircularProgressIndicator()))),
+      error: (e, _) => AlertDialog(
+        title: const Text('Cash drawer'),
+        content: Text('$e', style: const TextStyle(color: Bo.danger)),
+        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+      ),
+      data: (drawer) => drawer == null ? _openForm() : _closeForm(drawer),
+    );
+  }
+
+  Widget _openForm() => AlertDialog(
+        title: const Text('Open shift'),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Start a cash drawer with the opening float. Cash payments are attributed to your open shift.',
+                  style: TextStyle(color: Bo.textSubtle, fontSize: 12)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _amount,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Opening float', prefixText: '$_ccy '),
+              ),
+              const SizedBox(height: 8),
+              TextField(controller: _notes, decoration: const InputDecoration(labelText: 'Notes (optional)')),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!, style: const TextStyle(color: Bo.danger, fontSize: 12)),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: _busy ? null : _open,
+            child: _busy
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Open shift'),
+          ),
+        ],
+      );
+
+  Widget _closeForm(CashDrawer drawer) {
+    final summaryAsync = ref.watch(posDrawerSummaryProvider(drawer.id));
+    return AlertDialog(
+      title: Text('Close shift — ${drawer.drawerNumber}'),
+      content: SizedBox(
+        width: 400,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _row('Opening float', money(drawer.openingBalance, _ccy)),
+              _row('Cash received', money(drawer.cashReceived, _ccy)),
+              if (drawer.cashPaidOut != 0) _row('Cash paid out', money(drawer.cashPaidOut, _ccy)),
+              const Divider(),
+              _row('Expected in drawer', money(drawer.expectedClosingBalance, _ccy), bold: true),
+              summaryAsync.maybeWhen(
+                data: (s) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (s.byMethod.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text('Takings by method', style: TextStyle(color: Bo.textSubtle, fontSize: 12)),
+                      for (final m in s.byMethod) _row('${m.method} (${m.count})', money(m.amount, _ccy)),
+                    ],
+                  ],
+                ),
+                orElse: () => const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _amount,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Counted cash', prefixText: '$_ccy '),
+              ),
+              const SizedBox(height: 8),
+              TextField(controller: _notes, decoration: const InputDecoration(labelText: 'Notes (optional)')),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(_error!, style: const TextStyle(color: Bo.danger, fontSize: 12)),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Bo.danger),
+          onPressed: _busy ? null : () => _close(drawer),
+          child: _busy
+              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Close shift'),
+        ),
+      ],
+    );
+  }
+
+  Widget _row(String label, String value, {bool bold = false, Color? tone}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: TextStyle(color: tone ?? Bo.textSubtle, fontWeight: bold ? FontWeight.w700 : null)),
+            Text(value, style: TextStyle(color: tone, fontWeight: bold ? FontWeight.w700 : FontWeight.w600)),
+          ],
+        ),
+      );
 }
 
 /// Thermal printer settings dialog.

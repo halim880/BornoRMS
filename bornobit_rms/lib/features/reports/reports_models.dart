@@ -201,3 +201,150 @@ class TopSellingItemRow {
         currency: _s(j['currency']),
       );
 }
+
+/// One product-category sales row (CategorySalesDto). The endpoint returns a
+/// bare list (no envelope), so currency is not carried per row.
+class CategorySalesRow {
+  final String category;
+  final double revenue;
+  final int quantity;
+
+  CategorySalesRow({required this.category, required this.revenue, required this.quantity});
+
+  factory CategorySalesRow.fromJson(Map<String, dynamic> j) => CategorySalesRow(
+        category: _s(j['category']),
+        revenue: _d(j['revenue']),
+        quantity: _i(j['quantity']),
+      );
+}
+
+/// One cashier row (CashierReportRowDto).
+class CashierReportRow {
+  final String cashier;
+  final int txnCount;
+  final double charges;
+  final double refunds;
+  final double net;
+
+  CashierReportRow({
+    required this.cashier,
+    required this.txnCount,
+    required this.charges,
+    required this.refunds,
+    required this.net,
+  });
+
+  factory CashierReportRow.fromJson(Map<String, dynamic> j) => CashierReportRow(
+        cashier: _s(j['cashier']),
+        txnCount: _i(j['txnCount']),
+        charges: _d(j['charges']),
+        refunds: _d(j['refunds']),
+        net: _d(j['net']),
+      );
+}
+
+/// Cashier report (CashierReportDto).
+class CashierReport {
+  final List<CashierReportRow> rows;
+  final int totalTxns;
+  final double totalCharges;
+  final double totalRefunds;
+  final double totalNet;
+  final String currency;
+
+  CashierReport({
+    required this.rows,
+    required this.totalTxns,
+    required this.totalCharges,
+    required this.totalRefunds,
+    required this.totalNet,
+    required this.currency,
+  });
+
+  factory CashierReport.fromJson(Map<String, dynamic> j) => CashierReport(
+        rows: ((j['rows'] as List?) ?? [])
+            .map((e) => CashierReportRow.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        totalTxns: _i(j['totalTxns']),
+        totalCharges: _d(j['totalCharges']),
+        totalRefunds: _d(j['totalRefunds']),
+        totalNet: _d(j['totalNet']),
+        currency: _s(j['currency']),
+      );
+}
+
+/// One supplier purchase row (PurchaseReportRowDto).
+class PurchaseReportRow {
+  final String supplierId;
+  final String supplierName;
+  final int grnCount;
+  final double subtotal;
+
+  PurchaseReportRow({
+    required this.supplierId,
+    required this.supplierName,
+    required this.grnCount,
+    required this.subtotal,
+  });
+
+  factory PurchaseReportRow.fromJson(Map<String, dynamic> j) => PurchaseReportRow(
+        supplierId: _s(j['supplierId']),
+        supplierName: _s(j['supplierName']),
+        grnCount: _i(j['grnCount']),
+        subtotal: _d(j['subtotal']),
+      );
+}
+
+/// Purchase report (PurchaseReportDto) — posted goods receipts by supplier.
+class PurchaseReport {
+  final List<PurchaseReportRow> rows;
+  final int totalGrns;
+  final double grandTotal;
+  final String currency;
+
+  PurchaseReport({
+    required this.rows,
+    required this.totalGrns,
+    required this.grandTotal,
+    required this.currency,
+  });
+
+  factory PurchaseReport.fromJson(Map<String, dynamic> j) => PurchaseReport(
+        rows: ((j['rows'] as List?) ?? [])
+            .map((e) => PurchaseReportRow.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        totalGrns: _i(j['totalGrns']),
+        grandTotal: _d(j['grandTotal']),
+        currency: _s(j['currency']),
+      );
+}
+
+/// One stock-valuation category row (CategoryValueRow).
+class StockValuationRow {
+  final String categoryId;
+  final String categoryName;
+  final double value;
+
+  StockValuationRow({required this.categoryId, required this.categoryName, required this.value});
+
+  factory StockValuationRow.fromJson(Map<String, dynamic> j) => StockValuationRow(
+        categoryId: _s(j['categoryId']),
+        categoryName: _s(j['categoryName']),
+        value: _d(j['value']),
+      );
+}
+
+/// Stock valuation snapshot (StockValuationDto). Point-in-time, no date range.
+class StockValuation {
+  final double totalValue;
+  final List<StockValuationRow> byCategory;
+
+  StockValuation({required this.totalValue, required this.byCategory});
+
+  factory StockValuation.fromJson(Map<String, dynamic> j) => StockValuation(
+        totalValue: _d(j['totalValue']),
+        byCategory: ((j['byCategory'] as List?) ?? [])
+            .map((e) => StockValuationRow.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}

@@ -1,3 +1,4 @@
+using BornoBit.Restaurant.Api.Services;
 using BornoBit.Restaurant.Application.Dining.Queries;
 using BornoBit.Restaurant.Application.Operations.Dashboard;
 using BornoBit.Restaurant.Application.Operations.Sessions;
@@ -69,60 +70,68 @@ public static class WaiterEndpoints
             }));
 
         // ---------- session actions ----------
-        group.MapPost("/sessions/open", (OpenSessionRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/sessions/open", (OpenSessionRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new OpenSessionCommand(body.TableId, body.GuestCount), ct);
+                await live.NotifyAsync(LiveScopes.Sessions, ct);
                 return Results.Ok(result);
             }));
 
-        group.MapPost("/sessions/{id:guid}/guests", (Guid id, GuestsRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/sessions/{id:guid}/guests", (Guid id, GuestsRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new ChangeSessionGuestCountCommand(id, body.GuestCount), ct);
+                await live.NotifyAsync(LiveScopes.Sessions, ct);
                 return Results.NoContent();
             }));
 
-        group.MapPost("/sessions/{id:guid}/move", (Guid id, MoveRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/sessions/{id:guid}/move", (Guid id, MoveRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new MoveSessionTableCommand(id, body.TargetTableId), ct);
+                await live.NotifyAsync(LiveScopes.Sessions, ct);
                 return Results.NoContent();
             }));
 
-        group.MapPost("/sessions/{id:guid}/merge", (Guid id, MergeRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/sessions/{id:guid}/merge", (Guid id, MergeRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new MergeSessionsCommand(id, body.SourceSessionIds ?? new List<Guid>()), ct);
+                await live.NotifyAsync(LiveScopes.Sessions, ct);
                 return Results.NoContent();
             }));
 
-        group.MapPost("/sessions/{id:guid}/split", (Guid id, SplitRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/sessions/{id:guid}/split", (Guid id, SplitRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new SplitSessionCommand(
                     id, body.OrderIds ?? new List<Guid>(), body.TargetTableId, body.GuestCount), ct);
+                await live.NotifyAsync(LiveScopes.Sessions, ct);
                 return Results.Ok(result);
             }));
 
-        group.MapPost("/sessions/{id:guid}/transfer-waiter", (Guid id, TransferWaiterRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/sessions/{id:guid}/transfer-waiter", (Guid id, TransferWaiterRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new TransferSessionWaiterCommand(id, body.WaiterUserId, body.WaiterName), ct);
+                await live.NotifyAsync(LiveScopes.Sessions, ct);
                 return Results.NoContent();
             }));
 
-        group.MapPost("/sessions/{id:guid}/request-payment", (Guid id, ISender sender, CancellationToken ct) =>
+        group.MapPost("/sessions/{id:guid}/request-payment", (Guid id, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new RequestCashierSettlementCommand(id), ct);
+                await live.NotifyAsync(LiveScopes.Sessions, ct);
                 return Results.NoContent();
             }));
 
-        group.MapPost("/sessions/{id:guid}/close", (Guid id, CloseRequest? body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/sessions/{id:guid}/close", (Guid id, CloseRequest? body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new CloseSessionCommand(id, body?.Reason), ct);
+                await live.NotifyAsync(LiveScopes.Sessions, ct);
                 return Results.NoContent();
             }))
             .RequireAuthorization("CanCloseSession");
@@ -134,34 +143,38 @@ public static class WaiterEndpoints
         group.MapGet("/orders/{id:guid}", (Guid id, ISender sender, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetOrderQuery(id), ct))));
 
-        group.MapPost("/orders", (PlaceWaiterOrderRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders", (PlaceWaiterOrderRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new PlaceWaiterOrderCommand(
                     body.CustomerPhone, body.CustomerName, body.TableId, body.Type, body.Notes,
                     ToLines(body.Lines), body.GuestCount, body.DiningSessionId), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
                 return Results.Created($"/waiter/orders/{result.OrderId}", result);
             }));
 
-        group.MapPut("/orders/{id:guid}/lines", (Guid id, UpdateLinesRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPut("/orders/{id:guid}/lines", (Guid id, UpdateLinesRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 var result = await sender.Send(new UpdateWaiterOrderLinesCommand(id, ToLines(body.Lines)), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
                 return Results.Ok(result);
             }));
 
-        group.MapPost("/orders/{id:guid}/status", (Guid id, ChangeStatusRequest body, ISender sender, CancellationToken ct) =>
+        group.MapPost("/orders/{id:guid}/status", (Guid id, ChangeStatusRequest body, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new ChangeOrderStatusCommand(id, body.Target, body.CancellationReason), ct);
+                await live.NotifyAsync(LiveScopes.Orders, ct);
                 return Results.NoContent();
             }));
 
         // ---------- customer requests ----------
-        group.MapPost("/requests/{id:guid}/resolve", (Guid id, ISender sender, CancellationToken ct) =>
+        group.MapPost("/requests/{id:guid}/resolve", (Guid id, ISender sender, ILiveNotifier live, CancellationToken ct) =>
             Exec(async () =>
             {
                 await sender.Send(new ResolveCustomerRequestCommand(id), ct);
+                await live.NotifyAsync(LiveScopes.Requests, ct);
                 return Results.NoContent();
             }));
 

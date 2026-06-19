@@ -85,6 +85,7 @@ public class GetCashCounterBoardQueryHandler : IRequestHandler<GetCashCounterBoa
                 o.TaxAmount,
                 o.ServiceChargeAmount,
                 o.TipAmount,
+                o.DeliveryChargeAmount,
                 o.RoundingAdjustment,
                 ItemCount = o.Lines.Count(),
                 Paid = _db.Payments
@@ -96,7 +97,7 @@ public class GetCashCounterBoardQueryHandler : IRequestHandler<GetCashCounterBoa
 
         var items = rows.Select(r =>
         {
-            var grand = Math.Max(0m, r.Subtotal - r.DiscountAmount + r.TaxAmount + r.ServiceChargeAmount + r.TipAmount + r.RoundingAdjustment);
+            var grand = Math.Max(0m, r.Subtotal - r.DiscountAmount + r.TaxAmount + r.ServiceChargeAmount + r.TipAmount + r.DeliveryChargeAmount + r.RoundingAdjustment);
             var balance = Math.Max(0m, grand - r.Paid);
             return new CashCounterRowDto(r.Id, r.OrderNumber, r.TableNumber, r.DiningSessionId, r.WaiterName,
                 r.OrderType, r.Status, r.PaymentStatus, grand, r.Paid, balance, r.ItemCount, r.OrderedAtUtc);

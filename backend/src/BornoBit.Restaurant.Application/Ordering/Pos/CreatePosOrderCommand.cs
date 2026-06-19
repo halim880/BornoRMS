@@ -2,6 +2,7 @@ using BornoBit.Restaurant.Application.Common.Numbering;
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Ordering.Commands;
 using BornoBit.Restaurant.Application.Ordering.Common;
+using BornoBit.Restaurant.Domain.Logistics;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Identity;
 using FluentValidation;
@@ -21,7 +22,8 @@ public record CreatePosOrderCommand(
     Guid? TableId,
     string? CustomerPhone,
     string? CustomerName,
-    string? CustomerAddress) : IRequest<PlaceOrderResult>;
+    string? CustomerAddress,
+    decimal DeliveryCharge = 0m) : IRequest<PlaceOrderResult>;
 
 public class CreatePosOrderCommandValidator : AbstractValidator<CreatePosOrderCommand>
 {
@@ -31,9 +33,14 @@ public class CreatePosOrderCommandValidator : AbstractValidator<CreatePosOrderCo
             .NotNull()
             .When(x => x.Type == OrderType.DineIn)
             .WithMessage("Dine-in orders require a table.");
+        RuleFor(x => x.CustomerAddress)
+            .NotEmpty()
+            .When(x => x.Type == OrderType.Delivery)
+            .WithMessage("Delivery orders require an address.");
         RuleFor(x => x.CustomerPhone).MaximumLength(40);
         RuleFor(x => x.CustomerName).MaximumLength(200);
         RuleFor(x => x.CustomerAddress).MaximumLength(500);
+        RuleFor(x => x.DeliveryCharge).GreaterThanOrEqualTo(0m);
     }
 }
 
@@ -81,6 +88,14 @@ public class CreatePosOrderCommandHandler : IRequestHandler<CreatePosOrderComman
         }
 
         _db.Orders.Add(order);
+
+        // Delivery orders carry a fee on the bill and open a dispatch/tracking record.
+        if (request.Type == OrderType.Delivery)
+        {
+            order.SetDeliveryCharge(request.DeliveryCharge);
+            _db.Deliveries.Add(Delivery.Create(order.Id, request.CustomerAddress!.Trim(), request.CustomerPhone));
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return new PlaceOrderResult(order.Id, order.OrderNumber, order.Total, order.Currency);

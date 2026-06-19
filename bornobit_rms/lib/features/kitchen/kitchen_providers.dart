@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/providers.dart';
+import '../../core/realtime/live_connection.dart';
 import 'kitchen_api.dart';
 import 'kitchen_models.dart';
 
@@ -17,6 +18,9 @@ final kitchenBoardProvider =
     AsyncNotifierProvider<KitchenBoardNotifier, KitchenConsole>(KitchenBoardNotifier.new);
 
 class KitchenBoardNotifier extends PollingNotifier<KitchenConsole> {
+  @override
+  List<String> get liveScopes => const [LiveScope.orders, LiveScope.kitchen];
+
   @override
   Future<KitchenConsole> fetch() async {
     final api = ref.read(staffApiProvider);

@@ -5,6 +5,7 @@ using BornoBit.Restaurant.Domain.Customers;
 using BornoBit.Restaurant.Domain.Dining;
 using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Domain.Kitchen;
+using BornoBit.Restaurant.Domain.Logistics;
 using BornoBit.Restaurant.Domain.Menus;
 using BornoBit.Restaurant.Domain.Numbering;
 using BornoBit.Restaurant.Domain.Ordering;
@@ -40,6 +41,9 @@ public interface IAppDbContext
     DbSet<Payment> Payments { get; }
     DbSet<KitchenStation> KitchenStations { get; }
 
+    DbSet<Rider> Riders { get; }
+    DbSet<Delivery> Deliveries { get; }
+
     DbSet<Tenant> Tenants { get; }
     DbSet<AppMenu> AppMenus { get; }
     DbSet<AppMenuRolePermission> AppMenuRolePermissions { get; }
@@ -56,6 +60,7 @@ public interface IAppDbContext
     DbSet<PurchaseOrder> PurchaseOrders { get; }
     DbSet<PurchaseOrderLine> PurchaseOrderLines { get; }
     DbSet<SupplierPayment> SupplierPayments { get; }
+    DbSet<PurchaseReturn> PurchaseReturns { get; }
 
     // Store / warehouse (isolated from POS Inventory)
     DbSet<StoreUnit> StoreUnits { get; }

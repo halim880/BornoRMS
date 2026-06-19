@@ -3,6 +3,8 @@ bin/
 obj/
 *.user
 backend/src/**/logs/
+logs/
+*.cs.tmp.*
 
 # Visual Studio
 .vs/

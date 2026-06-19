@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/dtos.dart';
 import '../../core/providers/providers.dart';
+import '../../core/realtime/live_connection.dart';
 import 'waiter_api.dart';
 import 'waiter_models.dart';
 
@@ -26,6 +27,16 @@ final waiterConsoleProvider =
     AsyncNotifierProvider<WaiterConsoleNotifier, WaiterConsoleData>(WaiterConsoleNotifier.new);
 
 class WaiterConsoleNotifier extends PollingNotifier<WaiterConsoleData> {
+  @override
+  List<String> get liveScopes => const [
+        LiveScope.orders,
+        LiveScope.kitchen,
+        LiveScope.sessions,
+        LiveScope.tables,
+        LiveScope.requests,
+        LiveScope.payments,
+      ];
+
   @override
   Future<WaiterConsoleData> fetch() async {
     final api = ref.read(staffApiProvider);

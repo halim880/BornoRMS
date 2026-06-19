@@ -22,9 +22,10 @@ class AppConfig {
   /// All staff endpoints live under the versioned group (/api/v1/...).
   static const String apiPrefix = '/api/v1';
 
-  /// Dashboard re-fetch cadence. The Blazor console pushes live updates over
-  /// SignalR; Phase 1 mirrors that with polling (SignalR is deferred).
-  static const Duration pollInterval = Duration(seconds: 15);
+  /// Fallback re-fetch cadence. The API now pushes live "changed" ticks over
+  /// SignalR (`/hubs/live`), so screens refresh on demand; this timer only backstops
+  /// a dropped socket. Kept generous to avoid hammering the API when ticks are flowing.
+  static const Duration pollInterval = Duration(seconds: 60);
 
   /// Resolves a product `imagePath` (e.g. "/img/products/x.jpg") to an absolute
   /// URL against the API host. Returns null for empty paths.
