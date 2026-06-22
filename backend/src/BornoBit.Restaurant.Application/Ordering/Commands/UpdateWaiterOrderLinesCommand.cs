@@ -1,9 +1,12 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Inventory.Consumption;
+using BornoBit.Restaurant.Application.Ordering.Printing;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BornoBit.Restaurant.Application.Ordering.Commands;
 
@@ -35,8 +38,18 @@ public class UpdateWaiterOrderLinesCommandValidator : AbstractValidator<UpdateWa
 public class UpdateWaiterOrderLinesCommandHandler : IRequestHandler<UpdateWaiterOrderLinesCommand, PlaceOrderResult>
 {
     private readonly IAppDbContext _db;
+    private readonly IStockConsumptionService _consumption;
+    private readonly IKitchenTicketSender _kot;
+    private readonly ILogger<UpdateWaiterOrderLinesCommandHandler> _logger;
 
-    public UpdateWaiterOrderLinesCommandHandler(IAppDbContext db) => _db = db;
+    public UpdateWaiterOrderLinesCommandHandler(IAppDbContext db, IStockConsumptionService consumption,
+        IKitchenTicketSender kot, ILogger<UpdateWaiterOrderLinesCommandHandler> logger)
+    {
+        _db = db;
+        _consumption = consumption;
+        _kot = kot;
+        _logger = logger;
+    }
 
     public async Task<PlaceOrderResult> Handle(UpdateWaiterOrderLinesCommand request, CancellationToken cancellationToken)
     {
@@ -49,6 +62,12 @@ public class UpdateWaiterOrderLinesCommandHandler : IRequestHandler<UpdateWaiter
             throw new ConflictException($"Order {order.OrderNumber} is {order.Status} and cannot be modified.");
         if (order.IsPaid)
             throw new ConflictException($"Order {order.OrderNumber} is already paid.");
+
+        // If the kitchen already deducted stock (order confirmed) we must keep inventory in step as lines
+        // change: deduct added lines, restore removed ones, and net quantity changes. Captured up front
+        // because the per-line helpers read the line's current quantity.
+        var wasSynced = order.StockSyncStatus == StockSyncStatus.Synced;
+        var addedLines = new List<OrderLine>();
 
         // Desired state, duplicates merged. The grouping key includes the chosen add-on options, so two
         // lines of the same product+variant with different modifiers stay distinct.
@@ -87,21 +106,44 @@ public class UpdateWaiterOrderLinesCommandHandler : IRequestHandler<UpdateWaiter
                 _db.OrderLines.Add(line);
                 foreach (var m in OrderLineResolver.ResolveModifiers(products, productId, optionIds))
                     _db.OrderLineModifiers.Add(line.AddModifier(m.OptionId, m.GroupName, m.OptionName, m.PriceDelta));
+                addedLines.Add(line);
             }
         }
 
-        // Update quantities of kept lines, remove lines no longer wanted.
+        // Update quantities of kept lines, remove lines no longer wanted. Keep stock in step when the
+        // order was already deducted: restore a removed line, and net a quantity change by reversing the
+        // old quantity then consuming the new one (both helpers read line.Quantity).
         foreach (var line in order.Lines.ToList())
         {
             var key = LineOptKey(line);
             var match = desired.FirstOrDefault(d => d.ProductId == line.MenuItemId && d.VariantId == line.VariantId && d.OptKey == key);
             if (match.ProductId == Guid.Empty)
+            {
+                if (wasSynced) await _consumption.ReverseLineAsync(_db, order, line, cancellationToken);
                 order.RemoveLine(line.Id);
+            }
             else if (line.Quantity != match.Quantity)
+            {
+                if (wasSynced) await _consumption.ReverseLineAsync(_db, order, line, cancellationToken);
                 order.SetLineQuantity(line.Id, match.Quantity);
+                if (wasSynced) await _consumption.ConsumeLineAsync(_db, order, line, cancellationToken);
+            }
         }
 
+        // Deduct stock for any newly added lines (modifiers are already attached in-memory).
+        if (wasSynced)
+            foreach (var line in addedLines)
+                await _consumption.ConsumeLineAsync(_db, order, line, cancellationToken);
+
+        // The lines changed after the kitchen fired — re-dispatch an amended KOT so the cooks aren't on a
+        // stale ticket. (No-op if the order never printed one.)
+        var reprint = order.KotPrintStatus == KotPrintStatus.Printed;
+        if (reprint) order.ResetKotForReprint();
+
         await _db.SaveChangesAsync(cancellationToken);
+
+        if (reprint)
+            await OrderKotSync.TryDispatchAsync(_db, _kot, order, _logger, cancellationToken);
 
         return new PlaceOrderResult(order.Id, order.OrderNumber, order.Total, order.Currency);
     }

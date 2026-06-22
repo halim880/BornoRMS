@@ -30,10 +30,11 @@ public static class KitchenEndpoints
         // station / type / table / order-number filters (mirrors the Blazor filters).
         group.MapGet("/board", (
             ISender sender,
-            Guid? stationId, OrderType? type, OrderStatus? status,
+            Guid? kitchenId, Guid? stationId, OrderType? type, OrderStatus? status,
             string? tableNumber, string? search, DateOnly? date,
             CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetKitchenBoardQuery(
+                KitchenId: kitchenId,
                 StationId: stationId,
                 Type: type,
                 Status: status,
@@ -44,6 +45,42 @@ public static class KitchenEndpoints
         group.MapGet("/stations", (ISender sender, bool? includeInactive, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(
                 new GetKitchenStationsQuery(includeInactive ?? false), ct))));
+
+        // ---------- kitchens (physical kitchens grouping stations) ----------
+        group.MapGet("/kitchens", (ISender sender, bool? includeInactive, CancellationToken ct) =>
+            Exec(async () => Results.Ok(await sender.Send(
+                new GetKitchensQuery(includeInactive ?? false), ct))));
+
+        group.MapPost("/kitchens", (CreateKitchenRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var id = await sender.Send(new CreateKitchenCommand(
+                    body.Name, body.Code, body.ColorHex, body.PrinterName, body.DisplayOrder), ct);
+                return Results.Ok(new { id });
+            }));
+
+        group.MapPut("/kitchens/{id:guid}", (Guid id, UpdateKitchenRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                await sender.Send(new UpdateKitchenCommand(
+                    id, body.Name, body.Code, body.ColorHex, body.PrinterName, body.DisplayOrder), ct);
+                return Results.NoContent();
+            }));
+
+        group.MapPost("/kitchens/{id:guid}/active", (Guid id, ToggleActiveRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                await sender.Send(new ToggleKitchenActiveCommand(id, body.IsActive), ct);
+                return Results.NoContent();
+            }));
+
+        // Route a station to a kitchen (null clears → default kitchen).
+        group.MapPost("/stations/{id:guid}/kitchen", (Guid id, AssignStationKitchenRequest body, ISender sender, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                await sender.Send(new AssignStationKitchenCommand(id, body.KitchenId), ct);
+                return Results.NoContent();
+            }));
 
         group.MapGet("/metrics", (ISender sender, CancellationToken ct) =>
             Exec(async () => Results.Ok(await sender.Send(new GetKitchenPerformanceQuery(), ct))));
@@ -59,12 +96,13 @@ public static class KitchenEndpoints
         // Aggregate read: board + stations + metrics in one round-trip (cuts 3 polls to 1).
         group.MapGet("/console", (
             ISender sender,
-            Guid? stationId, OrderType? type, OrderStatus? status,
+            Guid? kitchenId, Guid? stationId, OrderType? type, OrderStatus? status,
             string? tableNumber, string? search, DateOnly? date,
             CancellationToken ct) =>
             Exec(async () =>
             {
                 var board = await sender.Send(new GetKitchenBoardQuery(
+                    KitchenId: kitchenId,
                     StationId: stationId,
                     Type: type,
                     Status: status,
@@ -72,8 +110,9 @@ public static class KitchenEndpoints
                     SearchOrderNumber: string.IsNullOrWhiteSpace(search) ? null : search,
                     Date: date), ct);
                 var stations = await sender.Send(new GetKitchenStationsQuery(), ct);
+                var kitchens = await sender.Send(new GetKitchensQuery(), ct);
                 var metrics = await sender.Send(new GetKitchenPerformanceQuery(), ct);
-                return Results.Ok(new { board, stations, metrics });
+                return Results.Ok(new { board, stations, kitchens, metrics });
             }));
 
         // ---------- order actions ----------
@@ -149,4 +188,8 @@ public static class KitchenEndpoints
     public record ChangeStatusRequest(OrderStatus Target, string? CancellationReason = null);
     public record PriorityRequest(bool IsPriority);
     public record NotesRequest(string? Notes);
+    public record CreateKitchenRequest(string Name, string? Code, string? ColorHex, string? PrinterName, int DisplayOrder);
+    public record UpdateKitchenRequest(string Name, string? Code, string? ColorHex, string? PrinterName, int DisplayOrder);
+    public record ToggleActiveRequest(bool IsActive);
+    public record AssignStationKitchenRequest(Guid? KitchenId);
 }

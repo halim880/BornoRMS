@@ -94,7 +94,8 @@ public partial class Products : ComponentBase
                 IsRequired = g.IsRequired,
                 Options = g.Options.Select(o => new OptionFormRow
                 {
-                    Id = o.Id, Name = o.Name, BanglaName = o.BanglaName, PriceDelta = o.PriceDelta
+                    Id = o.Id, Name = o.Name, BanglaName = o.BanglaName, PriceDelta = o.PriceDelta,
+                    InventoryItemId = o.InventoryItemId, ConsumeQtyBase = o.ConsumeQtyBase
                 }).ToList()
             }).ToList()
         };

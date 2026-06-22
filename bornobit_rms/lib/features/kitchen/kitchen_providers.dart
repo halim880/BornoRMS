@@ -7,6 +7,7 @@ import 'kitchen_models.dart';
 
 /// Active board filters. Mutating any of these re-fetches the board on the next
 /// poll tick (or immediately, via [kitchenBoardProvider.notifier.refresh]).
+final kitchenKitchenFilterProvider = StateProvider<String?>((ref) => null); // null = All kitchens
 final kitchenStationFilterProvider = StateProvider<String?>((ref) => null); // null = All stations
 final kitchenTypeFilterProvider = StateProvider<String?>((ref) => null); // null = All types
 final kitchenTableFilterProvider = StateProvider<String>((ref) => '');
@@ -25,6 +26,7 @@ class KitchenBoardNotifier extends PollingNotifier<KitchenConsole> {
   Future<KitchenConsole> fetch() async {
     final api = ref.read(staffApiProvider);
     return api.kitchenConsole(
+      kitchenId: ref.read(kitchenKitchenFilterProvider),
       stationId: ref.read(kitchenStationFilterProvider),
       type: ref.read(kitchenTypeFilterProvider),
       tableNumber: ref.read(kitchenTableFilterProvider),

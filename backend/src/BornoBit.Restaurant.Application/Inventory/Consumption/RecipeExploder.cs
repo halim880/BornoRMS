@@ -24,10 +24,18 @@ public static class RecipeExploder
     /// <summary>An order line reduced to the fields consumption needs.</summary>
     public record LineInput(Guid ProductId, Guid? VariantId, int Quantity);
 
+    /// <summary>A chosen add-on / modifier reduced to what consumption needs: its catalog option and how
+    /// many units of the line it applies to (so "extra meat" on a line of 2 deducts twice).</summary>
+    public record ModifierInput(Guid OptionId, int Quantity);
+
     public static async Task<IReadOnlyList<StockRequirement>> ExplodeAsync(
         IAppDbContext db, IReadOnlyCollection<LineInput> lines, CancellationToken ct)
+        => await ExplodeAsync(db, lines, Array.Empty<ModifierInput>(), ct);
+
+    public static async Task<IReadOnlyList<StockRequirement>> ExplodeAsync(
+        IAppDbContext db, IReadOnlyCollection<LineInput> lines, IReadOnlyCollection<ModifierInput> modifiers, CancellationToken ct)
     {
-        if (lines.Count == 0) return Array.Empty<StockRequirement>();
+        if (lines.Count == 0 && modifiers.Count == 0) return Array.Empty<StockRequirement>();
 
         var productIds = lines.Select(l => l.ProductId).Distinct().ToList();
 
@@ -97,6 +105,23 @@ public static class RecipeExploder
                     break;
 
                 // InventoryMethod.None → no stock impact.
+            }
+        }
+
+        // Add-ons / modifiers: each chosen option that links an inventory item deducts ConsumeQtyBase
+        // (in the item's base unit) per unit of the line it was applied to.
+        if (modifiers.Count > 0)
+        {
+            var optionIds = modifiers.Select(m => m.OptionId).Distinct().ToList();
+            var optionLinks = await db.ProductOptions
+                .Where(o => optionIds.Contains(o.Id) && o.InventoryItemId != null && o.ConsumeQtyBase > 0m)
+                .Select(o => new { o.Id, ItemId = o.InventoryItemId!.Value, o.ConsumeQtyBase })
+                .ToDictionaryAsync(o => o.Id, ct);
+
+            foreach (var mod in modifiers)
+            {
+                if (optionLinks.TryGetValue(mod.OptionId, out var link))
+                    Add(link.ItemId, link.ConsumeQtyBase * mod.Quantity);
             }
         }
 

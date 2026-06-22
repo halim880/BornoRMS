@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Domain.Catalog;
+using BornoBit.Restaurant.Domain.Inventory;
 using BornoBit.Restaurant.Domain.Kitchen;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -98,8 +99,16 @@ public class ProductOptionConfiguration : IEntityTypeConfiguration<ProductOption
         builder.Property(o => o.Name).IsRequired().HasMaxLength(100);
         builder.Property(o => o.BanglaName).HasMaxLength(100);
         builder.Property(o => o.PriceDelta).HasPrecision(18, 2);
+        builder.Property(o => o.ConsumeQtyBase).HasPrecision(18, 4);
 
         builder.HasIndex(o => new { o.OptionGroupId, o.DisplayOrder });
+        builder.HasIndex(o => o.InventoryItemId);
+
+        // Add-ons may consume an inventory item; SetNull so deleting the item just clears the link.
+        builder.HasOne<InventoryItem>()
+            .WithMany()
+            .HasForeignKey(o => o.InventoryItemId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 

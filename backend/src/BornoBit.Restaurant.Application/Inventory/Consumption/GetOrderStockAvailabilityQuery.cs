@@ -27,7 +27,7 @@ public class GetOrderStockAvailabilityQueryHandler : IRequestHandler<GetOrderSto
     public async Task<OrderStockAvailabilityDto> Handle(GetOrderStockAvailabilityQuery request, CancellationToken cancellationToken)
     {
         var order = await _db.Orders
-            .Include(o => o.Lines)
+            .Include(o => o.Lines).ThenInclude(l => l.Modifiers)
             .FirstOrDefaultAsync(o => o.Id == request.OrderId, cancellationToken)
             ?? throw new NotFoundException("Order not found.");
 
@@ -35,7 +35,13 @@ public class GetOrderStockAvailabilityQueryHandler : IRequestHandler<GetOrderSto
             .Select(l => new RecipeExploder.LineInput(l.MenuItemId, l.VariantId, l.Quantity))
             .ToList();
 
-        var requirements = await RecipeExploder.ExplodeAsync(_db, lines, cancellationToken);
+        var modifiers = order.Lines
+            .SelectMany(l => l.Modifiers
+                .Where(m => m.OptionId != null)
+                .Select(m => new RecipeExploder.ModifierInput(m.OptionId!.Value, l.Quantity)))
+            .ToList();
+
+        var requirements = await RecipeExploder.ExplodeAsync(_db, lines, modifiers, cancellationToken);
         if (requirements.Count == 0) return Empty;
 
         var itemIds = requirements.Select(r => r.InventoryItemId).ToList();

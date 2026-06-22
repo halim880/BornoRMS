@@ -1,4 +1,5 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
+using BornoBit.Restaurant.Application.Inventory.Consumption;
 using BornoBit.Restaurant.Application.Ordering.Printing;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
@@ -24,13 +25,15 @@ public class AcceptKitchenOrderCommandValidator : AbstractValidator<AcceptKitche
 public class AcceptKitchenOrderCommandHandler : IRequestHandler<AcceptKitchenOrderCommand, OrderStatus>
 {
     private readonly IAppDbContext _db;
+    private readonly IStockConsumptionService _consumption;
     private readonly IKitchenTicketSender _kot;
     private readonly ILogger<AcceptKitchenOrderCommandHandler> _logger;
 
     public AcceptKitchenOrderCommandHandler(
-        IAppDbContext db, IKitchenTicketSender kot, ILogger<AcceptKitchenOrderCommandHandler> logger)
+        IAppDbContext db, IStockConsumptionService consumption, IKitchenTicketSender kot, ILogger<AcceptKitchenOrderCommandHandler> logger)
     {
         _db = db;
+        _consumption = consumption;
         _kot = kot;
         _logger = logger;
     }
@@ -53,7 +56,12 @@ public class AcceptKitchenOrderCommandHandler : IRequestHandler<AcceptKitchenOrd
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Accept = fire: dispatch the kitchen ticket (idempotent + failure-tolerant).
+        // Accept = fire: the kitchen now owns the order, so deduct its stock here too (the other confirm
+        // paths — ChangeOrderStatus→Confirmed and POS quick-pay — already do). Idempotent + failure-tolerant,
+        // so it's a no-op if the order was already deducted.
+        await OrderStockSync.TryApplyAsync(_db, _consumption, order, _logger, cancellationToken);
+
+        // Dispatch the kitchen ticket (idempotent + failure-tolerant).
         await OrderKotSync.TryDispatchAsync(_db, _kot, order, _logger, cancellationToken);
 
         return order.Status;

@@ -8,10 +8,13 @@ namespace BornoBit.Restaurant.Application.Kitchen.Queries;
 
 /// <summary>
 /// The live kitchen board: open orders grouped into Pending / Preparing / Ready columns, optionally
-/// scoped to a single station (an order appears only if it has a line for that station, and its item
-/// list is filtered to that station's lines).
+/// scoped to a single kitchen and/or station. A line's kitchen is derived transitively from its station
+/// (station-less lines, and stations with no kitchen, fall back to the default kitchen). When a kitchen
+/// (or station) is selected an order appears only if it has a matching line, and its item list is filtered
+/// to those lines.
 /// </summary>
 public record GetKitchenBoardQuery(
+    Guid? KitchenId = null,
     Guid? StationId = null,
     OrderType? Type = null,
     OrderStatus? Status = null,
@@ -41,7 +44,7 @@ public record KitchenOrderCardDto(
     int ItemCount,
     IReadOnlyList<KitchenItemDto> Items);
 
-public record KitchenItemDto(int Quantity, string Name, string? Notes, Guid? StationId, string? StationName);
+public record KitchenItemDto(int Quantity, string Name, string? Notes, Guid? StationId, string? StationName, Guid? KitchenId, string? KitchenName);
 
 public class GetKitchenBoardQueryHandler : IRequestHandler<GetKitchenBoardQuery, KitchenBoardDto>
 {
@@ -61,6 +64,26 @@ public class GetKitchenBoardQueryHandler : IRequestHandler<GetKitchenBoardQuery,
     {
         var date = request.Date ?? _clock.Today;
         var (dayStart, dayEnd) = _clock.DayWindowUtc(date);
+
+        // Station → kitchen routing (small reference sets, loaded once). A line's kitchen is its station's
+        // kitchen; station-less lines and stations with no kitchen fall back to the default kitchen.
+        var stationKitchen = await _db.KitchenStations
+            .Select(s => new { s.Id, s.KitchenId })
+            .ToListAsync(cancellationToken);
+        var stationToKitchen = stationKitchen.ToDictionary(s => s.Id, s => s.KitchenId);
+
+        var kitchens = await _db.Kitchens
+            .Select(k => new { k.Id, k.Name, k.IsDefault })
+            .ToListAsync(cancellationToken);
+        var kitchenNames = kitchens.ToDictionary(k => k.Id, k => k.Name);
+        Guid? defaultKitchenId = kitchens.FirstOrDefault(k => k.IsDefault)?.Id;
+
+        Guid? ResolveKitchen(Guid? stationId)
+        {
+            if (stationId is { } sid && stationToKitchen.TryGetValue(sid, out var kid) && kid is { } resolved)
+                return resolved;
+            return defaultKitchenId;
+        }
 
         var query =
             from o in _db.Orders
@@ -84,6 +107,20 @@ public class GetKitchenBoardQueryHandler : IRequestHandler<GetKitchenBoardQuery,
         }
         if (request.StationId is { } stationId)
             query = query.Where(x => x.Order.Lines.Any(l => l.StationId == stationId));
+        if (request.KitchenId is { } kitchenFilter)
+        {
+            // Station ids that resolve to the target kitchen; if the target is the default kitchen,
+            // station-less lines (and stations with no kitchen) also belong to it.
+            var stationIdsForKitchen = stationToKitchen
+                .Where(kv => kv.Value == kitchenFilter || (defaultKitchenId == kitchenFilter && kv.Value == null))
+                .Select(kv => kv.Key)
+                .ToList();
+            var includeStationless = defaultKitchenId == kitchenFilter;
+
+            query = query.Where(x => x.Order.Lines.Any(l =>
+                (l.StationId.HasValue && stationIdsForKitchen.Contains(l.StationId.Value))
+                || (includeStationless && l.StationId == null)));
+        }
 
         var rows = await query
             .OrderByDescending(x => x.Order.IsPriority)
@@ -116,12 +153,17 @@ public class GetKitchenBoardQueryHandler : IRequestHandler<GetKitchenBoardQuery,
 
         var cards = rows.Select(r =>
         {
-            var lines = request.StationId is { } sid
-                ? r.Lines.Where(l => l.StationId == sid).ToList()
-                : r.Lines;
-
-            var items = lines
-                .Select(l => new KitchenItemDto(l.Quantity, l.Name, l.Notes, l.StationId, l.StationName))
+            // Resolve each line's kitchen, then narrow to the selected station/kitchen if filtered.
+            var lines = r.Lines
+                .Select(l =>
+                {
+                    var kid = ResolveKitchen(l.StationId);
+                    return new KitchenItemDto(
+                        l.Quantity, l.Name, l.Notes, l.StationId, l.StationName,
+                        kid, kid is { } k && kitchenNames.TryGetValue(k, out var name) ? name : null);
+                })
+                .Where(i => request.StationId is not { } sid || i.StationId == sid)
+                .Where(i => request.KitchenId is not { } kf || i.KitchenId == kf)
                 .ToList();
 
             var source = !string.IsNullOrWhiteSpace(r.WaiterName)
@@ -133,7 +175,7 @@ public class GetKitchenBoardQueryHandler : IRequestHandler<GetKitchenBoardQuery,
                 string.IsNullOrWhiteSpace(r.FullName) ? null : r.FullName,
                 r.OrderedAtUtc, r.PreparingAtUtc, r.ReadyAtUtc,
                 r.IsPriority, r.KitchenNotes, r.CustomerNotes, source,
-                items.Sum(i => i.Quantity), items);
+                lines.Sum(i => i.Quantity), lines);
         }).ToList();
 
         return new KitchenBoardDto(

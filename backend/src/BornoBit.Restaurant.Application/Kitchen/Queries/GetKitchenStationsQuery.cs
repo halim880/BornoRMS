@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BornoBit.Restaurant.Application.Kitchen.Queries;
 
-public record KitchenStationDto(Guid Id, string Name, string? Code, string? ColorHex, int DisplayOrder, bool IsActive);
+public record KitchenStationDto(Guid Id, string Name, string? Code, string? ColorHex, Guid? KitchenId, int DisplayOrder, bool IsActive);
 
 /// <summary>Active kitchen stations, ordered for the board's station tabs and the product station picker.</summary>
 public record GetKitchenStationsQuery(bool IncludeInactive = false) : IRequest<IReadOnlyList<KitchenStationDto>>;
@@ -23,7 +23,7 @@ public class GetKitchenStationsQueryHandler : IRequestHandler<GetKitchenStations
 
         return await query
             .OrderBy(s => s.DisplayOrder).ThenBy(s => s.Name)
-            .Select(s => new KitchenStationDto(s.Id, s.Name, s.Code, s.ColorHex, s.DisplayOrder, s.IsActive))
+            .Select(s => new KitchenStationDto(s.Id, s.Name, s.Code, s.ColorHex, s.KitchenId, s.DisplayOrder, s.IsActive))
             .ToListAsync(cancellationToken);
     }
 }

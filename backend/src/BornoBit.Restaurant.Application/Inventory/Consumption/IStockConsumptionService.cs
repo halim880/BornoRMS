@@ -31,4 +31,12 @@ public interface IStockConsumptionService
     /// no stock impact. Requires <c>order.Lines</c> loaded.
     /// </summary>
     Task ReverseLineAsync(IAppDbContext db, Order order, OrderLine line, CancellationToken ct);
+
+    /// <summary>
+    /// Deducts just one line's stock (a line added to an order that was already stock-synced — e.g. a
+    /// waiter adds an item after the kitchen fired): writes <c>ConsumptionOut</c> rows referencing the
+    /// order. Leaves the order's <see cref="Order.StockSyncStatus"/> unchanged. No-op if the line has no
+    /// stock impact. The line's <c>Modifiers</c> must be attached (in-memory is fine).
+    /// </summary>
+    Task ConsumeLineAsync(IAppDbContext db, Order order, OrderLine line, CancellationToken ct);
 }

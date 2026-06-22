@@ -10,7 +10,7 @@ public record OptionGroupSpec(
     int MinSelections,
     int MaxSelections,
     int DisplayOrder,
-    IReadOnlyList<(Guid? Id, string Name, string? BanglaName, decimal PriceDelta, int DisplayOrder)> Options);
+    IReadOnlyList<(Guid? Id, string Name, string? BanglaName, decimal PriceDelta, int DisplayOrder, Guid? InventoryItemId, decimal ConsumeQtyBase)> Options);
 
 /// <summary>
 /// A set of modifier / add-on choices attached to a product — e.g. "Spice level" (single, required)
@@ -39,7 +39,8 @@ public class ProductOptionGroup : BaseEntity
     /// <summary>True when only a single option may be picked (radio rather than checkboxes).</summary>
     public bool IsSingleSelect => MaxSelections <= 1;
 
-    public ProductOption AddOption(string name, decimal priceDelta, int displayOrder = 0, string? banglaName = null)
+    public ProductOption AddOption(string name, decimal priceDelta, int displayOrder = 0, string? banglaName = null,
+        Guid? inventoryItemId = null, decimal consumeQtyBase = 0m)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Option name is required.", nameof(name));
 
@@ -50,14 +51,16 @@ public class ProductOptionGroup : BaseEntity
             BanglaName = string.IsNullOrWhiteSpace(banglaName) ? null : banglaName.Trim(),
             PriceDelta = priceDelta,
             DisplayOrder = displayOrder,
-            IsActive = true
+            IsActive = true,
+            InventoryItemId = inventoryItemId,
+            ConsumeQtyBase = inventoryItemId is null ? 0m : consumeQtyBase
         };
         _options.Add(option);
         return option;
     }
 
     /// <summary>Reconciles the option list with the desired state (update / add / remove). Requires Options loaded.</summary>
-    public void SyncOptions(IReadOnlyList<(Guid? Id, string Name, string? BanglaName, decimal PriceDelta, int DisplayOrder)> desired)
+    public void SyncOptions(IReadOnlyList<(Guid? Id, string Name, string? BanglaName, decimal PriceDelta, int DisplayOrder, Guid? InventoryItemId, decimal ConsumeQtyBase)> desired)
     {
         var keepIds = new HashSet<Guid>();
         foreach (var row in desired)
@@ -71,11 +74,13 @@ public class ProductOptionGroup : BaseEntity
                 existing.BanglaName = string.IsNullOrWhiteSpace(row.BanglaName) ? null : row.BanglaName.Trim();
                 existing.PriceDelta = row.PriceDelta;
                 existing.DisplayOrder = row.DisplayOrder;
+                existing.InventoryItemId = row.InventoryItemId;
+                existing.ConsumeQtyBase = row.InventoryItemId is null ? 0m : row.ConsumeQtyBase;
                 keepIds.Add(existing.Id);
             }
             else
             {
-                keepIds.Add(AddOption(row.Name, row.PriceDelta, row.DisplayOrder, row.BanglaName).Id);
+                keepIds.Add(AddOption(row.Name, row.PriceDelta, row.DisplayOrder, row.BanglaName, row.InventoryItemId, row.ConsumeQtyBase).Id);
             }
         }
         _options.RemoveAll(o => !keepIds.Contains(o.Id));

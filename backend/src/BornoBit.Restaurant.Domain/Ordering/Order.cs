@@ -521,6 +521,9 @@ public class Order : AuditableEntity
     public void MarkKotPrinted() => KotPrintStatus = KotPrintStatus.Printed;
     /// <summary>Marks the dispatch as failed so the retry worker re-attempts it.</summary>
     public void MarkKotFailed() => KotPrintStatus = KotPrintStatus.Failed;
+    /// <summary>Resets the ticket to un-printed so an amended order (line added/removed/changed after the
+    /// kitchen already fired) re-dispatches a fresh KOT instead of leaving the cooks on a stale ticket.</summary>
+    public void ResetKotForReprint() => KotPrintStatus = KotPrintStatus.NotPrinted;
 
     private void TransitionTo(OrderStatus next, OrderStatus expected)
     {

@@ -599,6 +599,40 @@ class DayEndReport {
       );
 }
 
+/// Sales ↔ GL reconciliation for a business day (GetSalesGlReconciliationQuery).
+class SalesGlReconciliation {
+  final String currency;
+  final double operationalTakings;
+  final double postedToBooks;
+  final double variance;
+  final int unaccountedOrders;
+  final double unaccountedAmount;
+  final List<String> blockedMethods;
+  final bool isReconciled;
+
+  SalesGlReconciliation({
+    required this.currency,
+    required this.operationalTakings,
+    required this.postedToBooks,
+    required this.variance,
+    required this.unaccountedOrders,
+    required this.unaccountedAmount,
+    required this.blockedMethods,
+    required this.isReconciled,
+  });
+
+  factory SalesGlReconciliation.fromJson(Map<String, dynamic> j) => SalesGlReconciliation(
+        currency: j['currency'] == null ? 'Tk' : _s(j['currency']),
+        operationalTakings: _d(j['operationalTakings']),
+        postedToBooks: _d(j['postedToBooks']),
+        variance: _d(j['variance']),
+        unaccountedOrders: _i(j['unaccountedOrders']),
+        unaccountedAmount: _d(j['unaccountedAmount']),
+        blockedMethods: (j['blockedMethods'] as List? ?? []).map((e) => e.toString()).toList(),
+        isReconciled: j['isReconciled'] as bool? ?? false,
+      );
+}
+
 // ---------------------------------------------------------------------------
 // reports — food cost
 // ---------------------------------------------------------------------------

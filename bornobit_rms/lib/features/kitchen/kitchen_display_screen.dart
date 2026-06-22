@@ -73,6 +73,13 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
   }
 
   // ---------- filter mutators (re-fetch board) ----------
+  void _setKitchen(String? id) {
+    ref.read(kitchenKitchenFilterProvider.notifier).state = id;
+    // Selecting a kitchen narrows to its stations; drop any station filter that no longer applies.
+    ref.read(kitchenStationFilterProvider.notifier).state = null;
+    _reload();
+  }
+
   void _setStation(String? id) {
     ref.read(kitchenStationFilterProvider.notifier).state = id;
     _reload();
@@ -96,6 +103,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
   void _clearFilters() {
     _tableController.clear();
     _searchController.clear();
+    ref.read(kitchenKitchenFilterProvider.notifier).state = null;
     ref.read(kitchenStationFilterProvider.notifier).state = null;
     ref.read(kitchenTypeFilterProvider.notifier).state = null;
     ref.read(kitchenTableFilterProvider.notifier).state = '';
@@ -106,6 +114,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(kitchenBoardProvider);
+    final kitchenId = ref.watch(kitchenKitchenFilterProvider);
     final stationId = ref.watch(kitchenStationFilterProvider);
     final typeFilter = ref.watch(kitchenTypeFilterProvider);
 
@@ -134,7 +143,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
                 error: async.hasError ? async.error : null,
                 value: async.valueOrNull,
                 onRetry: _reload,
-                data: (console) => _body(console, stationId, typeFilter),
+                data: (console) => _body(console, kitchenId, stationId, typeFilter),
               ),
             ),
           ],
@@ -143,22 +152,69 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
     );
   }
 
-  Widget _body(KitchenConsole console, String? stationId, String? typeFilter) {
+  Widget _body(KitchenConsole console, String? kitchenId, String? stationId, String? typeFilter) {
+    // When a kitchen is picked, the station tabs narrow to that kitchen's stations.
+    final stations = kitchenId == null
+        ? console.stations
+        : console.stations.where((s) => s.kitchenId == kitchenId).toList();
+    final multiKitchen = console.kitchens.length > 1;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _metrics(console.metrics),
+          if (multiKitchen) ...[
+            const SizedBox(height: 12),
+            _kitchenTabs(console.kitchens, kitchenId),
+          ],
           const SizedBox(height: 12),
-          _stationTabs(console.stations, stationId),
+          _stationTabs(stations, stationId),
           const SizedBox(height: 12),
           _filters(typeFilter),
           const SizedBox(height: 12),
-          _board(console.board, showStationTag: stationId == null),
+          // Show the kitchen tag on items only when viewing all kitchens; the station tag otherwise.
+          _board(console.board,
+              showStationTag: stationId == null,
+              showKitchenTag: multiKitchen && kitchenId == null),
         ],
       ),
     );
+  }
+
+  // ---------- kitchen tabs ----------
+  Widget _kitchenTabs(List<Kitchen> kitchens, String? selected) {
+    Widget tab(String label, String? id, String? colorHex) {
+      final on = selected == id;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(
+          avatar: colorHex != null
+              ? CircleAvatar(backgroundColor: _hexColor(colorHex), radius: 6)
+              : null,
+          label: Text(label),
+          selected: on,
+          onSelected: (_) => _setKitchen(id),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          tab('All Kitchens', null, null),
+          for (final k in kitchens) tab(k.name, k.id, k.colorHex),
+        ],
+      ),
+    );
+  }
+
+  static Color? _hexColor(String hex) {
+    var h = hex.replaceAll('#', '').trim();
+    if (h.length == 6) h = 'FF$h';
+    final v = int.tryParse(h, radix: 16);
+    return v == null ? null : Color(v);
   }
 
   // ---------- metrics ----------
@@ -279,14 +335,14 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
   }
 
   // ---------- board ----------
-  Widget _board(KitchenBoard board, {required bool showStationTag}) {
+  Widget _board(KitchenBoard board, {required bool showStationTag, required bool showKitchenTag}) {
     final t = AppLocalizations.of(context);
     return LayoutBuilder(
       builder: (context, c) {
         final cols = [
-          _column(t.kdsColPending, board.pending, 'neutral', showStationTag),
-          _column(t.kdsColPreparing, board.preparing, 'warning', showStationTag),
-          _column(t.kdsColReady, board.ready, 'primary', showStationTag),
+          _column(t.kdsColPending, board.pending, 'neutral', showStationTag, showKitchenTag),
+          _column(t.kdsColPreparing, board.preparing, 'warning', showStationTag, showKitchenTag),
+          _column(t.kdsColReady, board.ready, 'primary', showStationTag, showKitchenTag),
         ];
         // Wide layout: three side-by-side columns; narrow: stacked.
         if (c.maxWidth >= 900) {
@@ -312,7 +368,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
     );
   }
 
-  Widget _column(String title, List<KitchenOrderCard> cards, String tone, bool showStationTag) {
+  Widget _column(String title, List<KitchenOrderCard> cards, String tone, bool showStationTag, bool showKitchenTag) {
     final t = AppLocalizations.of(context);
     return SectionCard(
       title: title,
@@ -331,6 +387,7 @@ class _KitchenDisplayScreenState extends ConsumerState<KitchenDisplayScreen> {
                       card: card,
                       nowUtc: _nowUtc,
                       showStationTag: showStationTag,
+                      showKitchenTag: showKitchenTag,
                       busy: _busy,
                       onAccept: () => _act(
                         () => ref.read(staffApiProvider).kitchenAccept(card.id),
@@ -405,6 +462,7 @@ class _OrderCard extends StatelessWidget {
   final KitchenOrderCard card;
   final DateTime nowUtc;
   final bool showStationTag;
+  final bool showKitchenTag;
   final bool busy;
   final VoidCallback onAccept;
   final VoidCallback onAdvance;
@@ -415,6 +473,7 @@ class _OrderCard extends StatelessWidget {
     required this.card,
     required this.nowUtc,
     required this.showStationTag,
+    required this.showKitchenTag,
     required this.busy,
     required this.onAccept,
     required this.onAdvance,
@@ -498,6 +557,8 @@ class _OrderCard extends StatelessWidget {
                           Text(item.notes!, style: const TextStyle(fontSize: 11, color: Bo.warning)),
                         if (showStationTag && item.stationName != null && item.stationName!.isNotEmpty)
                           Text(item.stationName!, style: const TextStyle(fontSize: 10, color: Bo.textSubtle)),
+                        if (showKitchenTag && item.kitchenName != null && item.kitchenName!.isNotEmpty)
+                          Text(item.kitchenName!, style: const TextStyle(fontSize: 10, color: Bo.primaryEmphasis)),
                       ],
                     ),
                   ),

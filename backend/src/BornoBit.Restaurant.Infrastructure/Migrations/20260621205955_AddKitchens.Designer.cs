@@ -4,6 +4,7 @@ using BornoBit.Restaurant.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BornoBit.Restaurant.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260621205955_AddKitchens")]
+    partial class AddKitchens
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -947,15 +950,8 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<decimal>("ConsumeQtyBase")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
                     b.Property<int>("DisplayOrder")
                         .HasColumnType("int");
-
-                    b.Property<Guid?>("InventoryItemId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -973,8 +969,6 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("InventoryItemId");
 
                     b.HasIndex("OptionGroupId", "DisplayOrder");
 
@@ -4551,11 +4545,6 @@ namespace BornoBit.Restaurant.Infrastructure.Migrations
 
             modelBuilder.Entity("BornoBit.Restaurant.Domain.Catalog.ProductOption", b =>
                 {
-                    b.HasOne("BornoBit.Restaurant.Domain.Inventory.InventoryItem", null)
-                        .WithMany()
-                        .HasForeignKey("InventoryItemId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("BornoBit.Restaurant.Domain.Catalog.ProductOptionGroup", null)
                         .WithMany("Options")
                         .HasForeignKey("OptionGroupId")

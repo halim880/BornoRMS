@@ -1,6 +1,7 @@
 using BornoBit.Restaurant.Application.Common.Persistence;
 using BornoBit.Restaurant.Application.Common.Security;
 using BornoBit.Restaurant.Application.Inventory.Consumption;
+using BornoBit.Restaurant.Application.Ordering.Printing;
 using BornoBit.Restaurant.Domain.Identity;
 using BornoBit.Restaurant.Domain.Ordering;
 using BornoBit.Restaurant.Shared.Common;
@@ -8,6 +9,7 @@ using BornoBit.Restaurant.Shared.Identity;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BornoBit.Restaurant.Application.Ordering.Commands;
 
@@ -32,12 +34,17 @@ public class VoidOrderLineCommandHandler : IRequestHandler<VoidOrderLineCommand,
     private readonly IAppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly IStockConsumptionService _consumption;
+    private readonly IKitchenTicketSender _kot;
+    private readonly ILogger<VoidOrderLineCommandHandler> _logger;
 
-    public VoidOrderLineCommandHandler(IAppDbContext db, ICurrentUser currentUser, IStockConsumptionService consumption)
+    public VoidOrderLineCommandHandler(IAppDbContext db, ICurrentUser currentUser, IStockConsumptionService consumption,
+        IKitchenTicketSender kot, ILogger<VoidOrderLineCommandHandler> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _consumption = consumption;
+        _kot = kot;
+        _logger = logger;
     }
 
     public async Task<Unit> Handle(VoidOrderLineCommand request, CancellationToken cancellationToken)
@@ -68,7 +75,16 @@ public class VoidOrderLineCommandHandler : IRequestHandler<VoidOrderLineCommand,
         }
         catch (InvalidOperationException ex) { throw new ConflictException(ex.Message); }
 
+        // If the kitchen already has a ticket for this order, the void made it stale — re-dispatch an
+        // amended KOT (the void reason is now in KitchenNotes and shows on the ticket / KDS card).
+        var reprint = order.KotPrintStatus == KotPrintStatus.Printed;
+        if (reprint) order.ResetKotForReprint();
+
         await _db.SaveChangesAsync(cancellationToken);
+
+        if (reprint)
+            await OrderKotSync.TryDispatchAsync(_db, _kot, order, _logger, cancellationToken);
+
         return Unit.Value;
     }
 }

@@ -74,6 +74,11 @@ final dayEndProvider = FutureProvider.autoDispose<DayEndReport>((ref) {
   return ref.read(staffApiProvider).dayEnd(date: date);
 });
 
+final salesGlReconProvider = FutureProvider.autoDispose<SalesGlReconciliation>((ref) {
+  final date = ref.watch(dayEndDateProvider);
+  return ref.read(staffApiProvider).salesGlReconciliation(date: date);
+});
+
 final foodCostProvider = FutureProvider.autoDispose<FoodCostReport>((ref) {
   final w = _window(ref);
   return ref.read(staffApiProvider).foodCost(from: w.from, to: w.to);

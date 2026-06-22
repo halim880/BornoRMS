@@ -27,4 +27,8 @@ public class OptionFormRow
     public string Name { get; set; } = string.Empty;
     public string? BanglaName { get; set; }
     public decimal PriceDelta { get; set; }
+    /// <summary>Optional inventory item this add-on consumes when chosen (null = no stock impact).</summary>
+    public Guid? InventoryItemId { get; set; }
+    /// <summary>How much of the item to deduct per line unit, in the item's base unit.</summary>
+    public decimal ConsumeQtyBase { get; set; }
 }

@@ -10,12 +10,47 @@ String _s(dynamic v) => v?.toString() ?? '';
 String? _sOrNull(dynamic v) => v?.toString();
 DateTime? _dt(dynamic v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
 
-/// A kitchen station (board tab + per-line routing).
+/// A physical kitchen (board selector + per-ticket routing). Groups stations.
+class Kitchen {
+  final String id;
+  final String name;
+  final String? code;
+  final String? colorHex;
+  final String? printerName;
+  final int displayOrder;
+  final bool isDefault;
+  final bool isActive;
+
+  Kitchen({
+    required this.id,
+    required this.name,
+    required this.code,
+    required this.colorHex,
+    required this.printerName,
+    required this.displayOrder,
+    required this.isDefault,
+    required this.isActive,
+  });
+
+  factory Kitchen.fromJson(Map<String, dynamic> j) => Kitchen(
+        id: _s(j['id']),
+        name: _s(j['name']),
+        code: _sOrNull(j['code']),
+        colorHex: _sOrNull(j['colorHex']),
+        printerName: _sOrNull(j['printerName']),
+        displayOrder: _i(j['displayOrder']),
+        isDefault: j['isDefault'] as bool? ?? false,
+        isActive: j['isActive'] as bool? ?? true,
+      );
+}
+
+/// A kitchen station (board tab + per-line routing). Belongs to a [Kitchen].
 class KitchenStation {
   final String id;
   final String name;
   final String? code;
   final String? colorHex;
+  final String? kitchenId;
   final int displayOrder;
   final bool isActive;
 
@@ -24,6 +59,7 @@ class KitchenStation {
     required this.name,
     required this.code,
     required this.colorHex,
+    required this.kitchenId,
     required this.displayOrder,
     required this.isActive,
   });
@@ -33,6 +69,7 @@ class KitchenStation {
         name: _s(j['name']),
         code: _sOrNull(j['code']),
         colorHex: _sOrNull(j['colorHex']),
+        kitchenId: _sOrNull(j['kitchenId']),
         displayOrder: _i(j['displayOrder']),
         isActive: j['isActive'] as bool? ?? true,
       );
@@ -45,6 +82,8 @@ class KitchenItem {
   final String? notes;
   final String? stationId;
   final String? stationName;
+  final String? kitchenId;
+  final String? kitchenName;
 
   KitchenItem({
     required this.quantity,
@@ -52,6 +91,8 @@ class KitchenItem {
     required this.notes,
     required this.stationId,
     required this.stationName,
+    required this.kitchenId,
+    required this.kitchenName,
   });
 
   factory KitchenItem.fromJson(Map<String, dynamic> j) => KitchenItem(
@@ -60,6 +101,8 @@ class KitchenItem {
         notes: _sOrNull(j['notes']),
         stationId: _sOrNull(j['stationId']),
         stationName: _sOrNull(j['stationName']),
+        kitchenId: _sOrNull(j['kitchenId']),
+        kitchenName: _sOrNull(j['kitchenName']),
       );
 }
 
@@ -188,11 +231,13 @@ class KitchenMetrics {
 class KitchenConsole {
   final KitchenBoard board;
   final List<KitchenStation> stations;
+  final List<Kitchen> kitchens;
   final KitchenMetrics metrics;
 
   KitchenConsole({
     required this.board,
     required this.stations,
+    required this.kitchens,
     required this.metrics,
   });
 
@@ -200,6 +245,9 @@ class KitchenConsole {
         board: KitchenBoard.fromJson(j['board'] as Map<String, dynamic>),
         stations: (j['stations'] as List? ?? [])
             .map((e) => KitchenStation.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        kitchens: (j['kitchens'] as List? ?? [])
+            .map((e) => Kitchen.fromJson(e as Map<String, dynamic>))
             .toList(),
         metrics: KitchenMetrics.fromJson(j['metrics'] as Map<String, dynamic>),
       );

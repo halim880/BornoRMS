@@ -22,7 +22,7 @@ public class GetProductOptionGroupsQueryHandler : IRequestHandler<GetProductOpti
                 g.Id, g.Name, g.BanglaName, g.MinSelections, g.MaxSelections, g.DisplayOrder,
                 g.Options
                     .OrderBy(o => o.DisplayOrder).ThenBy(o => o.Name)
-                    .Select(o => new ProductOptionDto(o.Id, o.Name, o.BanglaName, o.PriceDelta, o.DisplayOrder))
+                    .Select(o => new ProductOptionDto(o.Id, o.Name, o.BanglaName, o.PriceDelta, o.DisplayOrder, o.InventoryItemId, o.ConsumeQtyBase))
                     .ToList()))
             .ToListAsync(cancellationToken);
     }

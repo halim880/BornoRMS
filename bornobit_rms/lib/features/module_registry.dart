@@ -11,6 +11,7 @@ import 'waiter/waiter_screen.dart';
 
 // Wave 1 — kitchen, catalog, reports
 import 'kitchen/kitchen_display_screen.dart';
+import 'kitchen/kitchens_screen.dart';
 import 'catalog/products_screen.dart';
 import 'catalog/product_categories_screen.dart';
 import 'catalog/tables_screen.dart';
@@ -101,6 +102,7 @@ final Map<String, WidgetBuilder> moduleRoutes = {
   waiterRoute: (_) => const WaiterScreen(),
   // kitchen / catalog / reports
   kitchenDisplayRoute: (_) => const KitchenDisplayScreen(),
+  kitchensAdminRoute: (_) => const KitchensScreen(),
   productsRoute: (_) => const ProductsScreen(),
   productCategoriesRoute: (_) => const ProductCategoriesScreen(),
   tablesAdminRoute: (_) => const TablesScreen(),

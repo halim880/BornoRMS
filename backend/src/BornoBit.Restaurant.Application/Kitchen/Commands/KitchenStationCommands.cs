@@ -7,8 +7,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BornoBit.Restaurant.Application.Kitchen.Commands;
 
-public record CreateKitchenStationCommand(string Name, string? Code, string? ColorHex, int DisplayOrder) : IRequest<Guid>;
-public record UpdateKitchenStationCommand(Guid Id, string Name, string? Code, string? ColorHex, int DisplayOrder) : IRequest<Unit>;
+public record CreateKitchenStationCommand(string Name, string? Code, string? ColorHex, int DisplayOrder, Guid? KitchenId = null) : IRequest<Guid>;
+public record UpdateKitchenStationCommand(Guid Id, string Name, string? Code, string? ColorHex, int DisplayOrder, Guid? KitchenId = null) : IRequest<Unit>;
 public record ToggleKitchenStationActiveCommand(Guid Id, bool IsActive) : IRequest<Unit>;
 
 public class CreateKitchenStationCommandValidator : AbstractValidator<CreateKitchenStationCommand>
@@ -39,7 +39,7 @@ public class CreateKitchenStationCommandHandler : IRequestHandler<CreateKitchenS
 
     public async Task<Guid> Handle(CreateKitchenStationCommand request, CancellationToken cancellationToken)
     {
-        var station = KitchenStation.Create(request.Name, request.Code, request.ColorHex, request.DisplayOrder);
+        var station = KitchenStation.Create(request.Name, request.Code, request.ColorHex, request.DisplayOrder, request.KitchenId);
         _db.KitchenStations.Add(station);
         await _db.SaveChangesAsync(cancellationToken);
         return station.Id;
@@ -55,7 +55,7 @@ public class UpdateKitchenStationCommandHandler : IRequestHandler<UpdateKitchenS
     {
         var station = await _db.KitchenStations.FirstOrDefaultAsync(s => s.Id == request.Id, cancellationToken)
             ?? throw new NotFoundException("Kitchen station not found.");
-        station.UpdateDetails(request.Name, request.Code, request.ColorHex, request.DisplayOrder);
+        station.UpdateDetails(request.Name, request.Code, request.ColorHex, request.DisplayOrder, request.KitchenId);
         await _db.SaveChangesAsync(cancellationToken);
         return Unit.Value;
     }

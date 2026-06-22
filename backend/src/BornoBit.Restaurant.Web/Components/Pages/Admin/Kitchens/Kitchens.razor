@@ -1,0 +1,196 @@
+@page "/admin/kitchens"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+@using BornoBit.Restaurant.Application.Kitchen.Commands
+@using BornoBit.Restaurant.Application.Kitchen.Queries
+@using MediatR
+@inject ISender Mediator
+@inject IBoDialogService DialogService
+@inject IBoToastService ToastService
+
+<PageTitle>Kitchens · BornoBit.Restaurant</PageTitle>
+
+<div class="bo-page">
+    <PageHeader Title="Kitchens"
+                Description="Physical kitchens (e.g. Main Kitchen, Bar, Bakery). Each kitchen groups stations, has its own display and printer, and gets its own kitchen ticket per order.">
+        <Actions>
+            <button type="button" class="bo-btn bo-btn-primary" @onclick="ShowCreateAsync">+ New Kitchen</button>
+        </Actions>
+    </PageHeader>
+
+    @if (_loading)
+    {
+        <LoadingState Message="Loading kitchens…" />
+    }
+    else if (_error is not null)
+    {
+        <BoMessageBar Intent="error">@_error</BoMessageBar>
+    }
+    else
+    {
+        <div class="bo-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px;">Order</th>
+                        <th style="padding:10px 14px;">Name</th>
+                        <th style="padding:10px 14px;">Code</th>
+                        <th style="padding:10px 14px;">Printer</th>
+                        <th style="padding:10px 14px; text-align:center;">Default</th>
+                        <th style="padding:10px 14px; text-align:center;">Status</th>
+                        <th style="padding:10px 14px; text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var k in _kitchens)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px; font-family: ui-monospace, monospace; color: var(--bo-text-subtle);">@k.DisplayOrder</td>
+                            <td style="padding:10px 14px;">
+                                <span style="display:inline-flex; align-items:center; gap:8px;">
+                                    <span style="width:12px; height:12px; border-radius:3px; background:@(k.ColorHex ?? "#94a3b8"); display:inline-block;"></span>
+                                    <strong>@k.Name</strong>
+                                </span>
+                            </td>
+                            <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@(k.Code ?? "—")</span></td>
+                            <td style="padding:10px 14px; color: var(--bo-text-muted);">@(k.PrinterName ?? "(default)")</td>
+                            <td style="padding:10px 14px; text-align:center;">@(k.IsDefault ? "✓" : "")</td>
+                            <td style="padding:10px 14px; text-align:center;">
+                                <span class="bo-pill @(k.IsActive ? "bo-pill-active" : "bo-pill-inactive")">@(k.IsActive ? "Active" : "Inactive")</span>
+                            </td>
+                            <td style="padding:10px 14px; text-align:right;">
+                                <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ShowEditAsync(k))">Edit</button>
+                                @if (k.IsActive)
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(k, false))" disabled="@k.IsDefault">Deactivate</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="bo-btn bo-btn-ghost" @onclick="@(() => ToggleActiveAsync(k, true))">Activate</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <PageHeader Title="Station routing"
+                    Description="Each station belongs to one kitchen. A line's kitchen is derived from its station; unassigned stations fall back to the default kitchen." />
+
+        <div class="bo-card" style="padding:0; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="background:var(--bo-bg-soft); text-align:left;">
+                        <th style="padding:10px 14px;">Station</th>
+                        <th style="padding:10px 14px;">Code</th>
+                        <th style="padding:10px 14px; width:280px;">Kitchen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _stations)
+                    {
+                        <tr style="border-top:1px solid var(--bo-border-soft);">
+                            <td style="padding:10px 14px;"><strong>@s.Name</strong></td>
+                            <td style="padding:10px 14px;"><span class="bo-code bo-code-slate">@(s.Code ?? "—")</span></td>
+                            <td style="padding:10px 14px;">
+                                <BoSelect TOption="KitchenDto"
+                                          Items="@_activeKitchens"
+                                          OptionValue="@(k => k.Id.ToString())"
+                                          OptionText="@(k => k.Name)"
+                                          SelectedOption="@_activeKitchens.FirstOrDefault(k => k.Id == s.KitchenId)"
+                                          SelectedOptionChanged="@(k => OnStationKitchenChanged(s, k))"
+                                          Style="width:100%;" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<KitchenDto> _kitchens = new();
+    private List<KitchenDto> _activeKitchens = new();
+    private List<KitchenStationDto> _stations = new();
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            _kitchens = (await Mediator.Send(new GetKitchensQuery(IncludeInactive: true))).ToList();
+            _activeKitchens = _kitchens.Where(k => k.IsActive).ToList();
+            _stations = (await Mediator.Send(new GetKitchenStationsQuery(IncludeInactive: true))).ToList();
+        }
+        catch (Exception ex) { _error = $"Failed to load kitchens: {ex.Message}"; }
+        finally { _loading = false; }
+    }
+
+    private async Task ShowCreateAsync()
+    {
+        var nextOrder = _kitchens.Count == 0 ? 0 : _kitchens.Max(k => k.DisplayOrder) + 1;
+        var model = new KitchenFormModel { DisplayOrder = nextOrder };
+        var result = await DialogService.ShowAsync<KitchenFormDialog, KitchenFormModel>(model, new BoDialogOptions
+        {
+            Title = "New kitchen",
+            Width = "480px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is KitchenFormModel saved && saved.SavedId.HasValue)
+        {
+            ToastService.ShowSuccess($"Kitchen '{saved.Name}' created.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ShowEditAsync(KitchenDto k)
+    {
+        var model = new KitchenFormModel
+        {
+            Id = k.Id,
+            Name = k.Name,
+            Code = k.Code,
+            ColorHex = k.ColorHex,
+            PrinterName = k.PrinterName,
+            DisplayOrder = k.DisplayOrder
+        };
+        var result = await DialogService.ShowAsync<KitchenFormDialog, KitchenFormModel>(model, new BoDialogOptions
+        {
+            Title = $"Edit kitchen · {k.Name}",
+            Width = "480px",
+            DismissOnOverlayClick = false
+        });
+        if (!result.Cancelled && result.Data is KitchenFormModel saved && saved.SavedId.HasValue)
+        {
+            ToastService.ShowSuccess("Kitchen updated.");
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ToggleActiveAsync(KitchenDto k, bool active)
+    {
+        try
+        {
+            await Mediator.Send(new ToggleKitchenActiveCommand(k.Id, active));
+            ToastService.ShowSuccess($"Kitchen '{k.Name}' {(active ? "activated" : "deactivated")}.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+    }
+
+    private async Task OnStationKitchenChanged(KitchenStationDto station, KitchenDto? kitchen)
+    {
+        try
+        {
+            await Mediator.Send(new AssignStationKitchenCommand(station.Id, kitchen?.Id));
+            ToastService.ShowSuccess($"'{station.Name}' → {(kitchen?.Name ?? "default kitchen")}.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ToastService.ShowError(ex.Message); }
+    }
+}

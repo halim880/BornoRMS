@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 using System.Reflection;
+using KitchenEntity = BornoBit.Restaurant.Domain.Kitchen.Kitchen;
 
 namespace BornoBit.Restaurant.Infrastructure.Persistence;
 
@@ -51,6 +52,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<OrderLineModifier> OrderLineModifiers => Set<OrderLineModifier>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<KitchenStation> KitchenStations => Set<KitchenStation>();
+    public DbSet<KitchenEntity> Kitchens => Set<KitchenEntity>();
 
     public DbSet<Rider> Riders => Set<Rider>();
     public DbSet<Delivery> Deliveries => Set<Delivery>();

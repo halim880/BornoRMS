@@ -30,7 +30,14 @@ public class StockConsumptionService : IStockConsumptionService
             .Select(l => new RecipeExploder.LineInput(l.MenuItemId, l.VariantId, l.Quantity))
             .ToList();
 
-        var requirements = await RecipeExploder.ExplodeAsync(db, lines, ct);
+        // Chosen add-ons that link an inventory item also consume stock, scaled by the line quantity.
+        var modifiers = order.Lines
+            .SelectMany(l => l.Modifiers
+                .Where(m => m.OptionId != null)
+                .Select(m => new RecipeExploder.ModifierInput(m.OptionId!.Value, l.Quantity)))
+            .ToList();
+
+        var requirements = await RecipeExploder.ExplodeAsync(db, lines, modifiers, ct);
         if (requirements.Count == 0)
         {
             // Nothing in this order impacts stock (all None, or no recipe/link configured).
@@ -113,10 +120,50 @@ public class StockConsumptionService : IStockConsumptionService
         order.MarkStockReversed();
     }
 
+    public async Task ConsumeLineAsync(IAppDbContext db, Order order, OrderLine line, CancellationToken ct)
+    {
+        var input = new[] { new RecipeExploder.LineInput(line.MenuItemId, line.VariantId, line.Quantity) };
+        var modifiers = line.Modifiers
+            .Where(m => m.OptionId != null)
+            .Select(m => new RecipeExploder.ModifierInput(m.OptionId!.Value, line.Quantity))
+            .ToList();
+        var requirements = await RecipeExploder.ExplodeAsync(db, input, modifiers, ct);
+        if (requirements.Count == 0) return; // line has no stock impact
+
+        var itemIds = requirements.Select(r => r.InventoryItemId).ToList();
+        var items = await db.InventoryItems.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, ct);
+
+        var nowUtc = _time.GetUtcNow().UtcDateTime;
+        var reason = $"Order {order.OrderNumber} item added";
+
+        foreach (var req in requirements)
+        {
+            if (req.QtyBase <= 0m || !items.TryGetValue(req.InventoryItemId, out var item)) continue;
+
+            item.Consume(req.QtyBase);
+
+            db.StockMovements.Add(StockMovement.Create(
+                item.Id,
+                StockMovementType.ConsumptionOut,
+                qtyBase: -req.QtyBase,
+                occurredAtUtc: nowUtc,
+                unitCost: item.AvgCost,
+                reason: reason,
+                referenceType: OrderRef,
+                referenceId: order.Id));
+
+            await StockProjectionWriter.BumpAsync(db, item.Id, item.QtyOnHand, nowUtc, ct);
+        }
+    }
+
     public async Task ReverseLineAsync(IAppDbContext db, Order order, OrderLine line, CancellationToken ct)
     {
         var input = new[] { new RecipeExploder.LineInput(line.MenuItemId, line.VariantId, line.Quantity) };
-        var requirements = await RecipeExploder.ExplodeAsync(db, input, ct);
+        var modifiers = line.Modifiers
+            .Where(m => m.OptionId != null)
+            .Select(m => new RecipeExploder.ModifierInput(m.OptionId!.Value, line.Quantity))
+            .ToList();
+        var requirements = await RecipeExploder.ExplodeAsync(db, input, modifiers, ct);
         if (requirements.Count == 0) return; // line has no stock impact
 
         var itemIds = requirements.Select(r => r.InventoryItemId).ToList();

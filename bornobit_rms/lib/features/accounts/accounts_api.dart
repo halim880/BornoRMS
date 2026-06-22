@@ -191,6 +191,12 @@ extension AccountsApi on StaffApi {
         return DayEndReport.fromJson(res.data as Map<String, dynamic>);
       });
 
+  Future<SalesGlReconciliation> salesGlReconciliation({DateTime? date}) => client.guard(() async {
+        final res = await client.dio.get('$_base/reports/sales-gl-reconciliation',
+            queryParameters: {if (date != null) 'date': _dateOnly(date)});
+        return SalesGlReconciliation.fromJson(res.data as Map<String, dynamic>);
+      });
+
   Future<FoodCostReport> foodCost({DateTime? from, DateTime? to}) => client.guard(() async {
         final res =
             await client.dio.get('$_base/reports/food-cost', queryParameters: _range(from, to));

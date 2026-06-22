@@ -34,29 +34,70 @@ public sealed class PrintAgentKitchenTicketSender(
             : null;
         var customerName = await db.Customers.Where(c => c.Id == order.CustomerId).Select(c => c.FullName).FirstOrDefaultAsync(cancellationToken);
 
-        var request = BuildRequest(order, tableNumber, customerName, opts);
+        // A line's kitchen is its station's kitchen; station-less lines (and stations with no kitchen)
+        // fall back to the default kitchen. We print one ticket per kitchen, each to its own printer.
+        var stationKitchen = await db.KitchenStations
+            .Select(s => new { s.Id, s.KitchenId })
+            .ToListAsync(cancellationToken);
+        var stationToKitchen = stationKitchen.ToDictionary(s => s.Id, s => s.KitchenId);
 
-        var response = opts.IsHub
-            ? await SendViaHubAsync(request, opts, cancellationToken)
-            : await SendViaHttpAsync(request, cancellationToken);
+        var kitchens = await db.Kitchens
+            .Select(k => new { k.Id, k.Name, k.PrinterName, k.IsDefault })
+            .ToListAsync(cancellationToken);
+        var kitchenById = kitchens.ToDictionary(k => k.Id);
+        Guid? defaultKitchenId = kitchens.FirstOrDefault(k => k.IsDefault)?.Id;
 
-        return response is not null;
+        Guid? ResolveKitchen(Guid? stationId)
+        {
+            if (stationId is { } sid && stationToKitchen.TryGetValue(sid, out var kid) && kid is { } resolved)
+                return resolved;
+            return defaultKitchenId;
+        }
+
+        // Group the order's lines by resolved kitchen, preserving a stable order for printing.
+        var groups = order.Lines
+            .GroupBy(l => ResolveKitchen(l.StationId))
+            .OrderBy(g => g.Key is { } k && kitchenById.TryGetValue(k, out var info) ? info.Name : "~")
+            .ToList();
+
+        var allAcknowledged = true;
+        foreach (var group in groups)
+        {
+            string? kitchenName = group.Key is { } kid && kitchenById.TryGetValue(kid, out var info) ? info.Name : null;
+            string? kitchenPrinter = group.Key is { } kid2 && kitchenById.TryGetValue(kid2, out var info2) ? info2.PrinterName : null;
+
+            var request = BuildRequest(order, tableNumber, customerName, opts, group.ToList(), kitchenName, kitchenPrinter);
+
+            var response = opts.IsHub
+                ? await SendViaHubAsync(request, opts, cancellationToken)
+                : await SendViaHttpAsync(request, cancellationToken);
+
+            if (response is null) allAcknowledged = false;
+        }
+
+        // No lines ⇒ nothing to print; treat as acknowledged so the order isn't stuck Pending.
+        return allAcknowledged;
     }
 
-    private PrintJobRequest BuildRequest(Order order, string? tableNumber, string? customerName, PrintAgentOptions opts)
+    private PrintJobRequest BuildRequest(
+        Order order, string? tableNumber, string? customerName, PrintAgentOptions opts,
+        IReadOnlyList<OrderLine> lines, string? kitchenName, string? kitchenPrinter)
     {
         var b = branding.Value;
+        var label = string.IsNullOrWhiteSpace(kitchenName)
+            ? $"KOT · {order.OrderNumber}"
+            : $"KOT · {order.OrderNumber} · {kitchenName}";
         return new PrintJobRequest
         {
             JobId = Guid.NewGuid(),
             OrderId = order.Id,
-            PrinterName = opts.KitchenPrinterName ?? opts.PrinterName,
+            PrinterName = kitchenPrinter ?? opts.KitchenPrinterName ?? opts.PrinterName,
             KitchenTicket = new KitchenTicketPayload
             {
                 RestaurantName = b.Name,
                 TimeZoneId = b.TimeZoneId,
                 OrderNumber = order.OrderNumber,
-                TicketLabel = $"KOT · {order.OrderNumber}",
+                TicketLabel = label,
                 OrderType = order.OrderType.ToString(),
                 TableNumber = tableNumber,
                 CustomerName = customerName,
@@ -64,7 +105,7 @@ public sealed class PrintAgentKitchenTicketSender(
                 IsPriority = order.IsPriority,
                 KitchenNotes = order.KitchenNotes,
                 Notes = order.Notes,
-                Lines = order.Lines.Select(l => new KitchenTicketLinePayload
+                Lines = lines.Select(l => new KitchenTicketLinePayload
                 {
                     Name = l.Name,
                     Quantity = l.Quantity,

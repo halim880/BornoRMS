@@ -14,6 +14,7 @@ using BornoBit.Restaurant.Domain.Settings;
 using BornoBit.Restaurant.Domain.Store;
 using BornoBit.Restaurant.Domain.Tenants;
 using Microsoft.EntityFrameworkCore;
+using KitchenEntity = BornoBit.Restaurant.Domain.Kitchen.Kitchen;
 
 namespace BornoBit.Restaurant.Application.Common.Persistence;
 
@@ -40,6 +41,7 @@ public interface IAppDbContext
     DbSet<OrderLineModifier> OrderLineModifiers { get; }
     DbSet<Payment> Payments { get; }
     DbSet<KitchenStation> KitchenStations { get; }
+    DbSet<KitchenEntity> Kitchens { get; }
 
     DbSet<Rider> Riders { get; }
     DbSet<Delivery> Deliveries { get; }

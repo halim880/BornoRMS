@@ -59,6 +59,18 @@ public class ClosePeriodCommandHandler : IRequestHandler<ClosePeriodCommand, Uni
         if (draftsInMonth > 0)
             throw new ConflictException($"There are {draftsInMonth} draft journal entr(ies) dated in {request.Year}-{request.Month:00}. Post or void them before closing.");
 
+        // Sales reach the GL only via the Cash Counter import. Closing a month with paid-but-unimported orders
+        // would leave operational takings and the books permanently out of sync — block until they're imported.
+        var monthStart = new DateTime(request.Year, request.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var monthEnd = monthStart.AddMonths(1);
+        var unaccounted = await _db.Orders.CountAsync(
+            o => o.IsPaid && o.Status != Domain.Ordering.OrderStatus.Cancelled
+                 && o.AccountedAtUtc == null && o.PaidAtUtc != null
+                 && o.PaidAtUtc >= monthStart && o.PaidAtUtc < monthEnd,
+            cancellationToken);
+        if (unaccounted > 0)
+            throw new ConflictException($"There are {unaccounted} paid order(s) in {request.Year}-{request.Month:00} not yet imported into the books (Cash Counter → Import). Import them before closing.");
+
         var period = await _db.FiscalPeriods.FirstOrDefaultAsync(p => p.Year == request.Year && p.Month == request.Month, cancellationToken);
         if (period is null)
         {

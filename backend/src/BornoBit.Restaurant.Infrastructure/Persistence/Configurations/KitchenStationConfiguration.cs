@@ -1,6 +1,7 @@
 using BornoBit.Restaurant.Domain.Kitchen;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using KitchenEntity = BornoBit.Restaurant.Domain.Kitchen.Kitchen;
 
 namespace BornoBit.Restaurant.Infrastructure.Persistence.Configurations;
 
@@ -17,5 +18,11 @@ public class KitchenStationConfiguration : IEntityTypeConfiguration<KitchenStati
 
         builder.HasIndex(s => new { s.IsActive, s.DisplayOrder });
         builder.HasIndex(s => s.Name);
+        builder.HasIndex(s => s.KitchenId);
+
+        builder.HasOne<KitchenEntity>()
+            .WithMany()
+            .HasForeignKey(s => s.KitchenId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

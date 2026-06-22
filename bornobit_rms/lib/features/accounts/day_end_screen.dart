@@ -27,7 +27,12 @@ class DayEndScreen extends ConsumerWidget {
         PageHeader(
           title: 'Day End',
           subtitle: 'Reconcile one business day: sales, collection, drawers, expenses.',
-          actions: [RefreshAction(onPressed: () => ref.invalidate(dayEndProvider))],
+          actions: [
+            RefreshAction(onPressed: () {
+              ref.invalidate(dayEndProvider);
+              ref.invalidate(salesGlReconProvider);
+            }),
+          ],
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -53,6 +58,10 @@ class DayEndScreen extends ConsumerWidget {
               _PostToGlButton(date: date),
             ],
           ),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: _ReconciliationBanner(),
         ),
         Expanded(
           child: AsyncStateView<DayEndReport>(
@@ -160,6 +169,7 @@ class _PostToGlButtonState extends ConsumerState<_PostToGlButton> {
     try {
       final result = await ref.read(staffApiProvider).cashCounterImport(date: widget.date);
       ref.invalidate(dayEndProvider);
+      ref.invalidate(salesGlReconProvider);
       if (!mounted) return;
       final msg = result.count == 0
           ? 'Nothing to post — the books are already up to date.'
@@ -182,6 +192,61 @@ class _PostToGlButtonState extends ConsumerState<_PostToGlButton> {
           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
           : const Icon(Icons.account_balance, size: 16),
       label: const Text('Post to GL'),
+    );
+  }
+}
+
+/// Banner showing whether the day's operational takings match what reached the books, and why not.
+/// Green when reconciled; amber/red with the specific reasons (unimported orders, blocked methods) when not.
+class _ReconciliationBanner extends ConsumerWidget {
+  const _ReconciliationBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(salesGlReconProvider);
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (e, _) => const SizedBox.shrink(),
+      data: (r) {
+        final cur = r.currency;
+        final ok = r.isReconciled;
+        final reasons = <String>[
+          if (r.unaccountedOrders > 0)
+            '${r.unaccountedOrders} paid order(s) not yet posted to GL (${money(r.unaccountedAmount, cur)}) — tap "Post to GL".',
+          if (r.blockedMethods.isNotEmpty)
+            'No cash account for: ${r.blockedMethods.join(", ")} — create one in Cash Accounts, then post.',
+          if (r.unaccountedOrders == 0 && r.blockedMethods.isEmpty && r.variance.abs() >= 0.01)
+            'Takings and books differ by ${money(r.variance, cur)}.',
+        ];
+        final bg = ok ? Bo.successSoft : (r.blockedMethods.isNotEmpty ? Bo.dangerSoft : Bo.warningSoft);
+        final fg = ok ? Bo.success : (r.blockedMethods.isNotEmpty ? Bo.danger : Bo.warning);
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(Bo.radiusMd)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(ok ? Icons.verified : Icons.warning_amber_rounded, size: 18, color: fg),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    ok ? 'Reconciled — takings match the books.' : 'Not reconciled — books are behind the floor.',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: fg),
+                  ),
+                ),
+                Text('Floor ${money(r.operationalTakings, cur)}  ·  GL ${money(r.postedToBooks, cur)}',
+                    style: const TextStyle(color: Bo.textSubtle, fontSize: 12)),
+              ]),
+              for (final reason in reasons) ...[
+                const SizedBox(height: 4),
+                Text('• $reason', style: TextStyle(color: fg, fontSize: 12)),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

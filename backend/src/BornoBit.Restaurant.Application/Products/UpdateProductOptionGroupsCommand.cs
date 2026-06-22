@@ -31,6 +31,11 @@ public class UpdateProductOptionGroupsCommandValidator : AbstractValidator<Updat
                 o.RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
                 o.RuleFor(x => x.BanglaName).MaximumLength(100);
                 o.RuleFor(x => x.PriceDelta).GreaterThanOrEqualTo(0);
+                o.RuleFor(x => x.ConsumeQtyBase).GreaterThanOrEqualTo(0)
+                    .WithMessage("Add-on consumption quantity cannot be negative.");
+                o.RuleFor(x => x.ConsumeQtyBase).GreaterThan(0)
+                    .When(x => x.InventoryItemId != null)
+                    .WithMessage("Set how much stock this add-on consumes.");
             });
         });
     }
@@ -54,7 +59,7 @@ public class UpdateProductOptionGroupsCommandHandler : IRequestHandler<UpdatePro
 
         product.SyncOptionGroups(request.Groups.Select(g => new OptionGroupSpec(
             g.Id, g.Name, g.BanglaName, g.MinSelections, g.MaxSelections, g.DisplayOrder,
-            g.Options.Select(o => (o.Id, o.Name, o.BanglaName, o.PriceDelta, o.DisplayOrder)).ToList())).ToList());
+            g.Options.Select(o => (o.Id, o.Name, o.BanglaName, o.PriceDelta, o.DisplayOrder, o.InventoryItemId, o.ConsumeQtyBase)).ToList())).ToList());
 
         // The product is tracked, so new rows (pre-set Guid keys) would be saved as UPDATEs — mark Added.
         foreach (var g in product.OptionGroups.Where(g => !existingGroupIds.Contains(g.Id)))

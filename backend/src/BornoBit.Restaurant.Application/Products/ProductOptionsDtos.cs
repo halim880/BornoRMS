@@ -7,7 +7,9 @@ public record ProductOptionDto(
     string Name,
     string? BanglaName,
     decimal PriceDelta,
-    int DisplayOrder);
+    int DisplayOrder,
+    Guid? InventoryItemId = null,
+    decimal ConsumeQtyBase = 0m);
 
 public record ProductOptionGroupDto(
     Guid Id,
@@ -23,7 +25,8 @@ public record ProductOptionGroupDto(
 }
 
 /// <summary>Option row sent from the form; Id is null for new rows.</summary>
-public record OptionInput(Guid? Id, string Name, string? BanglaName, decimal PriceDelta, int DisplayOrder);
+public record OptionInput(Guid? Id, string Name, string? BanglaName, decimal PriceDelta, int DisplayOrder,
+    Guid? InventoryItemId = null, decimal ConsumeQtyBase = 0m);
 
 /// <summary>Option-group row sent from the form; Id is null for new rows.</summary>
 public record OptionGroupInput(

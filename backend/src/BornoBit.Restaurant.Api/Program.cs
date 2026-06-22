@@ -201,6 +201,7 @@ using (var scope = app.Services.CreateScope())
         await scope.ServiceProvider.GetRequiredService<MenuSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<TableSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<KitchenStationSeeder>().SeedAsync();
+        await scope.ServiceProvider.GetRequiredService<KitchenSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<CustomerSeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<InventorySeeder>().SeedAsync();
         await scope.ServiceProvider.GetRequiredService<UnitSeeder>().SeedAsync();

@@ -8,8 +8,9 @@ extension KitchenApi on StaffApi {
   String get _kds => '${AppConfig.apiPrefix}/staff/kitchen';
 
   // ---------- reads ----------
-  /// Board + stations + metrics in one round-trip, with the active filters.
+  /// Board + stations + kitchens + metrics in one round-trip, with the active filters.
   Future<KitchenConsole> kitchenConsole({
+    String? kitchenId,
     String? stationId,
     String? type,
     String? tableNumber,
@@ -17,6 +18,7 @@ extension KitchenApi on StaffApi {
   }) =>
       client.guard(() async {
         final res = await client.dio.get('$_kds/console', queryParameters: {
+          if (kitchenId != null) 'kitchenId': kitchenId,
           if (stationId != null) 'stationId': stationId,
           if (type != null) 'type': type,
           if (tableNumber != null && tableNumber.isNotEmpty) 'tableNumber': tableNumber,
@@ -26,6 +28,7 @@ extension KitchenApi on StaffApi {
       });
 
   Future<KitchenBoard> kitchenBoard({
+    String? kitchenId,
     String? stationId,
     String? type,
     String? tableNumber,
@@ -33,6 +36,7 @@ extension KitchenApi on StaffApi {
   }) =>
       client.guard(() async {
         final res = await client.dio.get('$_kds/board', queryParameters: {
+          if (kitchenId != null) 'kitchenId': kitchenId,
           if (stationId != null) 'stationId': stationId,
           if (type != null) 'type': type,
           if (tableNumber != null && tableNumber.isNotEmpty) 'tableNumber': tableNumber,
@@ -41,11 +45,67 @@ extension KitchenApi on StaffApi {
         return KitchenBoard.fromJson(res.data as Map<String, dynamic>);
       });
 
-  Future<List<KitchenStation>> kitchenStations() => client.guard(() async {
-        final res = await client.dio.get('$_kds/stations');
+  Future<List<KitchenStation>> kitchenStations({bool includeInactive = false}) =>
+      client.guard(() async {
+        final res = await client.dio.get('$_kds/stations',
+            queryParameters: {if (includeInactive) 'includeInactive': true});
         return (res.data as List)
             .map((e) => KitchenStation.fromJson(e as Map<String, dynamic>))
             .toList();
+      });
+
+  // ---------- kitchens (physical kitchens grouping stations) ----------
+  Future<List<Kitchen>> kitchens({bool includeInactive = false}) => client.guard(() async {
+        final res = await client.dio.get('$_kds/kitchens',
+            queryParameters: {if (includeInactive) 'includeInactive': true});
+        return (res.data as List)
+            .map((e) => Kitchen.fromJson(e as Map<String, dynamic>))
+            .toList();
+      });
+
+  Future<void> kitchenCreate({
+    required String name,
+    String? code,
+    String? colorHex,
+    String? printerName,
+    int displayOrder = 0,
+  }) =>
+      client.guard(() async {
+        await client.dio.post('$_kds/kitchens', data: {
+          'name': name,
+          'code': code,
+          'colorHex': colorHex,
+          'printerName': printerName,
+          'displayOrder': displayOrder,
+        });
+      });
+
+  Future<void> kitchenUpdate(
+    String id, {
+    required String name,
+    String? code,
+    String? colorHex,
+    String? printerName,
+    int displayOrder = 0,
+  }) =>
+      client.guard(() async {
+        await client.dio.put('$_kds/kitchens/$id', data: {
+          'name': name,
+          'code': code,
+          'colorHex': colorHex,
+          'printerName': printerName,
+          'displayOrder': displayOrder,
+        });
+      });
+
+  Future<void> kitchenSetActive(String id, bool isActive) => client.guard(() async {
+        await client.dio.post('$_kds/kitchens/$id/active', data: {'isActive': isActive});
+      });
+
+  /// Route a station to a kitchen (null clears → default kitchen).
+  Future<void> assignStationKitchen(String stationId, String? kitchenId) =>
+      client.guard(() async {
+        await client.dio.post('$_kds/stations/$stationId/kitchen', data: {'kitchenId': kitchenId});
       });
 
   Future<KitchenMetrics> kitchenMetrics() => client.guard(() async {

@@ -1,4 +1,5 @@
 @using BornoBit.Restaurant.Application.Products
+@using BornoBit.Restaurant.Application.Inventory.Items
 @using BornoBit.Restaurant.Web.Components.BornoUi
 @using FluentValidation
 @using MediatR
@@ -14,6 +15,7 @@
         <div class="bo-cmp-field-hint">
             Modifier &amp; add-on groups for <strong>@Content.ProductName</strong>. Single-select groups render as
             a choice (e.g. Spice level); multi-select as checkboxes (e.g. Add-ons). A price &gt; 0 is added to the line.
+            Link an add-on to a <strong>stock item + quantity</strong> (in the item's base unit) so choosing it deducts inventory.
         </div>
 
         @if (Content.Groups.Count == 0)
@@ -38,10 +40,20 @@
                 <div style="display:flex; flex-direction:column; gap:6px;">
                     @foreach (var option in group.Options)
                     {
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <BoInput @bind-Value="option.Name" Placeholder="Option, e.g. Extra cheese" Style="flex:1;" Maxlength="100" />
-                            <BoInput @bind-Value="option.BanglaName" Placeholder="বাংলা" Style="width:140px;" Maxlength="100" />
-                            <BoNumeric T="decimal" @bind-Value="option.PriceDelta" Label="" Style="width:120px;" Min="0" Step="0.01" />
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <BoInput @bind-Value="option.Name" Placeholder="Option, e.g. Extra cheese" Style="flex:1; min-width:140px;" Maxlength="100" />
+                            <BoInput @bind-Value="option.BanglaName" Placeholder="বাংলা" Style="width:120px;" Maxlength="100" />
+                            <BoNumeric T="decimal" @bind-Value="option.PriceDelta" Label="" Style="width:100px;" Min="0" Step="0.01" />
+                            <BoSelect TOption="InventoryItemDto"
+                                      Items="@_items"
+                                      OptionValue="@(i => i.Id.ToString())"
+                                      OptionText="@(i => $"{i.Name} ({i.UnitCode})")"
+                                      SelectedOption="@_items.FirstOrDefault(i => i.Id == option.InventoryItemId)"
+                                      SelectedOptionChanged="@(i => option.InventoryItemId = i?.Id)"
+                                      Placeholder="No stock impact"
+                                      Style="width:190px;" />
+                            <BoNumeric T="decimal" @bind-Value="option.ConsumeQtyBase" Label="" Placeholder="qty"
+                                       Style="width:90px;" Min="0" Step="0.001" Disabled="@(option.InventoryItemId is null)" />
                             <button type="button" class="bo-btn bo-btn-ghost" title="Remove option"
                                     @onclick="@(() => group.Options.Remove(option))">✕</button>
                         </div>
@@ -66,6 +78,14 @@
 
     private string? _error;
     private bool _busy;
+    private List<InventoryItemDto> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Active stock items to link add-ons to (large page → effectively all).
+        var page = await Mediator.Send(new GetInventoryItemsQuery(IncludeInactive: false, PageSize: 200));
+        _items = page.Items.OrderBy(i => i.Name).ToList();
+    }
 
     private void AddGroup() => Content.Groups.Add(new OptionGroupFormRow
     {
@@ -78,6 +98,7 @@
         if (Content.Groups.Any(g => string.IsNullOrWhiteSpace(g.Name))) { _error = "Every group needs a name."; return; }
         if (Content.Groups.Any(g => g.Options.Count == 0)) { _error = "Every group needs at least one option."; return; }
         if (Content.Groups.SelectMany(g => g.Options).Any(o => string.IsNullOrWhiteSpace(o.Name))) { _error = "Every option needs a name."; return; }
+        if (Content.Groups.SelectMany(g => g.Options).Any(o => o.InventoryItemId is not null && o.ConsumeQtyBase <= 0)) { _error = "A stock-linked add-on needs a consumption quantity greater than 0."; return; }
 
         var groups = Content.Groups.Select((g, gi) => new OptionGroupInput(
             g.Id,
@@ -92,7 +113,9 @@
                 o.Name.Trim(),
                 string.IsNullOrWhiteSpace(o.BanglaName) ? null : o.BanglaName.Trim(),
                 o.PriceDelta,
-                oi + 1)).ToList())).ToList();
+                oi + 1,
+                o.InventoryItemId,
+                o.InventoryItemId is null ? 0m : o.ConsumeQtyBase)).ToList())).ToList();
 
         _busy = true;
         try

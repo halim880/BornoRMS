@@ -155,6 +155,15 @@ public static class AccountsEndpoints
                 return Results.Ok(await sender.Send(new GetDayEndReportQuery(d), ct));
             }));
 
+        // Sales ↔ GL reconciliation for a day: operational takings vs what reached the books, plus the
+        // reasons they diverge (unimported orders, payment methods with no cash account).
+        group.MapGet("/reports/sales-gl-reconciliation", (ISender sender, DateTime? date, CancellationToken ct) =>
+            Exec(async () =>
+            {
+                var d = DateOnly.FromDateTime(date?.Date ?? DateTime.UtcNow.Date);
+                return Results.Ok(await sender.Send(new GetSalesGlReconciliationQuery(d), ct));
+            }));
+
         // Operational food-cost % report (consumption-based, in Inventory.Reports).
         group.MapGet("/reports/food-cost", (ISender sender, DateTime? from, DateTime? to, CancellationToken ct) =>
             Exec(async () =>

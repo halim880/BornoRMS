@@ -13,12 +13,14 @@ public class KitchenStation : AuditableEntity
     public string? Code { get; private set; }
     /// <summary>Optional accent colour (e.g. "#0E7490") used for the station tab/column on the board.</summary>
     public string? ColorHex { get; private set; }
+    /// <summary>The kitchen this station belongs to. Null ⇒ falls back to the default kitchen. See <see cref="Kitchen"/>.</summary>
+    public Guid? KitchenId { get; private set; }
     public int DisplayOrder { get; private set; }
     public bool IsActive { get; private set; } = true;
 
     private KitchenStation() { }
 
-    public static KitchenStation Create(string name, string? code = null, string? colorHex = null, int displayOrder = 0)
+    public static KitchenStation Create(string name, string? code = null, string? colorHex = null, int displayOrder = 0, Guid? kitchenId = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Station name is required.", nameof(name));
 
@@ -28,18 +30,23 @@ public class KitchenStation : AuditableEntity
             Code = Trim(code),
             ColorHex = Trim(colorHex),
             DisplayOrder = displayOrder,
+            KitchenId = kitchenId,
             IsActive = true
         };
     }
 
-    public void UpdateDetails(string name, string? code, string? colorHex, int displayOrder)
+    public void UpdateDetails(string name, string? code, string? colorHex, int displayOrder, Guid? kitchenId = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Station name is required.", nameof(name));
         Name = name.Trim();
         Code = Trim(code);
         ColorHex = Trim(colorHex);
         DisplayOrder = displayOrder;
+        KitchenId = kitchenId;
     }
+
+    /// <summary>Routes this station to a kitchen (null = unassigned ⇒ default kitchen).</summary>
+    public void AssignKitchen(Guid? kitchenId) => KitchenId = kitchenId;
 
     public void Activate() => IsActive = true;
     public void Deactivate() => IsActive = false;

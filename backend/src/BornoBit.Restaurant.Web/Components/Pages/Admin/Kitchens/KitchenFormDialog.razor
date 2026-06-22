@@ -1,0 +1,65 @@
+@using BornoBit.Restaurant.Application.Kitchen.Commands
+@using FluentValidation
+@using MediatR
+@inject ISender Mediator
+
+<BoDialogBody>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <BoMessageBar Intent="error">@_error</BoMessageBar>
+        }
+        <BoInput @bind-Value="Content.Name" Label="Name" Required="true" Style="width:100%;" Maxlength="80" />
+        <BoInput @bind-Value="Content.Code" Label="Code (e.g. MAIN, BAR, BAKERY)" Style="width:100%;" Maxlength="20" />
+        <BoInput @bind-Value="Content.ColorHex" Label="Accent colour (e.g. #0F766E)" Style="width:100%;" Maxlength="9" />
+        <BoInput @bind-Value="Content.PrinterName" Label="Printer name (blank ⇒ default KOT printer)" Style="width:100%;" Maxlength="120" />
+        <BoNumeric T="int" @bind-Value="Content.DisplayOrder" Label="Display order" Style="width:100%;" Min="0" Step="1" />
+        <p class="bo-text-subtle" style="margin:0;">
+            A kitchen groups stations. Orders print a separate kitchen ticket per kitchen, to this printer.
+        </p>
+    </div>
+</BoDialogBody>
+
+<BoDialogFooter>
+    <BoButton Variant="ghost" OnClick="CancelAsync" Disabled="_busy">Cancel</BoButton>
+    <BoButton Variant="primary" OnClick="SaveAsync" Loading="_busy">@(Content.Id is null ? "Create" : "Save")</BoButton>
+</BoDialogFooter>
+
+@code {
+    [Parameter] public KitchenFormModel Content { get; set; } = default!;
+    [CascadingParameter] public BoDialogInstance Dialog { get; set; } = default!;
+
+    private string? _error;
+    private bool _busy;
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(Content.Name)) { _error = "Name is required."; return; }
+
+        _busy = true;
+        try
+        {
+            var code = string.IsNullOrWhiteSpace(Content.Code) ? null : Content.Code.Trim();
+            var color = string.IsNullOrWhiteSpace(Content.ColorHex) ? null : Content.ColorHex.Trim();
+            var printer = string.IsNullOrWhiteSpace(Content.PrinterName) ? null : Content.PrinterName.Trim();
+
+            if (Content.Id is null)
+            {
+                var id = await Mediator.Send(new CreateKitchenCommand(Content.Name.Trim(), code, color, printer, Content.DisplayOrder));
+                Content.SavedId = id;
+            }
+            else
+            {
+                await Mediator.Send(new UpdateKitchenCommand(Content.Id.Value, Content.Name.Trim(), code, color, printer, Content.DisplayOrder));
+                Content.SavedId = Content.Id;
+            }
+            Dialog.Close(Content);
+        }
+        catch (ValidationException vex) { _error = string.Join("; ", vex.Errors.Select(e => e.ErrorMessage)); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync() => Dialog.Cancel();
+}
