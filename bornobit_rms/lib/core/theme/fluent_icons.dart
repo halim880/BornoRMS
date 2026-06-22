@@ -68,6 +68,9 @@ IconData fluentIcon(String? name) {
       return Icons.security_outlined;
     case 'NumberSymbol':
       return Icons.tag_outlined;
+    case 'Food':
+    case 'ConferenceRoom': // legacy name for the Kitchens menu (pre-rename DB rows)
+      return Icons.soup_kitchen_outlined;
     default:
       return Icons.circle_outlined;
   }

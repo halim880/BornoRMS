@@ -288,7 +288,7 @@ public class AppMenuSeeder
             new("Menu Permissions", Url: "/admin/menu-permissions", Icon: "ShieldKeyhole", RequiredRole: Roles.Admin),
             new("Module Permissions", Url: "/admin/module-permissions", Icon: "AppsList", RequiredRole: Roles.Admin),
             new("Numbering Scopes", Url: "/admin/numbering-scopes", Icon: "NumberSymbol", RequiredRole: Roles.Admin),
-            new("Kitchens", Url: "/admin/kitchens", Icon: "ConferenceRoom", RequiredRole: Roles.Admin),
+            new("Kitchens", Url: "/admin/kitchens", Icon: "Food", RequiredRole: Roles.Admin),
             new("Tenants", Url: "/admin/tenants", Icon: "Building", RequiredRole: Roles.SuperAdmin),
             new("Modules", Url: "/admin/modules", Icon: "AppsList", RequiredRole: Roles.SuperAdmin),
         }),

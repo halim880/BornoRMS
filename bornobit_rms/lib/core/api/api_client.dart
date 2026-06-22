@@ -61,7 +61,11 @@ class ApiClient {
           return handler.next(e);
         }
 
-        if (e.response?.statusCode == 401) {
+        // A 401 from the auth endpoints themselves (a bad login, or a rejected refresh token) is
+        // not an expired session — let it propagate as a plain error so the caller can show the
+        // server's reason ("Invalid credentials."). Only a 401 on a normal authenticated call
+        // means the session is gone.
+        if (e.response?.statusCode == 401 && !isAuthCall) {
           await tokenStore.clear();
           onUnauthorized();
         }
